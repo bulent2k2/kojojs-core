@@ -453,6 +453,13 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
   }
 
   private def realRestoreStyle(): Unit = {
+    // Eşleşen saveStyle olmadan çağrılırsa pop fırlatır; istisna queueHandler'ın
+    // içinde olduğu için scheduleLater'a HİÇ ulaşılmaz ve komut pompası ölür --
+    // sonraki bütün kaplumbağa komutları sessizce hiçbir şey yapmaz.
+    if (savedStyles.isEmpty) {
+      kojoWorld.scheduleLater(queueHandler)
+      return
+    }
     pushQ()
     val (color, fill, width, fontSize, penWasUp) = savedStyles.pop()
     setPenColor(color)

@@ -11,8 +11,11 @@ trait AralıkYöntemleri extends TemelTürler {
 
   case class Aralık(ilki: Sayı, sonuncu: Sayı, adım: Sayı = 1) {
     val r = Range(ilki, sonuncu, adım)
-    val başı = r.head
-    val sonu = r.last
+    // lazy: boş aralıkta (Aralık(5,5), Aralık(1,5,-1)) head/last fırlatıyor.
+    // Strict val olsalardı sadece .uzunluğu soran bir betik bile NESNE
+    // KURULURKEN patlardı.
+    lazy val başı = r.head
+    lazy val sonu = r.last
     val uzunluğu = r.size
     def boyu = r.size
     def içindeMi(s: Sayı) = r.contains(s)

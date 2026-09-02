@@ -12,7 +12,9 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   val turtle = new GlobalTurtleForPicture
   turtle.globalTurtle = turtle0
   val svTurtle = new SwedishTurtle(turtle0, this)
-  val trTurtle = new TurkishTurtle(turtle0, this)
+  // turtle (GlobalTurtleForPicture) geçiyoruz, turtle0 DEĞİL -- bkz.
+  // TurkishTurtle'daki açıklama: resim içine çizim buna bağlı.
+  val trTurtle = new TurkishTurtle(turtle, this)
   TurtlePicture.turtle = turtle
   TurtlePicture.turtle0 = turtle0
 

@@ -23,7 +23,13 @@ trait KökTürYöntemleri extends TemelTürler {
   trait Eşsizlik {
     def kıymaKodu: Sayı
     override def hashCode = kıymaKodu
-    override def equals(h2: Any) = h2 != null && h2.hashCode == kıymaKodu
+    // Yalnızca hash'e bakmak yanlış olurdu: simetrik değil (nokta == "yazı"
+    // doğru dönerken tersi dönmez) ve hash çakışması alakasız nesneleri eşit
+    // yapar -- Küme/Eşlek aramaları yanlış öge döndürebilir. Tür denetimi şart.
+    override def equals(h2: Any) = h2 match {
+      case e: Eşsizlik => e.kıymaKodu == kıymaKodu
+      case _           => false
+    }
   }
 
   implicit class NesneMetotları(h: Nesne) {

@@ -2,12 +2,19 @@ package kojo
 
 // Turkish (Koco) turtle wrapper for KojoJS.
 //
+// ÖNEMLİ: englishTurtle'ın türü `TurtleAPI` ve Builtins buraya `turtle`
+// (GlobalTurtleForPicture) geçiyor, `turtle0` DEĞİL. Sebep: TurtlePicture.apply
+// resim çizerken turtle.globalTurtle'ı resmin kendi kaplumbağasıyla takas
+// ediyor. turtle0'a doğrudan bağlansaydık `Picture { yinele(4){ileri(50);sağ()} }`
+// kareyi tuvale çizip BOŞ bir resim döndürürdü.
+// (SwedishTurtle hâlâ turtle0'a bağlı ve bu hatadan muzdarip.)
+//
 // Names follow the desktop Koco layer (bulent2k2/kojo,
 // src/main/scala/net/kogics/kojo/lite/i18n/trInit.scala) so that scripts read the
 // same in both. Commands the browser runtime does not implement yet are left
 // commented out, each with the reason -- same convention as SwedishTurtle.
 
-class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implicit kojoWorld: KojoWorld)
+class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(implicit kojoWorld: KojoWorld)
     extends kojo.tr.SayıYöntemleri
     with kojo.tr.MatematikYöntemleri
     with kojo.tr.BelkiYöntemleri
@@ -60,11 +67,12 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implic
   def atla(x: Kesir, y: Kesir): Birim = englishTurtle.setPosition(x, y)
   def ilerle(x: Kesir, y: Kesir): Birim = englishTurtle.moveTo(x, y)
   def noktayaGit(x: Kesir, y: Kesir): Birim = englishTurtle.lineTo(x, y)
-  def zıpla(n: Kesir): Birim = {
-    englishTurtle.saveStyle() // to preserve pen state
-    englishTurtle.hop(n) // hop leaves the pen down afterwards
-    englishTurtle.restoreStyle()
-  }
+  // Masaüstünde hop kalem durumunu bozduğu için saveStyle/restoreStyle ile
+  // sarılıyor. KojoJS'te Hop -> realForward(n, hop=true) ve penIsUp'a HİÇ
+  // dokunmuyor, yani sarmalama gereksiz -- üstelik zararlı: restoreStyle
+  // fillColor'ı geri koyarken (başlangıçta null) realSetFillColor beginFill
+  // çağırıyor ve PIXI Graphics kalıcı olarak doldurma kipine geçiyor.
+  def zıpla(n: Kesir): Birim = englishTurtle.hop(n)
   def zıpla(): Birim = zıpla(25)
   def ev(): Birim = englishTurtle.home()
   def konumuKur(x: Kesir, y: Kesir): Birim = englishTurtle.setPosition(x, y)
@@ -105,8 +113,12 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implic
   def daire(yarıçap: Kesir = 25): Birim = englishTurtle.circle(yarıçap)
   def üçgen(en: Kesir = 25): Birim = yinele(3) { ileri(en); sağ(120) }
   def kare(en: Kesir = 25): Birim = yinele(4) { ileri(en); sağ(90) }
-  def nokta(çap: Sayı): Birim = englishTurtle.dot(çap)
-  def nokta(): Birim = englishTurtle.dot(25)
+  // nokta/ışınlar/çıktıyıSil KojoJS'te henüz UYGULANMADI (gövdeleri boş).
+  // Dosyanın geleneği gereği sessizce çalışmış gibi görünmesinler:
+  // def nokta(çap: Sayı) = englishTurtle.dot(çap)      // TurtleAPI.dot gövdesi yorumda
+  // def ışınlarıAç() = englishTurtle.beamsOn()          // beamsOn/Off = {}
+  // def ışınlarıKapat() = englishTurtle.beamsOff()
+  // def çıktıyıSil() = builtins.clearOutput()           // clearOutput = {}
 
   // ---- hız ----
   def hızıKur(hız: Hız): Birim = englishTurtle.setSpeed(hız)
@@ -115,10 +127,6 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implic
   lazy val orta = Speed.medium
   lazy val hızlı = Speed.fast
   lazy val çokHızlı = Speed.superFast
-
-  // ---- ışınlar ----
-  def ışınlarıAç(): Birim = englishTurtle.beamsOn()
-  def ışınlarıKapat(): Birim = englishTurtle.beamsOff()
 
   // giysi (costume) komutları KojoJS'te henüz yok:
   // giysiKur, giysileriKur, birsonrakiGiysi, giysiyiBüyült
@@ -158,7 +166,6 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implic
   def satıryaz(): Birim = println()
   def satıryaz(veri: Any): Birim = println(veri)
   def yaz(veri: Any): Birim = print(veri)
-  def çıktıyıSil(): Birim = builtins.clearOutput()
 
   // ---- sayılar ----
   def rastgele(üstSınır: Sayı): Sayı = builtins.random(üstSınır)

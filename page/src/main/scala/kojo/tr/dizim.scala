@@ -21,8 +21,10 @@ trait DizimYöntemleri extends TemelTürler {
     def +=(öge: T) = ekle(öge)
     def çıkar(yer: Sayı) = a.remove(yer)
     def sil() = a.clear()
-    def dizi = a.toSeq
-    def diziye = a.toSeq
+    // 2.12'de ArrayBuffer.toSeq KOPYA DEĞİL, kendisini döndürüyor: `val d =
+    // e.diziye; e += 4` çağıranın elindeki diziyi de değiştirirdi.
+    def dizi = a.toVector
+    def diziye = a.toVector
     def dizine = a.toList
     def boşMu: İkil = a.isEmpty
     def doluMu: İkil = a.nonEmpty

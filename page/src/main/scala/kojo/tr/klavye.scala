@@ -3,14 +3,19 @@ package kojo.tr
 /**
  * Tuş kodlarının Türkçesi -- oyun yazmak için `tuşBasılıMı(tuşlar.sol)` gibi.
  *
- * Değerler KojoJS'in `kojo.KeyCodes` sınıfındaki VK_* sabitleriyle birebir aynı;
- * sabit oldukları için burada doğrudan yazılıyorlar (bağımlılık gerekmiyor).
+ * DEĞERLER DOM `KeyboardEvent.keyCode`'una göre -- masaüstündeki (ve KojoJS'in
+ * kendi `KeyCodes` sınıfındaki) AWT VK_* değerlerine göre DEĞİL.
+ *
+ * Sebep: `KojoWorld.isKeyPressed` tarayıcının verdiği `e.keyCode` ile
+ * karşılaştırıyor. Ok tuşları, harfler, rakamlar, boşluk ve escape iki tabloda
+ * aynı; ama Enter (AWT 10 / DOM 13) ve noktalama tuşları farklı -- AWT değeri
+ * kullanılsa `tuşBasılıMı(tuşlar.gir)` HİÇBİR ZAMAN doğru dönmezdi.
  */
 trait KlavyeYöntemleri extends TemelTürler {
   object tuşlar {
-    val gir = '\n'.toInt
-    val silGeri = '\b'.toInt
-    val sekme = '\t'.toInt
+    val gir = 13 // DOM; AWT'de 10
+    val silGeri = 8
+    val sekme = 9
     val iptal = 0x03
     val temizle = 0x0c
     val kaldırma = 0x10 // shift
@@ -32,12 +37,12 @@ trait KlavyeYöntemleri extends TemelTürler {
     val sağ = 0x27
     val aşağı = 0x28
 
-    val virgül = 0x2c
-    val eksi = 0x2d
-    val nokta = 0x2e
-    val bölü = 0x2f
-    val noktalıVirgül = 0x3b
-    val eşittir = 0x3d
+    val virgül = 188 // DOM; AWT'de 0x2c
+    val eksi = 189
+    val nokta = 190
+    val bölü = 191
+    val noktalıVirgül = 186
+    val eşittir = 187
 
     val n0 = 0x30; val n1 = 0x31; val n2 = 0x32; val n3 = 0x33; val n4 = 0x34
     val n5 = 0x35; val n6 = 0x36; val n7 = 0x37; val n8 = 0x38; val n9 = 0x39
