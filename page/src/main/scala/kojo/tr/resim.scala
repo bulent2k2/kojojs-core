@@ -115,6 +115,16 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     // yeni resim döndüren dönüşümler (zincirlenebilir)
     def döndürülmüş(açı: Kesir): Resim = r.withRotation(açı)
     def döndürülmüşMerkezli(açı: Kesir, x: Kesir, y: Kesir): Resim = r.withRotationAround(açı, x, y)
+    /**
+     * DİKKAT: `taşı` ile AYNI ÇERÇEVEDE DEĞİL. `taşı`/`kaydır` dünya
+     * koordinatlarında hareket ettiriyor (offset), `taşınmış` ise resmin kendi
+     * çerçevesinde (translate). Döndürülmemiş bir resimde ikisi aynı; 45 derece
+     * döndürülmüş bir resimde `taşı(10, 0)` ekranda sağa, `taşınmış(10, 0)`
+     * çapraza gider.
+     *
+     * `taşınmış` tek seferlik ve zincirlenebilir olduğu için yerel çerçeve
+     * burada genelde istenen şey (resmi kendi yönünde kaydırmak).
+     */
     def taşınmış(x: Kesir, y: Kesir): Resim = r.withTranslation(x, y)
     def büyütülmüş(oran: Kesir): Resim = r.withScaling(oran)
     def boyalı(renk: Renk): Resim = r.withFillColor(renk)
