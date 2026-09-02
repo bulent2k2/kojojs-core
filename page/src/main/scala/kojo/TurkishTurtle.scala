@@ -35,7 +35,9 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
     with kojo.tr.KuyrukYöntemleri
     with kojo.tr.RenkYöntemleri
     with kojo.tr.KlavyeYöntemleri
-    with kojo.tr.ResimYöntemleri {
+    with kojo.tr.ResimYöntemleri
+    with kojo.tr.KumandaYöntemleri
+    with kojo.tr.GelecekYöntemleri {
   import kojo.doodle.Color
   import kojo.tr._
 

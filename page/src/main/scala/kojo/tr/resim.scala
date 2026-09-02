@@ -12,7 +12,7 @@ package kojo.tr
  * `builtins`e ihtiyaç var (Picture fabrikası onun içinde bir iç nesne), o yüzden
  * soyut `kb` üyesi TurkishTurtle tarafından sağlanıyor.
  */
-trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri {
+trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri with Yöney2BYöntemleri {
   protected def kb: kojo.syntax.Builtins
   // Picture.image / draw gibi metotlar örtük KojoWorld istiyor; Builtins'in
   // kendi kojoWorld'ü dışarıdan erişilebilir değil, o yüzden ayrıca alıyoruz.
@@ -21,6 +21,19 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   type Resim = kojo.Picture
 
   object Resim {
+    /**
+     * Blok biçimi: kaplumbağa komutlarıyla resim yapar --
+     * `Resim { yinele(4) { ileri(60); sağ() } }`
+     *
+     * İngilizce `Picture { ... }` ile aynı şey. Bu OLMADAN kullanıcı Türkçe
+     * yazarken İngilizce `Picture` yazmak zorunda kalıyordu.
+     *
+     * Çalışması TurkishTurtle'ın turtle0'a değil GlobalTurtleForPicture'a
+     * bağlanmasına dayanıyor: blok içindeki Türkçe komutların resme yönlenmesi
+     * için TurtlePicture globalTurtle'ı takas ediyor.
+     */
+    def apply(komutlar: => Birim): Resim = kb.Picture(komutlar)
+
     def dikdörtgen(en: Kesir, boy: Kesir): Resim = kb.Picture.rectangle(en, boy)
     def kare(en: Kesir): Resim = kb.Picture.rectangle(en, en)
     def daire(yarıçap: Kesir): Resim = kb.Picture.circle(yarıçap)
@@ -65,7 +78,28 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def açıyaDön(açı: Kesir): Birim = r.setHeading(açı)
     def döndür(açı: Kesir): Birim = r.rotate(açı)
     def döndürMerkezli(açı: Kesir, x: Kesir, y: Kesir): Birim = r.rotateAboutPoint(açı, x, y)
-    def taşı(dx: Kesir, dy: Kesir): Birim = r.translate(dx, dy)
+    /**
+     * Resmi DÜNYA koordinatlarında kaydırır -- konuma dx,dy ekler, başka
+     * hiçbir şeye bakmaz. Hareket eden nesneler (oyunlar) için doğru olan bu.
+     */
+    def kaydır(dx: Kesir, dy: Kesir): Birim = r.offset(dx, dy)
+    def kaydır(yöney: Yöney2B): Birim = r.offset(yöney.x, yöney.y)
+
+    /**
+     * `kaydır` ile AYNI (ikisi de offset).
+     *
+     * Neden translate DEĞİL: KojoJS'in `Picture.translate`'i tekrarlı
+     * canlandırmada bozuk. Konumu `localTransform.apply(dx, dy)` ile
+     * hesaplıyor, ama localTransform kareler arasında tazelenmediği için her
+     * karede AYNI hedefi buluyor -- resim bir kez kıpırdayıp donuyor.
+     * Kullanıcı 05-sekme-oyunu'nda bunu yaşadı; offset ile akıcı çalışıyor.
+     *
+     * `taşı` çocuğun ilk aklına gelen sözcük, o yüzden bozuk olana değil
+     * çalışana bağlı. Gerçekten yerel çerçevede taşıma gerekirse
+     * `resim.translate(...)` hâlâ erişilebilir.
+     */
+    def taşı(dx: Kesir, dy: Kesir): Birim = r.offset(dx, dy)
+    def taşı(yöney: Yöney2B): Birim = r.offset(yöney.x, yöney.y)
     def büyüt(oran: Kesir): Birim = r.scale(oran)
     def büyüklüğünüKur(oran: Kesir): Birim = r.setScale(oran)
     def yansıtX(): Birim = r.flipX()
