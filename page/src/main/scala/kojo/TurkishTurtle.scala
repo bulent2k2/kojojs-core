@@ -7,7 +7,7 @@ package kojo
 // same in both. Commands the browser runtime does not implement yet are left
 // commented out, each with the reason -- same convention as SwedishTurtle.
 
-class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)
+class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)(implicit kojoWorld: KojoWorld)
     extends kojo.tr.SayıYöntemleri
     with kojo.tr.MatematikYöntemleri
     with kojo.tr.BelkiYöntemleri
@@ -22,13 +22,18 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)
     with kojo.tr.KökTürYöntemleri
     with kojo.tr.DizimYöntemleri
     with kojo.tr.MiskinDizinYöntemleri
-    with kojo.tr.KuyrukYöntemleri {
+    with kojo.tr.KuyrukYöntemleri
+    with kojo.tr.RenkYöntemleri
+    with kojo.tr.KlavyeYöntemleri
+    with kojo.tr.ResimYöntemleri {
   import kojo.doodle.Color
   import kojo.tr._
 
-  // Tür takma adları (Sayı, Kesir, Yazı, İkil, Birim ...) artık kojo.tr paket
-  // nesnesinde; burada yalnızca KojoJS'e özgü olanlar kalıyor.
-  type Renk = Color
+  // ResimYöntemleri'nin ihtiyaç duyduğu builtins erişimi
+  protected def kb: syntax.Builtins = builtins
+  protected implicit def kd: KojoWorld = kojoWorld
+
+  // Tür takma adları kojo.tr trait'lerinde; Renk de RenkYöntemleri'nde.
   type Hız = Speed.Speed
 
   // ---- görünürlük ----
@@ -140,20 +145,7 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)
   def yineleİlktenSona(ilki: Sayı, sonu: Sayı)(diziKomut: Sayı => Birim): Birim =
     RepeatCommands.repeatFor(ilki to sonu) { diziKomut }
 
-  // ---- renkler ----
-  lazy val kırmızı = builtins.Color.red
-  lazy val mavi = builtins.Color.blue
-  lazy val yeşil = builtins.Color.green
-  lazy val sarı = builtins.Color.yellow
-  lazy val mor = builtins.Color.purple
-  lazy val morumsu = builtins.Color.magenta
-  lazy val pembe = builtins.Color.pink
-  lazy val kahverengi = builtins.Color.brown
-  lazy val turuncu = builtins.Color.orange
-  lazy val gri = builtins.Color.gray
-  lazy val siyah = builtins.Color.black
-  lazy val beyaz = builtins.Color.white
-  lazy val saydam = builtins.noColor
+  // ---- renkler: kojo.tr.RenkYöntemleri ----
 
   def artalanıKur(renk: Renk): Birim = builtins.setBackground(renk)
   def artalanıKurDik(r1: Renk, r2: Renk): Birim = builtins.setBackgroundV(r1, r2)
@@ -181,4 +173,13 @@ class TurkishTurtle(val englishTurtle: Turtle, builtins: syntax.Builtins)
   // yuvarla: kojo.tr.MatematikYöntemleri
 
   def bekle(saniye: Kesir): Birim = englishTurtle.pause(saniye)
+
+  // ---- oyun / etkileşim ----
+  def tuşBasılıMı(tuşKodu: Sayı): İkil = builtins.isKeyPressed(tuşKodu)
+  def canlandır(işlev: => Birim): Birim = builtins.animate(işlev)
+  def canlandırmayıDurdur(): Birim = builtins.stopAnimation()
+  def tuvalSınırları = builtins.canvasBounds
+  def tuvaliEtkinleştir(): Birim = builtins.activateCanvas()
+  def yakınlaştırmayıKapat(): Birim = builtins.disablePanAndZoom()
+  def kareSüresi: Kesir = builtins.frameDeltaTime
 }
