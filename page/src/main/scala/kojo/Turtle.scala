@@ -41,6 +41,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
   private var penIsUp = false
   private var animationDelay = 1000l
   private val savedPosHe = new mutable.Stack[(PIXI.Point, Double)]
+  private val savedStyles = new mutable.Stack[(Color, Color, Double, Int, Boolean)]
 
   var commandQs = mutable.Queue.empty[Command] :: Nil
 
@@ -140,12 +141,24 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
     commandQ.enqueue(Write(text))
   }
 
+  def towards(x: Double, y: Double): Unit = {
+    commandQ.enqueue(Towards(x, y))
+  }
+
   def savePosHe(): Unit = {
     commandQ.enqueue(SavePosHe)
   }
 
   def restorePosHe(): Unit = {
     commandQ.enqueue(RestorePosHe)
+  }
+
+  def saveStyle(): Unit = {
+    commandQ.enqueue(SaveStyle)
+  }
+
+  def restoreStyle(): Unit = {
+    commandQ.enqueue(RestoreStyle)
   }
 
   def clear(): Unit = {
@@ -194,8 +207,11 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
         case PopQ               => realPopQ()
         case Write(text)        => realWriteText(text)
         case SetPenFontSize(n)  => realSetPenFontSize(n)
+        case Towards(x, y)      => realTowards(x, y)
         case SavePosHe          => realSavePosHe()
         case RestorePosHe       => realRestorePosHe()
+        case SaveStyle          => realSaveStyle()
+        case RestoreStyle       => realRestoreStyle()
         case Clear              => realClear()
         case Pause(seconds)     => realPause(seconds)
         case PenUp              => realPenUpDown(true)
@@ -419,6 +435,31 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
     val (newPosition, newHeading) = savedPosHe.pop()
     setPosition(newPosition.x, newPosition.y)
     setHeading(newHeading)
+    popQ()
+    kojoWorld.scheduleLater(queueHandler)
+  }
+
+  // the heading is computed here, inside the queue, so that it sees the position
+  // left by the commands queued before this one
+  private def realTowards(x: Double, y: Double): Unit = {
+    turtleImage.rotation = towardsHelper(x, y)
+    kojoWorld.render()
+    kojoWorld.scheduleLater(queueHandler)
+  }
+
+  private def realSaveStyle(): Unit = {
+    savedStyles.push((penColor, fillColor, penWidth, penFontSize, penIsUp))
+    kojoWorld.scheduleLater(queueHandler)
+  }
+
+  private def realRestoreStyle(): Unit = {
+    pushQ()
+    val (color, fill, width, fontSize, penWasUp) = savedStyles.pop()
+    setPenColor(color)
+    setFillColor(fill)
+    setPenThickness(width)
+    setPenFontSize(fontSize)
+    if (penWasUp) penUp() else penDown()
     popQ()
     kojoWorld.scheduleLater(queueHandler)
   }

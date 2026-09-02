@@ -20,8 +20,12 @@ trait TurtleAPI extends VertexShapeSupport {
   def lineTo(x: Double, y: Double) = moveTo(x, y)
   def arc2(r: Double, a: Double): Unit
   def write(text: String): Unit
+  def towards(x: Double, y: Double): Unit
   def savePosHe(): Unit
   def restorePosHe(): Unit
+  def saveStyle(): Unit
+  def restoreStyle(): Unit
+  def home(): Unit = { setPosition(0, 0); setHeading(90) }
   def clear(): Unit
   def cleari(): Unit
   def pause(seconds: Double): Unit

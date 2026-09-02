@@ -17,8 +17,11 @@ case class MoveTo(x: Double, y: Double) extends Command
 case class Arc2(r: Double, a: Double) extends Command
 case class Write(text: String) extends Command
 case class SetPenFontSize(n: Int) extends Command
+case class Towards(x: Double, y: Double) extends Command
 case object SavePosHe extends Command
 case object RestorePosHe extends Command
+case object SaveStyle extends Command
+case object RestoreStyle extends Command
 case object Clear extends Command
 case class Pause(seconds: Double) extends Command
 case object PenUp extends Command
