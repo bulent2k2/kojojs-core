@@ -88,15 +88,18 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     /**
      * `kaydır` ile AYNI (ikisi de offset).
      *
-     * Neden translate DEĞİL: KojoJS'in `Picture.translate`'i tekrarlı
-     * canlandırmada bozuk. Konumu `localTransform.apply(dx, dy)` ile
-     * hesaplıyor, ama localTransform kareler arasında tazelenmediği için her
-     * karede AYNI hedefi buluyor -- resim bir kez kıpırdayıp donuyor.
-     * Kullanıcı 05-sekme-oyunu'nda bunu yaşadı; offset ile akıcı çalışıyor.
+     * Neden `translate` değil: `translate` resmin KENDİ çerçevesinde taşıyor --
+     * resim döndürülmüşse "sağa 5" ekranda eğik çıkıyor. Çocuğun `taşı`dan
+     * beklediği dünya çerçevesinde hareket, o da `offset`.
      *
-     * `taşı` çocuğun ilk aklına gelen sözcük, o yüzden bozuk olana değil
-     * çalışana bağlı. Gerçekten yerel çerçevede taşıma gerekirse
-     * `resim.translate(...)` hâlâ erişilebilir.
+     * DÜZELTME (2026-09-02): burada önce "translate tekrarlı canlandırmada
+     * bozuk" yazıyordu. Yanlıştı. 05-sekme-oyunu'ndaki donma translate'ten
+     * değil, `sahnedenSek`in sahne kenarları kurulmadan çağrılıp TypeError
+     * atmasından geliyordu; yan yana ölçümde translate ile offset aynı
+     * hareketi verdi. Gerçek nedeni TurkishTurtle.sahneKurulduMu anlatıyor.
+     *
+     * Gerçekten yerel çerçevede taşıma gerekirse `resim.translate(...)`
+     * hâlâ erişilebilir.
      */
     def taşı(dx: Kesir, dy: Kesir): Birim = r.offset(dx, dy)
     def taşı(yöney: Yöney2B): Birim = r.offset(yöney.x, yöney.y)

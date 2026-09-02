@@ -196,12 +196,30 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def kareSüresi: Kesir = builtins.frameDeltaTime
 
   // ---- sekme (oyun fiziği) ----
-  def sahnedenSek(resim: Resim, hız: Yöney2B): Yöney2B = builtins.bouncePicOffStage(resim, hız)
+  /**
+   * Sahne kenarları `çizSahne(...)` çağrılana kadar null.
+   *
+   * Bu olmadan `sahnedenSek` `collidesWith(null)` ile TypeError atıyor;
+   * `canlandır` döngüsü ilk karede sessizce ölüyor ve resim hiç kıpırdamıyor --
+   * ekranda hata yok, hiçbir ipucu yok. `artalanıKur` yetmiyor: o yalnızca
+   * tuvalin rengini değiştiriyor, kenarları kurmuyor.
+   */
+  private def sahneKurulduMu(nereden: Yazı): Birim =
+    if (builtins.stageTop == null)
+      throw new ÇalışmaSırasıKuralDışı(
+        s"$nereden kullanabilmek için önce sahneyi çizmelisin: çizSahne(siyah). " +
+          "artalanıKur yalnızca rengi değiştirir, sahne kenarlarını kurmaz."
+      )
+
+  def sahnedenSek(resim: Resim, hız: Yöney2B): Yöney2B = {
+    sahneKurulduMu("sahnedenSek'i")
+    builtins.bouncePicOffStage(resim, hız)
+  }
   def resimdenSek(resim: Resim, hız: Yöney2B, engel: Resim): Yöney2B =
     builtins.bouncePicOffPic(resim, hız, engel)
-  def sahneKenarı: Resim = builtins.stageBorder
-  def sahneÜstü: Resim = builtins.stageTop
-  def sahneAltı: Resim = builtins.stageBot
-  def sahneSolu: Resim = builtins.stageLeft
-  def sahneSağı: Resim = builtins.stageRight
+  def sahneKenarı: Resim = { sahneKurulduMu("sahneKenarı'nı"); builtins.stageBorder }
+  def sahneÜstü: Resim = { sahneKurulduMu("sahneÜstü'nü"); builtins.stageTop }
+  def sahneAltı: Resim = { sahneKurulduMu("sahneAltı'nı"); builtins.stageBot }
+  def sahneSolu: Resim = { sahneKurulduMu("sahneSolu'nu"); builtins.stageLeft }
+  def sahneSağı: Resim = { sahneKurulduMu("sahneSağı'nı"); builtins.stageRight }
 }
