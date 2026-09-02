@@ -5,7 +5,8 @@ package kojo.tr
  *
  * Masaüstündeki `ParalelDiziYöntemleri` (ve `Dizin.paralel`) buraya ALINMADI:
  * `scala.collection.parallel` Scala.js'te HİÇ yok -- tarayıcı tek iş parçacıklı.
- * Bu, portun kalıcı bir kaybı; şim yazılamaz.
+ * Bu, portun kalıcı bir kaybı: tarayıcıda karşılığı olmadığı için şim (shim)
+ * bile yazılamaz.
  */
 trait DizinYöntemleri extends TemelTürler {
   val Boş = collection.immutable.Nil

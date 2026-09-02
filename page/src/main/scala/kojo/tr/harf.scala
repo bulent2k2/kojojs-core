@@ -24,10 +24,27 @@ trait HarfYöntemleri extends TemelTürler {
     val enİrisi = Char.MaxValue
   }
 
+  /**
+   * TÜRKÇE noktalı/noktasız i kuralı. Java/JS'in varsayılan toUpper/toLower'ı
+   * İngilizce: 'i'.toUpper = 'I' (Türkçede 'İ' olmalı), 'I'.toLower = 'i'
+   * (Türkçede 'ı' olmalı). Türkçe bir üründe "istanbul".büyükHarfe'nin
+   * "ISTANBUL" vermesi kabul edilemez.
+   */
+  private[tr] def trBüyüt(h: Char): Char = h match {
+    case 'i' => 'İ'
+    case 'ı' => 'I'
+    case _   => h.toUpper
+  }
+  private[tr] def trKüçült(h: Char): Char = h match {
+    case 'I' => 'ı'
+    case 'İ' => 'i'
+    case _   => h.toLower
+  }
+
   implicit class HarfMetotları(h: Harf) {
     def yazıya: Yazı = h.toString
-    def büyükHarfe: Harf = h.toUpper
-    def küçükHarfe: Harf = h.toLower
+    def büyükHarfe: Harf = trBüyüt(h)
+    def küçükHarfe: Harf = trKüçült(h)
     def sayıya: Sayı = h.toInt
     def kesire: Kesir = h.toDouble
     def sayıMı: İkil = h.isDigit

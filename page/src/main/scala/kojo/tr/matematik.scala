@@ -7,12 +7,11 @@ package kojo.tr
  * `StatUtils`) Scala.js'te yok, o yüzden gcd/lcm/ortalama/değişim burada elle
  * yazıldı.
  *
- * `uzaklık(Nokta, Nokta)` / `açı(Nokta, Nokta)` aşırı yüklemeleri KASITLI olarak
- * yok: kojo.tr -> kojo çapraz paket başvurusu zinc'in artımlı derlemesini her
- * yeni dosyada bozuyordu ("object Vector2D is not a member of package kojo",
- * yalnızca `clean` ile geçiyor). Dört argümanlı sürümler aynı işi görüyor.
+ * `uzaklık`/`açı`'nın Nokta alan sürümleri kojo.tr.NoktaYöntemleri üzerinden
+ * geliyor (Nokta = PIXI.Point). Daha önce kojo.Vector2D'ye bağlıydılar ve o
+ * çapraz paket başvurusu zinc'in artımlı derlemesini bozuyordu.
  */
-trait MatematikYöntemleri extends TemelTürler {
+trait MatematikYöntemleri extends TemelTürler with NoktaYöntemleri {
   def piSayısı: Kesir = math.Pi
   def eSayısı: Kesir = math.E
 
@@ -29,8 +28,8 @@ trait MatematikYöntemleri extends TemelTürler {
   def doğalLogu(x: Kesir): Kesir = math.log(x)
   def logaritması(x: Kesir): Kesir = math.log(x)
   def logTabanlı(x: Kesir, t: Kesir): Kesir = math.log(x) / math.log(t)
-  private lazy val log2_e = math.log(2)
-  def log2tabanlı(x: Kesir): Kesir = math.log(x) / log2_e
+  private lazy val ln2 = math.log(2)
+  def log2tabanlı(x: Kesir): Kesir = math.log(x) / ln2
 
   def radyana(açı: Kesir): Kesir = math.toRadians(açı)
   def dereceye(açı: Kesir): Kesir = math.toDegrees(açı)
@@ -84,6 +83,8 @@ trait MatematikYöntemleri extends TemelTürler {
     math.sqrt(math.pow(y2 - y1, 2) + math.pow(x2 - x1, 2))
   def açı(x1: Kesir, y1: Kesir, x2: Kesir, y2: Kesir): Kesir =
     math.toDegrees(math.atan2(y2 - y1, x2 - x1))
+  def uzaklık(n1: Nokta, n2: Nokta): Kesir = uzaklık(n1.x, n1.y, n2.x, n2.y)
+  def açı(n1: Nokta, n2: Nokta): Kesir = açı(n1.x, n1.y, n2.x, n2.y)
 
   // StatUtils yerine
   def ortalama(sayılar: Array[Kesir]): Kesir =

@@ -12,7 +12,7 @@ package kojo.tr
  * `builtins`e ihtiyaç var (Picture fabrikası onun içinde bir iç nesne), o yüzden
  * soyut `kb` üyesi TurkishTurtle tarafından sağlanıyor.
  */
-trait ResimYöntemleri extends TemelTürler with RenkYöntemleri {
+trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri {
   protected def kb: kojo.syntax.Builtins
   // Picture.image / draw gibi metotlar örtük KojoWorld istiyor; Builtins'in
   // kendi kojoWorld'ü dışarıdan erişilebilir değil, o yüzden ayrıca alıyoruz.
@@ -59,7 +59,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri {
     def arkayaAt(): Birim = r.moveToBack()
 
     // konum ve yön
-    def konum = r.position
+    def konum: Nokta = r.position
     def doğrultu: Kesir = r.heading
     def konumuKur(x: Kesir, y: Kesir): Birim = r.setPosition(x, y)
     def açıyaDön(açı: Kesir): Birim = r.setHeading(açı)
@@ -89,7 +89,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri {
     def yYansımalı: Resim = r.withFlippedY
 
     // çarpışma ve sınırlar
-    def sınırları = r.bounds
+    def sınırları: Dikdörtgen = r.bounds
     def çarpışıyorMu(öbürü: Resim): İkil = r.collidesWith(öbürü)
   }
 }

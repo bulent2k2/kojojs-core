@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
  * Array ve ArrayBuffer sarmalayıcıları (eski adlandırma; dizik.scala daha yeni).
  *
  * 2.12 uyarlamaları: `ArrayBuffer.from(...)` -> `ArrayBuffer(... : _*)`,
- * `filterInPlace` (2.13) -> `retain`.
+ * `filterInPlace` (2.13) yok; 2.12'de ArrayBuffer'da `retain` de yok, elle.
  */
 trait DizimYöntemleri extends TemelTürler {
 

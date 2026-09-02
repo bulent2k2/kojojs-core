@@ -47,8 +47,10 @@ trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri {
     def sağdanKatla[B](z: B)(işlev: (Pair, B) => B): B = m.foldRight(z)(işlev)
     def yazıYap: Yazı = m.mkString
     def yazıYap(ara: Yazı): Yazı = m.mkString(ara)
-    // 2.13'teki addOne yerine +=
-    def değiştir(a: A, d: D) = m.clone() += (a -> d)
+    // DİKKAT: m'yi YERİNDE değiştirmez, değiştirilmiş bir KOPYA döndürür.
+    // (Değişebilir bir sarmalayıcıda ad yanıltıcı olabilir; yerinde değişiklik
+    // için eşEkle/+= kullanın.) 2.13'teki addOne yerine +=.
+    def değiştirilmiş(a: A, d: D) = m.clone() += (a -> d)
     def varMı(deneme: ((A, D)) => İkil): İkil = m.exists(deneme)
     def hepsiDoğruMu(deneme: ((A, D)) => İkil): İkil = m.forall(deneme)
     def içeriyorMu(anahtar: A): İkil = m.contains(anahtar)

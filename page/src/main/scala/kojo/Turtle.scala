@@ -431,6 +431,12 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
   }
 
   private def realRestorePosHe(): Unit = {
+    // realRestoreStyle ile aynı tehlike: eşleşen savePosHe yoksa pop fırlatır ve
+    // istisna queueHandler içinde olduğu için komut pompası ölür.
+    if (savedPosHe.isEmpty) {
+      kojoWorld.scheduleLater(queueHandler)
+      return
+    }
     pushQ()
     val (newPosition, newHeading) = savedPosHe.pop()
     setPosition(newPosition.x, newPosition.y)

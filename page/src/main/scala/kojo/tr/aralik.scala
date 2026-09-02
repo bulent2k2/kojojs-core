@@ -54,6 +54,7 @@ trait AralıkYöntemleri extends TemelTürler {
     def kapalı(ilki: Sayı, sonuncu: Sayı, adım: Sayı = 1) =
       new Aralık(ilki, if (adım > 0) sonuncu + 1 else sonuncu - 1, adım)
     def kesirden(ilki: Kesir, sonuncu: Kesir, adım: Kesir) = Range.BigDecimal(ilki, sonuncu, adım)
+    // kesirden ile aynı; "açık aralık" olduğunu adında belirten takma ad
     def kesirdenAçık(ilki: Kesir, sonuncu: Kesir, adım: Kesir) = Range.BigDecimal(ilki, sonuncu, adım)
     def kesirdenKapalı(ilki: Kesir, sonuncu: Kesir, adım: Kesir) =
       Range.BigDecimal.inclusive(ilki, sonuncu, adım)

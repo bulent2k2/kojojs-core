@@ -9,7 +9,7 @@ package kojo.tr
  *  - `dizime` / `eşleme` masaüstünde Dizim/Eşlem sarmalayıcılarına dönüyor;
  *    onlar henüz portlanmadı, bu yüzden düz Array/Map döndürüyoruz.
  */
-trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri {
+trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri with HarfYöntemleri {
   type EsnekYazı = collection.mutable.StringBuilder
 
   object Yazı {
@@ -84,9 +84,10 @@ trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri {
     def değiştirİlkini(xler: Yazı, yler: Yazı): Yazı = y.replaceFirst(xler, yler)
     def böl(delim: Harf): Dizin[Yazı] = y.split(delim).toList
     def böl(delim: Yazı, enÇokParça: Sayı = 0): Dizin[Yazı] = y.split(delim, enÇokParça).toList
-    def büyükHarfe: Yazı = y.map(_.toUpper)
-    def küçükHarfe: Yazı = y.map(_.toLower)
-    def ilkHarfiBüyült: Yazı = y.capitalize
+    // Türkçe i/İ kuralı -- bkz. harf.scala
+    def büyükHarfe: Yazı = y.map(trBüyüt)
+    def küçükHarfe: Yazı = y.map(trKüçült)
+    def ilkHarfiBüyült: Yazı = if (y.isEmpty) y else trBüyüt(y.head) + y.tail
     def kıyasla(öbürü: Yazı): Sayı = y.compareTo(öbürü)
     def harf(sıra: Sayı): Harf = y.charAt(sıra)
     def parçası(nereden: Sayı): Yazı = y.substring(nereden)
