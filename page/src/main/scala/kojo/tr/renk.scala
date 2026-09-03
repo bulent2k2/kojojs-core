@@ -52,6 +52,15 @@ trait RenkYöntemleri extends TemelTürler {
     val gökMavisi: Renk = DRenk.skyBlue
     val çelikMavisi: Renk = DRenk.steelBlue
     val beyazlatılmışBadem: Renk = DRenk.blanchedAlmond
+
+    // Koyu renkler: doodle.Color'da vardı, Türkçe adları yoktu (2026-09, ayna
+    // sayfaları için eklendi -- ikojo.in örnekleri darkBlue vb. kullanıyor).
+    val koyuMavi: Renk = DRenk.darkBlue
+    val koyuYeşil: Renk = DRenk.darkGreen
+    val koyuKırmızı: Renk = DRenk.darkRed
+    val koyuTuruncu: Renk = DRenk.darkOrange
+    val koyuCamgöbeği: Renk = DRenk.darkCyan
+    val koyuMor: Renk = DRenk.darkMagenta
   }
 
   // sık kullanılanlar üst düzeyde
@@ -64,6 +73,12 @@ trait RenkYöntemleri extends TemelTürler {
   val gri = Renkler.gri
   val kahverengi = Renkler.kahverengi
   val koyuGri = Renkler.koyuGri
+  val koyuMavi = Renkler.koyuMavi
+  val koyuYeşil = Renkler.koyuYeşil
+  val koyuKırmızı = Renkler.koyuKırmızı
+  val koyuTuruncu = Renkler.koyuTuruncu
+  val koyuCamgöbeği = Renkler.koyuCamgöbeği
+  val koyuMor = Renkler.koyuMor
   val kırmızı = Renkler.kırmızı
   val mavi = Renkler.mavi
   val mor = Renkler.mor
@@ -83,5 +98,9 @@ trait RenkYöntemleri extends TemelTürler {
     def yeşili = r.green
     def mavisi = r.blue
     def saydamlığı = r.alpha
+    // fadeOut/fadeIn: saydamlığı azalt/artır (0-1). Renkli eksen çizgileri gibi
+    // yerlerde kullanılıyor (birim çember örneği: yeşil.soluk(0.8)).
+    def soluk(oran: Kesir): Renk = r.fadeOut(oran)
+    def belirgin(oran: Kesir): Renk = r.fadeIn(oran)
   }
 }

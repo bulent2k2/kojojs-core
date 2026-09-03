@@ -43,6 +43,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def yatayÇizgi(n: Kesir): Resim = kb.Picture.hline(n)
     def dikeyÇizgi(n: Kesir): Resim = kb.Picture.vline(n)
     def yazı(içerik: Her, yazıBoyu: Sayı = 15): Resim = kb.Picture.text(içerik, yazıBoyu)
+    def renkliYazı(içerik: Her, boy: Sayı, renk: Renk): Resim = kb.Picture.textu(içerik, boy, renk)
     def imge(adres: Yazı): Resim = kb.Picture.image(adres)
     def imge(adres: Yazı, zarf: Resim): Resim = kb.Picture.image(adres, zarf)
     def yatayBoşluk(boşluk: Kesir): Resim = kb.Picture.hgap(boşluk)
@@ -57,6 +58,10 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def çiz(resimler: Resim*): Birim = kb.draw(resimler: _*)
   def çizMerkezde(r: Resim): Birim = kb.drawCentered(r)
   def çizSahne(boya: Renk): Birim = kb.drawStage(boya)
+  // zoomXY: tuvali x ve y'de ölçekle ve (mx,my) merkeze kaydır. Birim çember
+  // gibi örnekler ekranı telefona sığdırmak için kullanıyor.
+  def tuvaliYakınlaştır(xÇarpan: Kesir, yÇarpan: Kesir, mx: Kesir, my: Kesir): Birim =
+    kb.zoomXY(xÇarpan, yÇarpan, mx, my)
   def çizMerkezdeYazı(mesaj: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
     kb.drawCenteredMessage(mesaj, renk, yazıBoyu)
 
