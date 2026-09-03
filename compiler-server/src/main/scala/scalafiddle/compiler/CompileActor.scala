@@ -9,9 +9,14 @@ import upickle.default._
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scalafiddle.compiler.cache.{AutoCompleteCache, CompilerCache, LinkerCache}
 import scalafiddle.shared._
 
 case object WatchPong
+
+// LibraryManager kurulumu Future'da biter; değişim (ve eskisinin kapatılması)
+// posta kutusu üzerinden aktör içinde yapılır ki derlemelerle sıralansın
+case class ManagerReady(mgr: LibraryManager)
 
 class CompileActor(out: ActorRef, manager: ActorRef) extends Actor with ActorLogging {
   import context.dispatcher
@@ -44,6 +49,19 @@ class CompileActor(out: ActorRef, manager: ActorRef) extends Actor with ActorLog
         context.stop(self)
       }
 
+    case ManagerReady(mgr) =>
+      val old = libraryManager
+      libraryManager = mgr
+      if (old != null) {
+        // önbellekteki Global'ler/linker'lar eski yöneticinin (kapanacak)
+        // veri kanalına bağlı dosyaları tutuyor -- birlikte boşalt
+        CompilerCache.clear()
+        AutoCompleteCache.clear()
+        LinkerCache.clear()
+        old.close()
+      }
+      sendOut(CompilerReady)
+
     case msg: TextMessage =>
       msg.textStream.runReduce(_ + _).map { text =>
         read[CompilerMessage](text) match {
@@ -51,8 +69,7 @@ class CompileActor(out: ActorRef, manager: ActorRef) extends Actor with ActorLog
             log.debug(s"Received ${extLibs.size} libraries")
             // library loading can take some time, run in another thread
             Future(new LibraryManager(extLibs)).map { mgr =>
-              libraryManager = mgr
-              sendOut(CompilerReady)
+              context.self ! ManagerReady(mgr)
             } recover {
               case e =>
                 log.error(e, "Error while loading libraries")

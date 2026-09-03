@@ -68,7 +68,7 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
         val settings = new Settings
         settings.outputDirs.setSingleOutput(vd)
         settings.processArgumentString("-Ypresentation-any-thread")
-        GlobalInitCompat.initInteractiveGlobal(settings, new StoreReporter(new Settings), libManager.compilerLibraries(extLibs))
+        GlobalInitCompat.initInteractiveGlobal(settings, new StoreReporter(settings), libManager.compilerLibraries(extLibs))
       }
     )
 
@@ -98,7 +98,7 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
     val compiler = CompilerCache.getOrUpdate(
       extLibs, {
         val settings = new Settings
-        GlobalInitCompat.initGlobal(settings, new StoreReporter(new Settings), libManager.compilerLibraries(extLibs))
+        GlobalInitCompat.initGlobal(settings, new StoreReporter(settings), libManager.compilerLibraries(extLibs))
       }
     )
 

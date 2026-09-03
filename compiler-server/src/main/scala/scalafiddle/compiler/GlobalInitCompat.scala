@@ -99,6 +99,9 @@ object GlobalInitCompat {
   // JDK'nın kendi sınıfları (java.*): jrt üzerinden. Bir kez çözülür.
   private lazy val jdkClassPath: Seq[ClassPath] = {
     val settings = new Settings
+    // varsayılan kullanıcı classpath'i ("." = sunucunun çalışma dizini)
+    // derleyiciye sızmasın; yalnızca platform (jrt) girdileri kalsın
+    settings.classpath.value = ""
     new PathResolver(settings, new nsc.CloseableRegistry).result match {
       case AggregateClassPath(entries) => entries
       case single                      => List(single)

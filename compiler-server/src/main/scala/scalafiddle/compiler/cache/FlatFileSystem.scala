@@ -56,6 +56,8 @@ class FlatFileSystem(dataChannel: FileChannel, val jars: Seq[FlatJar], val index
     val newJars = jars.filter(j => f.contains(j.name))
     new FlatFileSystem(dataChannel, newJars, FlatFileSystem.createIndex(newJars))
   }
+
+  def close(): Unit = dataChannel.close()
 }
 
 object FlatFileSystem {
@@ -81,7 +83,9 @@ object FlatFileSystem {
 
   private val validExtensions = Set("class", "sjsir")
   private def validFile(entry: ZipEntry) = {
-    val ext = entry.getName.split('.').last
+    val name = entry.getName
+    val dot  = name.lastIndexOf('.')
+    val ext  = if (dot < 0) "" else name.substring(dot + 1)
     !entry.isDirectory && validExtensions.contains(ext)
   }
 
@@ -93,8 +97,11 @@ object FlatFileSystem {
     val existingJars = if (location.resolve("index.json").toFile.exists()) readMetadata(location) else Seq.empty[FlatJar]
 
     // içerik karmasını hesaplayabilmek için akışları belleğe al
-    val jarBytes = jars.map { case (name, stream) => (name, stream.readAllBytes(), ()) }
-      .map { case (name, bytes, _) => (name, bytes, sha1(bytes)) }
+    val jarBytes = jars.map {
+      case (name, stream) =>
+        val bytes = try stream.readAllBytes() finally stream.close()
+        (name, bytes, sha1(bytes))
+    }
 
     val newJars = jarBytes.filterNot { case (name, _, hash) =>
       existingJars.exists(j => j.name == name && j.hash == hash)
@@ -104,8 +111,54 @@ object FlatFileSystem {
     location.toFile.mkdirs()
 
     val dataFile = location.resolve("data").toFile
-    val fos      = new FileOutputStream(dataFile, true)
-    var offset   = dataFile.length()
+
+    // adı yeni jar'larca değiştirilmeyen mevcut kayıtlar; değiştirilenlerin
+    // veri dosyasındaki baytları ölü kalır
+    val survivors = existingJars.filterNot(j => newJars.exists(_._1 == j.name))
+
+    // ölü bayt canlı baytı aşınca veri dosyasını sıkıştır -- yoksa her
+    // içeriği değişen jar (ör. yeniden stage'lenen page jar'ı) dosyayı
+    // sınırsız büyütür
+    val compacted: Seq[FlatJar] = {
+      val live = survivors.iterator.flatMap(_.files).map(_.compressedSize.toLong).sum
+      val dead = dataFile.length() - live
+      if (dead > 0 && dead > live) {
+        log.info(s"Compacting cache data file: $dead dead bytes, $live live bytes")
+        val tmpFile   = location.resolve("data.tmp").toFile
+        val in        = new RandomAccessFile(dataFile, "r").getChannel
+        val out       = new FileOutputStream(tmpFile)
+        var newOffset = 0L
+        val rewritten = try {
+          survivors.map { jar =>
+            val newFiles = jar.files.map { f =>
+              val buf = java.nio.ByteBuffer.allocate(f.compressedSize)
+              var pos = f.offset
+              while (buf.hasRemaining) {
+                val n = in.read(buf, pos)
+                if (n < 0) throw new java.io.EOFException(s"Unexpected EOF compacting ${f.path}")
+                pos += n
+              }
+              out.write(buf.array())
+              val nf = f.copy(offset = newOffset)
+              newOffset += f.compressedSize
+              nf
+            }
+            jar.copy(files = newFiles)
+          }
+        } finally {
+          in.close()
+          out.close()
+        }
+        Files.move(tmpFile.toPath, dataFile.toPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        // eski index yeni ofsetlerle tutarsız; süreç tam burada ölürse bayat
+        // index çöp okutmasın diye sıkıştırılmış hali hemen kalıcılaştır
+        Files.write(location.resolve("index.json"), write(rewritten).getBytes(StandardCharsets.UTF_8))
+        rewritten
+      } else survivors
+    }
+
+    val fos    = new FileOutputStream(dataFile, true)
+    var offset = dataFile.length()
 
     // read through all new JARs, append contents to data and create metadata
     val addedJars = newJars.map { case (name, bytes, hash) =>
@@ -130,9 +183,9 @@ object FlatFileSystem {
     }
     fos.close()
 
-    // aynı adın eski (farklı içerikli) kaydı düşer -- veri dosyasındaki eski
-    // baytlar ölü kalır, sorun değil; index her ada tek (güncel) kayıt tutar
-    val finalJars = existingJars.filterNot(j => addedJars.exists(_.name == j.name)) ++ addedJars
+    // index her ada tek (güncel) kayıt tutar; eski sürümlerin ölü baytları
+    // yukarıdaki sıkıştırma eşiğiyle geri kazanılır
+    val finalJars = compacted ++ addedJars
     val json      = write(finalJars)
     Files.write(location.resolve("index.json"), json.getBytes(StandardCharsets.UTF_8))
 

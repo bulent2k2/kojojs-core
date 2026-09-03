@@ -23,8 +23,9 @@ import scalafiddle.shared.ExtLib
   *    jar adı+yol IRFile sürümü olarak veriliyor ki artımlı linker
   *    kütüphaneleri her derlemede yeniden işlemesin.
   *  - Java 8 bootFiles korsanlığı kalktı (bkz. GlobalInitCompat: jrt).
-  *  - Kütüphane eşlemesi Dependency yerine jar ADI üzerinden (Koco'da dış
-  *    kütüphane listesi küçük; ad bazında tekilleştirme yeterli).
+  *  - Kütüphane eşlemesi jar ADI üzerinden; modül çakışmaları (aynı modülün
+  *    farklı sürümleri) ComparableVersion ile en yüksek sürüme çözülür
+  *    (coursier 1'deki eski çözümlemenin karşılığı).
   *  - baseLibs, Scala.js 1.15+ stdlib bölünmesini içeriyor: javalib +
   *    scalalib ayrı jar'lar.
   */
@@ -56,6 +57,7 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
   }
 
   import coursier.{Dependency, Fetch, Module, ModuleName, Organization, Repositories, LocalRepositories}
+  import org.apache.maven.artifact.versioning.ComparableVersion
 
   private def toDependency(lib: ExtLib): Dependency = {
     val exclusions = Set(
@@ -80,16 +82,35 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
     )
 
     // her kütüphaneyi (geçişli bağımlılıklarıyla) ayrı ayrı çöz ki
-    // ExtLib -> jar listesi eşlemesi elde kalsın
-    val resolved: Seq[(ExtLib, Seq[File])] = libs.map { lib =>
-      val files = Fetch()
+    // ExtLib -> jar listesi eşlemesi elde kalsın; modül+sürüm bilgisini de
+    // koru ki çakışmalar sürüme göre çözülebilsin
+    val resolved: Seq[(ExtLib, Seq[(Module, String, File)])] = libs.map { lib =>
+      val result = Fetch()
         .withRepositories(repositories)
         .addDependencies(toDependency(lib))
-        .run()
-      lib -> files.filter(_.getName.endsWith(".jar"))
+        .runResult()
+      val jars = result.detailedArtifacts.collect {
+        case (dep, _, _, file) if file.getName.endsWith(".jar") => (dep.module, dep.version, file)
+      }
+      lib -> jars
     }
 
-    val extJars = resolved.flatMap(_._2).distinctBy(_.getName)
+    // aynı modül birden çok sürümle çözülmüşse en yükseği kazanır; elenenler
+    // loglanır. Her kütüphanenin classpath'i kazanan jar'a yönlendirilir.
+    val chosenByModule: Map[Module, File] = resolved
+      .flatMap(_._2)
+      .groupBy(_._1)
+      .map {
+        case (module, candidates) =>
+          val byVersion = candidates.distinctBy(_._2)
+          val chosen    = byVersion.maxBy(c => new ComparableVersion(c._2))
+          if (byVersion.size > 1)
+            log.warn(
+              s"Multiple versions of $module resolved: ${byVersion.map(_._2).sorted.mkString(", ")} -- using ${chosen._2}")
+          module -> chosen._3
+      }
+
+    val extJars = chosenByModule.values.toSeq.distinctBy(_.getName)
 
     // acquire an exclusive lock to prevent others from updating the FFS at the same time
     Paths.get(Config.libCache).toFile.mkdirs()
@@ -116,7 +137,12 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
 
       val commonLibs = commonJars.map { case (name, _) => name -> absffs.roots(name) }
       val extLibMap = resolved.map {
-        case (lib, files) => lib -> files.map(f => f.getName -> absffs.roots(f.getName)).toMap
+        case (lib, jars) =>
+          lib -> jars.map {
+            case (module, _, _) =>
+              val f = chosenByModule(module)
+              f.getName -> absffs.roots(f.getName)
+          }.toMap
       }.toMap
 
       (commonLibs, extLibMap, ffs)
@@ -145,16 +171,22 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
   }
 
   /**
-    * Linker 1.x için IRFile listesi. Jar adı + dosya yolu IRFile "sürümü"
-    * olarak verilir; jar içerikleri sunucu ömrü boyunca sabit olduğundan
-    * artımlı linker önbelleği bunlara güvenebilir.
+    * Linker 1.x için IRFile listesi. IRFile "sürümü" jar İÇERİĞİNİN sha-1'i
+    * + dosya yolundan türetilir: aynı adla farklı içerik gelirse (ör. yeni
+    * deploy'da değişen page jar'ı) artımlı linker önbelleği bayatlamaz.
+    * (hash alanı boş olan eski önbellek kayıtları için jar adına düşülür.)
     */
   private def irFilesOfJar(jarName: String, jar: FlatJar): Seq[IRFile] = {
+    val jarTag = if (jar.hash.nonEmpty) jar.hash else jarName
     jar.files.filter(_.path.endsWith(".sjsir")).map { file =>
       val content = ffs.load(jar, file.path)
-      new MemIRFileImpl(s"$jarName:${file.path}", org.scalajs.ir.Version.fromUTF8String(org.scalajs.ir.UTF8String(s"$jarName:${file.path}")), content)
+      val version = org.scalajs.ir.Version.fromUTF8String(org.scalajs.ir.UTF8String(s"$jarTag:${file.path}"))
+      new MemIRFileImpl(s"$jarName:${file.path}", version, content)
     }
   }
+
+  /** Önbellek veri kanalını kapatır; yönetici değiştirilirken çağrılır. */
+  def close(): Unit = ffs.close()
 
   val linkerCaches = new LRUCache[Seq[IRFile]]("IRFiles")
 
