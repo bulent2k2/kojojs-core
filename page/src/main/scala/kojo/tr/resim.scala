@@ -52,6 +52,13 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
 
     def çiz(r: Resim): Birim = r.draw()
     def önyükle(adres: Yazı): Birim = kb.preloadImage(adres)
+    // Sözlük adları (picCol/picRow/picStack): resimSütunu/Satırı/Yığını ile aynı.
+    def diziDikey(resimler: Resim*): Resim = kb.picCol(resimler: _*)
+    def diziYatay(resimler: Resim*): Resim = kb.picRow(resimler: _*)
+    def dizi(resimler: Resim*): Resim = kb.picStack(resimler: _*)
+    def diziDikeyDüzenli(resimler: Resim*): Resim = kb.picColCentered(resimler: _*)
+    def diziYatayDüzenli(resimler: Resim*): Resim = kb.picRowCentered(resimler: _*)
+    def diziDüzenli(resimler: Resim*): Resim = kb.picStackCentered(resimler: _*)
   }
 
   // ---- çizim yardımcıları ----
@@ -72,6 +79,18 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def kalemRengi(renk: Renk): Dönüştürücü = kb.penColor(renk)
   def boyaRengi(renk: Renk): Dönüştürücü = kb.fillColor(renk)
   def kalemKalınlığı(k: Kesir): Dönüştürücü = kb.penThickness(k)
+  // Sözlük alias'ları (aynı işlevler): götür=öteleme(trans), yaklaşXY=tuvaliYakınlaştır(zoomXY)
+  def götür(x: Kesir, y: Kesir): Dönüştürücü = kb.trans(x, y)
+  def yaklaşXY(xÇarpan: Kesir, yÇarpan: Kesir, mx: Kesir, my: Kesir): Birim = kb.zoomXY(xÇarpan, yÇarpan, mx, my)
+
+  // ---- oyun / tuval (sözlük adları) ----
+  def rastgeleDiziden[T](dizi: collection.Seq[T]): T = kb.randomFrom(dizi)   // randomFrom
+  def sırayaSok(saniye: Kesir)(kod: => Birim): Birim = kb.schedule(saniye)(kod) // schedule
+  def yaklaşmayaİzinVerme(): Birim = kb.disablePanAndZoom()                  // disablePanAndZoom
+  def tümEkran(): Birim = kb.toggleFullScreenCanvas()                        // toggleFullScreenCanvas
+  def oyunSüresiniGöster(sınırSn: Sayı, bitişİletisi: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
+    kb.showGameTime(sınırSn, bitişİletisi, renk, yazıBoyu)                   // showGameTime
+  def ada(ton: Kesir, doygunluk: Kesir, açıklık: Kesir): Renk = kojo.doodle.Color.hsl(ton, doygunluk, açıklık) // cm.hsl
 
   // ---- resimleri diz (satır / sütun / yığın) ----
   def resimSatırı(resimler: Resim*): Resim = kb.picRow(resimler: _*)
@@ -161,5 +180,6 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     // çarpışma ve sınırlar
     def sınırları: Dikdörtgen = r.bounds
     def çarpışıyorMu(öbürü: Resim): İkil = r.collidesWith(öbürü)
+    def fareyeTıklayınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseClick((x, y) => işlev(x, y)) // onMouseClick
   }
 }

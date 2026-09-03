@@ -55,6 +55,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def sil(): Birim = englishTurtle.clear()
   // cleari: tuvali temizler VE kaplumbağayı gizler (clear + invisible).
   def temizle(): Birim = englishTurtle.cleari()
+  def silVeSakla(): Birim = englishTurtle.cleari() // sözlük adı (temizle ile aynı)
   def göster(): Birim = görünür()
   def gizle(): Birim = görünmez()
   def görünür(): Birim = englishTurtle.visible()
@@ -77,6 +78,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def atla(x: Kesir, y: Kesir): Birim = englishTurtle.setPosition(x, y)
   def ilerle(x: Kesir, y: Kesir): Birim = englishTurtle.moveTo(x, y)
   def noktayaGit(x: Kesir, y: Kesir): Birim = englishTurtle.lineTo(x, y)
+  def git(x: Kesir, y: Kesir): Birim = englishTurtle.moveTo(x, y) // goTo/moveTo
   // Masaüstünde hop kalem durumunu bozduğu için saveStyle/restoreStyle ile
   // sarılıyor. KojoJS'te Hop -> realForward(n, hop=true) ve penIsUp'a HİÇ
   // dokunmuyor, yani sarmalama gereksiz -- üstelik zararlı: restoreStyle
