@@ -5,7 +5,6 @@ import scala.collection.mutable.{Stack, Queue, PriorityQueue}
 /**
  * Yığın (Stack), Kuyruk (Queue) ve Öncelik Sırası (PriorityQueue).
  *
- * 2.12 uyarlaması: `X.from(elems)` 2.13'e özgü, `X(elems: _*)` oldu.
  */
 trait KuyrukYöntemleri extends TemelTürler {
   type Yığın[T] = Stack[T]

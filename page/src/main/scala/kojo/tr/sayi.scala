@@ -4,8 +4,6 @@ package kojo.tr
  * Sayı türlerinin Türkçesi. Tür takma adları paket nesnesinde; burada uzantı
  * metotları ve eşlik eden nesneler var.
  *
- * 2.12 notu: masaüstündeki `Vector.from(elemanlar)` 2.13'e özgü; burada
- * `elemanlar.toVector`.
  */
 trait SayıYöntemleri extends TemelTürler {
   val İriSayı = BigInt
@@ -13,7 +11,7 @@ trait SayıYöntemleri extends TemelTürler {
 
   type Sayılar = Vector[Sayı]
   object Sayılar {
-    def apply(elemanlar: Sayı*): Sayılar = elemanlar.toVector
+    def apply(elemanlar: Sayı*): Sayılar = Vector.from(elemanlar)
     def unapplySeq(ss: Sayılar) = Vector.unapplySeq(ss)
   }
 

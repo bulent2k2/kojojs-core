@@ -4,131 +4,92 @@ import java.io._
 import java.nio.channels.{FileLock, OverlappingFileLockException}
 import java.nio.file.Paths
 
-import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
-import org.apache.maven.artifact.versioning.ComparableVersion
-import org.scalajs.core.tools.io.{RelativeVirtualFile, _}
+import org.scalajs.linker.interface.IRFile
+import org.scalajs.linker.standard.MemIRFileImpl
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.duration._
 import scala.tools.nsc.io.AbstractFile
 import scalafiddle.compiler.cache._
 import scalafiddle.shared.ExtLib
-import scalaz.concurrent.Task
-
-class JarEntryIRFile(outerPath: String, val relativePath: String)
-    extends MemVirtualSerializedScalaJSIRFile(s"$outerPath:$relativePath")
-    with RelativeVirtualFile
-
-class VirtualFlatJarFile(flatJar: FlatJar, ffs: FlatFileSystem) extends VirtualJarFile {
-  override def content: Array[Byte] = null
-  override def path: String         = flatJar.name
-  override def exists: Boolean      = true
-
-  override def sjsirFiles: Seq[VirtualScalaJSIRFile with RelativeVirtualFile] = {
-    flatJar.files.filter(_.path.endsWith("sjsir")).map { file =>
-      val content = ffs.load(flatJar, file.path)
-      new JarEntryIRFile(flatJar.name, file.path).withContent(content).withVersion(Some(path))
-    }
-  }
-}
 
 /**
   * Loads the jars that make up the classpath of the scala-js-fiddle
   * compiler and re-shapes it into the correct structure to satisfy
-  * scala-compile and scalajs-tools
+  * scala-compile and the Scala.js linker.
+  *
+  * Faz 3 farkları:
+  *  - coursier 1.0/scalaz -> coursier 2.x (Fetch API).
+  *  - scalajs-tools VirtualJarFile -> linker 1.x IRFile (MemIRFileImpl);
+  *    jar adı+yol IRFile sürümü olarak veriliyor ki artımlı linker
+  *    kütüphaneleri her derlemede yeniden işlemesin.
+  *  - Java 8 bootFiles korsanlığı kalktı (bkz. GlobalInitCompat: jrt).
+  *  - Kütüphane eşlemesi Dependency yerine jar ADI üzerinden (Koco'da dış
+  *    kütüphane listesi küçük; ad bazında tekilleştirme yeterli).
+  *  - baseLibs, Scala.js 1.15+ stdlib bölünmesini içeriyor: javalib +
+  *    scalalib ayrı jar'lar.
   */
 class LibraryManager(val depLibs: Seq[ExtLib]) {
-  implicit val system       = ActorSystem()
-  implicit val materializer = ActorMaterializer()
-  implicit val ec           = system.dispatcher
-
   val log     = LoggerFactory.getLogger(getClass)
-  val timeout = 60.seconds
 
   val baseLibs = Seq(
     s"/scala-library-${Config.scalaVersion}.jar",
     s"/scala-reflect-${Config.scalaVersion}.jar",
     s"/scalajs-library_${Config.scalaMainVersion}-${Config.scalaJSVersion}.jar",
-    s"/page_sjs${Config.scalaJSMainVersion}_${Config.scalaMainVersion}-${Config.version}.jar"
+    s"/scalajs-javalib-${Config.scalaJSVersion}.jar",
+    s"/scalajs-scalalib_${Config.scalaMainVersion}-${Config.scalaVersion}+${Config.scalaJSVersion}.jar",
+    s"/page_sjs${Config.scalaJSMajorVersion}_${Config.scalaMainVersion}-${Config.version}.jar"
   )
 
-  val sjsVersion = s"_sjs${Config.scalaJSMainVersion}_${Config.scalaMainVersion}"
+  val sjsVersion = s"_sjs${Config.scalaJSMajorVersion}_${Config.scalaMainVersion}"
 
-  val commonJars = {
+  val commonJars: Seq[(String, InputStream)] = {
     log.debug("Loading common libraries...")
-    val jarFiles = baseLibs.map { name =>
-      val stream = getClass.getResourceAsStream(name)
+    baseLibs.map { name =>
+      // coursier önbelleği '+' işaretini %2B olarak kodluyor (scalalib jar
+      // adı sürümünde + taşıyor) -- iki adı da dene
+      val stream = Option(getClass.getResourceAsStream(name))
+        .orElse(Option(getClass.getResourceAsStream(name.replace("+", "%2B"))))
+        .getOrElse(throw new Exception(s"Classpath loading failed, jar $name not found"))
       log.debug(s"Loading resource $name")
-      if (stream == null) {
-        throw new Exception(s"Classpath loading failed, jar $name not found")
-      }
       name -> stream
-    }.seq
-
-    val bootFiles = for {
-      prop <- Seq("sun.boot.class.path")
-      path <- System.getProperty(prop).split(System.getProperty("path.separator"))
-      vfile = scala.reflect.io.File(path)
-      if vfile.exists && !vfile.isDirectory
-    } yield {
-      val name = "system/" + path.split(File.separatorChar).last
-      log.debug(s"Loading resource $name")
-      name -> vfile.inputStream()
     }
-    log.debug("Common libraries loaded...")
-    jarFiles ++ bootFiles
   }
 
-  import coursier._
-  def loadCoursier(libs: Seq[ExtLib]) = {
-    import scalaz._
+  import coursier.{Dependency, Fetch, Module, ModuleName, Organization, Repositories, LocalRepositories}
 
+  private def toDependency(lib: ExtLib): Dependency = {
+    val exclusions = Set(
+      (Organization("org.scala-lang"), ModuleName("scala-reflect")),
+      (Organization("org.scala-lang"), ModuleName("scala-library")),
+      (Organization("org.scala-js"), ModuleName(s"scalajs-library_${Config.scalaMainVersion}")),
+      (Organization("org.scala-js"), ModuleName(s"scalajs-test-interface_${Config.scalaMainVersion}"))
+    )
+    val artifactName =
+      if (lib.compileTimeOnly) s"${lib.artifact}_${Config.scalaMainVersion}"
+      else lib.artifact + sjsVersion
+    Dependency(Module(Organization(lib.group), ModuleName(artifactName)), lib.version)
+      .withExclusions(exclusions)
+  }
+
+  def loadLibraries(libs: Seq[ExtLib]) = {
     log.debug(s"Loading: $libs")
 
     val repositories = Seq(
-      Cache.ivy2Local,
-      MavenRepository("https://repo1.maven.org/maven2")
+      LocalRepositories.ivy2Local,
+      Repositories.central
     )
-    val exclusions = Set(
-      ("org.scala-lang", "scala-reflect"),
-      ("org.scala-lang", "scala-library"),
-      ("org.scala-js", s"scalajs-library_${Config.scalaMainVersion}"),
-      ("org.scala-js", s"scalajs-test-interface_${Config.scalaMainVersion}")
-    )
-    val results = Task
-      .gatherUnordered(libs.map { lib =>
-        val dep = lib match {
-          case ExtLib(group, artifact, version, false) =>
-            Dependency(Module(group, artifact + sjsVersion), lib.version, exclusions = exclusions)
-          case ExtLib(group, artifact, version, true) =>
-            Dependency(Module(group, s"${artifact}_${Config.scalaMainVersion}"), lib.version, exclusions = exclusions)
-        }
-        val start = Resolution(Set(dep))
-        val fetch = Fetch.from(repositories, Cache.fetch())
-        start.process.run(fetch).map(res => (lib, res))
-      })
-      .unsafePerformSync
-    results.foreach {
-      case (lib, r) =>
-        val root = r.rootDependencies.head
-        if (r.metadataErrors.nonEmpty) {
-          log.error(r.metadataErrors.toString)
-        }
-        log.debug(s"Deps for ${root.moduleVersion}: ${r.minDependencies.size}")
-        r.minDependencies.foreach { dep =>
-          // log.debug(s"   ${dep.moduleVersion}")
-        }
-    }
-    val depArts = results.flatMap(_._2.dependencyArtifacts).distinct
 
-    val jars =
-      Task.gatherUnordered(depArts.map(da => Cache.file(da._2).map(f => (da._1, f.toPath)).run)).unsafePerformSync.collect {
-        case \/-((dep, path)) if path.toString.endsWith("jar") =>
-          (dep, path.toString, new FileInputStream(path.toFile))
-        case -\/(error) =>
-          throw new Exception(s"Unable to load a library: ${error.describe}")
-      }
+    // her kütüphaneyi (geçişli bağımlılıklarıyla) ayrı ayrı çöz ki
+    // ExtLib -> jar listesi eşlemesi elde kalsın
+    val resolved: Seq[(ExtLib, Seq[File])] = libs.map { lib =>
+      val files = Fetch()
+        .withRepositories(repositories)
+        .addDependencies(toDependency(lib))
+        .run()
+      lib -> files.filter(_.getName.endsWith(".jar"))
+    }
+
+    val extJars = resolved.flatMap(_._2).distinctBy(_.getName)
 
     // acquire an exclusive lock to prevent others from updating the FFS at the same time
     Paths.get(Config.libCache).toFile.mkdirs()
@@ -149,18 +110,13 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
         }
       }
 
-      val ffs    = FlatFileSystem.build(Paths.get(Config.libCache), jars.map(j => (j._2, j._3)) ++ commonJars)
-      val absffs = new AbstractFlatFileSystem(ffs)
+      val extStreams = extJars.map(f => (f.getName, new FileInputStream(f): InputStream))
+      val ffs        = FlatFileSystem.build(Paths.get(Config.libCache), extStreams ++ commonJars)
+      val absffs     = new AbstractFlatFileSystem(ffs)
 
-      val jarFlatFiles       = jars.map(jar => (jar._1, absffs.roots(jar._2)))
-      val commonJarFlatFiles = commonJars.map(jar => (jar._1, absffs.roots(jar._1))).toMap
-
-      val commonLibs = commonJars.map { case (jar, _) => jar -> commonJarFlatFiles(jar) }
-      val extLibMap = results.map {
-        case (lib, resolution) =>
-          (lib,
-           resolution.minDependencies.flatMap(dep =>
-             jarFlatFiles.find(_._1.moduleVersion == dep.moduleVersion).map(ff => (dep, ff._2))))
+      val commonLibs = commonJars.map { case (name, _) => name -> absffs.roots(name) }
+      val extLibMap = resolved.map {
+        case (lib, files) => lib -> files.map(f => f.getName -> absffs.roots(f.getName)).toMap
       }.toMap
 
       (commonLibs, extLibMap, ffs)
@@ -170,67 +126,47 @@ class LibraryManager(val depLibs: Seq[ExtLib]) {
     }
   }
 
-  def resolveDeps(deps: Seq[Dependency]): Seq[Dependency] = {
-    deps
-      .groupBy(_.module)
-      .map {
-        case (_, versions) =>
-          // sort by version, select latest
-          versions.maxBy(lib => new ComparableVersion(lib.version))
-      }
-      .toSeq
-  }
-
   /**
     * External libraries loaded from repository
     */
   log.debug("Loading external libraries")
-  val (commonLibs, extLibraries, ffs) = loadCoursier(depLibs)
-
-  val flatDeps = extLibraries.flatMap(_._2).groupBy(_._1).mapValues(_.head._2)
+  val (commonLibs, extLibraries, ffs) = loadLibraries(depLibs)
 
   /**
-    * The loaded files shaped for Scala-Js-Tools to use
+    * In memory cache of all the jars used in the compiler.
     */
-  def lib4linker(file: AbstractFlatJar) = {
-    val jarFile = new VirtualFlatJarFile(file.flatJar, ffs)
-    IRFileCache.IRContainer.Jar(jarFile)
-  }
+  val commonLibraries4compiler: Seq[AbstractFile] = commonLibs.map { case (_, jar) => jar.root }
 
-  /**
-    * In memory cache of all the jars used in the compiler. This takes up some
-    * memory but is better than reaching all over the filesystem every time we
-    * want to do something.
-    */
-  val commonLibraries4compiler = commonLibs.map { case (name, data) => data.root }.seq
-  val dependency4compiler      = flatDeps.map { case (dep, data)    => dep -> data.root }.seq
-
-  /**
-    * In memory cache of all the jars used in the linker.
-    */
-  val commonLibraries4linker = commonLibs.map { case (name, file) => lib4linker(file) }
-  val dependency4linker      = flatDeps.map { case (dep, file)    => dep -> lib4linker(file) }
-
-  def deps(extLibs: Set[ExtLib]) = {
-    val resolved = resolveDeps(extLibs.flatMap(lib => extLibraries(lib).map(_._1)).toList)
-    // log.debug(s"Resolved libraries: ${resolved.map(_.moduleVersion)}")
-    resolved
-  }
+  private def extJars(extLibs: Set[ExtLib]): Seq[(String, AbstractFlatJar)] =
+    extLibs.toSeq.flatMap(lib => extLibraries.getOrElse(lib, Map.empty).toSeq).distinctBy(_._1)
 
   def compilerLibraries(extLibs: Set[ExtLib]): Seq[AbstractFile] = {
-    commonLibraries4compiler ++ deps(extLibs).map(dep => dependency4compiler(dep))
+    commonLibraries4compiler ++ extJars(extLibs).map(_._2.root)
   }
 
-  val irCache      = new IRFileCache
-  val linkerCaches = new LRUCache[Seq[IRFileCache.VirtualRelativeIRFile]]("IRFiles")
+  /**
+    * Linker 1.x için IRFile listesi. Jar adı + dosya yolu IRFile "sürümü"
+    * olarak verilir; jar içerikleri sunucu ömrü boyunca sabit olduğundan
+    * artımlı linker önbelleği bunlara güvenebilir.
+    */
+  private def irFilesOfJar(jarName: String, jar: FlatJar): Seq[IRFile] = {
+    jar.files.filter(_.path.endsWith(".sjsir")).map { file =>
+      val content = ffs.load(jar, file.path)
+      new MemIRFileImpl(s"$jarName:${file.path}", org.scalajs.ir.Version.fromUTF8String(org.scalajs.ir.UTF8String(s"$jarName:${file.path}")), content)
+    }
+  }
 
-  def linkerLibraries(extLibs: Set[ExtLib]) = {
+  val linkerCaches = new LRUCache[Seq[IRFile]]("IRFiles")
+
+  def linkerLibraries(extLibs: Set[ExtLib]): Seq[IRFile] = {
     this.synchronized {
-      linkerCaches.getOrUpdate(extLibs, {
-        val loadedJars = commonLibraries4linker ++ deps(extLibs).map(dep => dependency4linker(dep))
-        val cache      = irCache.newCache
-        cache.cached(loadedJars)
-      })
+      linkerCaches.getOrUpdate(
+        extLibs, {
+          val commonIr = commonLibs.flatMap { case (name, absJar) => irFilesOfJar(name, absJar.flatJar) }
+          val extIr    = extJars(extLibs).flatMap { case (name, absJar) => irFilesOfJar(name, absJar.flatJar) }
+          commonIr ++ extIr
+        }
+      )
     }
   }
 }

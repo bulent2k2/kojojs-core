@@ -48,15 +48,16 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def randomInt = Random.nextInt
   def randomLong = Random.nextLong
   def randomFrom[T](seq: collection.Seq[T]) = seq(random(seq.length))
-  def randomFrom[T](seq: collection.Seq[T], weights: collection.mutable.Seq[Int]): T = randomFrom(seq, weights map (_.toDouble))
-  def randomFrom[T](seq: collection.Seq[T], weights: collection.immutable.Seq[Int]): T = randomFrom(seq, weights map (_.toDouble))
-  def randomFrom[T](seq: collection.Seq[T], weights: Seq[Double]): T = {
-    val sum = weights.sum
+  // 2.13: eski Int/Double overload üçlüsü silme sonrası aynı imzaya
+  // düşüyordu (erasure); Numeric ile tek metot ikisini de kapsıyor
+  def randomFrom[T, W](seq: collection.Seq[T], weights: collection.Seq[W])(implicit num: Numeric[W]): T = {
+    val ws  = weights.map(num.toDouble)
+    val sum = ws.sum
     val probabilities = if (Utils.doublesEqual(sum, 1.0, 1e-3)) {
-      weights
+      ws
     }
     else {
-      weights.map { w => w / sum }
+      ws.map { w => w / sum }
     }
 
     // sourced from:
@@ -307,9 +308,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     stopMp3Loop()
   }
 
-  def draw(pictures: Picture*) = pictures.foreach { _ draw () }
-  def draw(pictures: IndexedSeq[Picture]) = pictures.foreach { _ draw () }
-  def draw(pictures: List[Picture]) = pictures.foreach { _ draw () }
+  def draw(pictures: Picture*) = pictures.foreach { _.draw() }
+  // 2.13: IndexedSeq/List overload çifti yerine collection.Seq -- ikisini de,
+  // artı ArrayBuffer gibi mutable dizileri de kapsıyor
+  def draw(pictures: collection.Seq[Picture]) = pictures.foreach { _.draw() }
   def drawAndHide(pictures: Picture*) = pictures.foreach { p =>
     import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
     p.draw()

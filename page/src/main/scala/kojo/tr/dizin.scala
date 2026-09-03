@@ -42,10 +42,7 @@ trait DizinYöntemleri extends TemelTürler {
     def topla[T2 >: T](implicit num: Numeric[T2]) = d.sum(num)
     def çarp[T2 >: T](implicit num: Numeric[T2]) = d.product(num)
     def yinelemesiz: Col = d.distinct
-    def yinelemesizİşlevle[T2](işlev: T => T2): Col = {
-      val görülen = collection.mutable.HashSet.empty[T2]
-      d.filter(x => görülen.add(işlev(x)))
-    }
+    def yinelemesizİşlevle[T2](işlev: T => T2): Col = d.distinctBy(işlev)
     def yazıYap: Yazı = d.mkString
     def yazıYap(ara: Yazı): Yazı = d.mkString(ara)
     def yazıYap(başı: Yazı, ara: Yazı, sonu: Yazı): Yazı = d.mkString(başı, ara, sonu)

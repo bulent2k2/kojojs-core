@@ -30,17 +30,11 @@ trait GelecekYöntemleri extends TemelTürler {
    * "recursive value builtins needs type" hatası veriyor (örtüğün türünü
    * çözmek için trTurtle, onun için de builtins gerekiyor). Burada üye olarak
    * verince `import trTurtle._` ile kendiliğinden geliyor.
-   *
-   * Aynı nedenle `import scala.concurrent.ExecutionContext.Implicits.global`
-   * da YAZILMAMALI (internetteki Future örneklerinin çoğunda var): bu örtükle
-   * çakışır ve `ambiguous implicit values` hatası verir. Gerek de yok.
    */
   implicit lazy val küreselİşletimBağlamı: İşletimBağlamı = ExecutionContext.global
 
   object Gelecek {
     def başarılı[T](sonuç: T): Gelecek[T] = Future.successful(sonuç)
-    // KASITLI daraltma: Future.failed aslında Throwable alıyor. Çocuk API'sinde
-    // KuralDışı (Exception) yeterli ve masaüstü Koco'daki gelecek.scala ile aynı.
     def başarısız[T](hata: KuralDışı): Gelecek[T] = Future.failed(hata)
   }
 

@@ -5,8 +5,7 @@ package kojo.tr
  *  - `Eşlek` : değişmez Map (collection.immutable.Map) -- uzantı metotlarıyla
  *  - `Eşlem` : değişebilir Map sarmalayıcısı (ekle/çıkar yapılabilen)
  *
- * 2.12 uyarlamaları: `Map.from(...)` -> `Map(... : _*)`, `addOne` -> `+=`,
- * `zip` Iterable alıyor. `dizime` (Dizim sarmalayıcısı) henüz portlanmadı.
+ * `dizime` (Dizim sarmalayıcısı) henüz portlanmadı.
  */
 trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri {
   type Eşlek[A, D] = collection.immutable.Map[A, D]
@@ -49,8 +48,8 @@ trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri {
     def yazıYap(ara: Yazı): Yazı = m.mkString(ara)
     // DİKKAT: m'yi YERİNDE değiştirmez, değiştirilmiş bir KOPYA döndürür.
     // (Değişebilir bir sarmalayıcıda ad yanıltıcı olabilir; yerinde değişiklik
-    // için eşEkle/+= kullanın.) 2.13'teki addOne yerine +=.
-    def değiştirilmiş(a: A, d: D) = m.clone() += (a -> d)
+    // için eşEkle/+= kullanın.)
+    def değiştirilmiş(a: A, d: D) = m.clone().addOne(a -> d)
     def varMı(deneme: ((A, D)) => İkil): İkil = m.exists(deneme)
     def hepsiDoğruMu(deneme: ((A, D)) => İkil): İkil = m.forall(deneme)
     def içeriyorMu(anahtar: A): İkil = m.contains(anahtar)
@@ -64,7 +63,7 @@ trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri {
     def boş[A, D] = new Eşlem[A, D](collection.mutable.Map.empty[A, D])
     def apply[A, D](elems: (A, D)*) = new Eşlem[A, D](collection.mutable.Map(elems: _*))
     def değişmezden[A, D](m: collection.immutable.Map[A, D]) =
-      new Eşlem[A, D](collection.mutable.Map(m.toSeq: _*))
+      new Eşlem[A, D](collection.mutable.Map.from(m))
   }
 
   implicit class EşlekMetotları[A, D](m: Eşlek[A, D]) {

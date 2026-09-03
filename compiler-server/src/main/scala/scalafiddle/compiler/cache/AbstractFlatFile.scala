@@ -7,6 +7,16 @@ import scala.collection.mutable.ArrayBuffer
 import scala.tools.nsc.io.AbstractFile
 import scala.reflect.io._
 
+object AbstractFlatFile {
+  // GEÇİCİ tanı: hangi classfile kaç kez okunuyor
+  private val counts = new java.util.concurrent.ConcurrentHashMap[String, java.util.concurrent.atomic.AtomicLong]()
+  private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+  def readLog(path: String): Unit = {
+    val n = counts.computeIfAbsent(path, _ => new java.util.concurrent.atomic.AtomicLong()).incrementAndGet()
+    if (n == 10 || n == 100 || n % 1000 == 0) logger.warn(s"HOT-READ x$n: $path")
+  }
+}
+
 class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem) extends AbstractFile {
   override val path                    = flatFile.path
   override val name: String            = path.split('/').last
@@ -17,11 +27,16 @@ class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem
   override def delete(): Unit          = unsupported()
   override def isDirectory: Boolean    = false
   val lastModified: Long               = System.currentTimeMillis
+  // sizeOption olmadan nsc'nin ReusableDataReader'ı dosyayı BAYT BAYT okuyup
+  // her büyümede Arrays.copyOf yapıyor -- boyut bilinince tek geçişte okuyor
+  override def sizeOption: Option[Int] = Some(flatFile.origSize)
+
   override def input: InputStream = {
     new ByteArrayInputStream(ffs.load(flatFile.path))
   }
 
   override def toByteArray: Array[Byte] = {
+    AbstractFlatFile.readLog(flatFile.path)
     ffs.load(flatJar, flatFile.path)
   }
 
@@ -34,7 +49,7 @@ class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem
 }
 
 class AbstractFlatDir(val path: String, val children: ArrayBuffer[AbstractFile] = ArrayBuffer.empty) extends AbstractFile {
-  private lazy val files: Map[String, AbstractFile] = children.map(c => c.name -> c)(collection.breakOut)
+  private lazy val files: Map[String, AbstractFile] = children.iterator.map(c => c.name -> c).toMap
   override val name: String                         = path.split('/').last
   override def absolute: AbstractFile               = this
   override def container: AbstractFile              = NoAbstractFile

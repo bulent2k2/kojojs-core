@@ -3,7 +3,6 @@ package kojo.tr
 /**
  * Set'in Türkçesi.
  *
- * 2.12 uyarlaması: `Set.from(elemanlar)` 2.13'e özgü, `elemanlar.toSet` oldu.
  * `dizime` / `eşleme` masaüstünde Dizim/Eşlem sarmalayıcılarına dönüyor; onlar
  * henüz portlanmadı, düz Array/Map dönüyoruz.
  */

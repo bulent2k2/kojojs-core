@@ -1,28 +1,22 @@
 package kojo.tr
 
 /**
- * "Miskin" (tembel/lazy) dizin.
- *
- * 2.12 UYARLAMASI: masaüstü `LazyList` kullanıyor, o 2.13'te geldi. 2.12'deki
- * karşılığı `Stream` -- aynı tembel semantik, farklı ad. `MiskinDizin` takma adı
- * sayesinde KULLANICI kodu iki tarafta da aynı yazılıyor.
- *
- * Fark: Stream'in başı hevesli (head eager), LazyList'te o da tembel. Sonsuz
- * diziler ve `sayalım`/`yinele` gibi kullanımlar etkilenmiyor.
+ * "Miskin" (tembel/lazy) dizin. 2.13 (Faz 2): masaüstüyle aynı, gerçek
+ * `LazyList` (2.12 döneminde `Stream` ile taklit ediliyordu).
  */
 trait MiskinDizinYöntemleri extends TemelTürler {
-  type MiskinDizin[C] = Stream[C]
+  type MiskinDizin[C] = LazyList[C]
 
   object MiskinDizin {
     def ekle[A](diziler: Yinelenebilir[A]*): MiskinDizin[A] =
-      diziler.foldLeft(Stream.empty[A])((acc, d) => acc #::: d.toStream)
-    def sürekli[A](öge: => A): MiskinDizin[A] = Stream.continually(öge)
-    def boş[A]: MiskinDizin[A] = Stream.empty[A]
-    def doldur[A](s: Sayı)(öge: => A): MiskinDizin[A] = Stream.fill(s)(öge)
+      diziler.foldLeft(LazyList.empty[A])((acc, d) => acc #::: d.to(LazyList))
+    def sürekli[A](öge: => A): MiskinDizin[A] = LazyList.continually(öge)
+    def boş[A]: MiskinDizin[A] = LazyList.empty[A]
+    def doldur[A](s: Sayı)(öge: => A): MiskinDizin[A] = LazyList.fill(s)(öge)
     def sayalım(başlangıç: Sayı, kaçarKaçar: Sayı = 1): MiskinDizin[Sayı] =
-      Stream.from(başlangıç, kaçarKaçar)
+      LazyList.from(başlangıç, kaçarKaçar)
     def yinele[S](başlangıç: => S)(işlev: S => S): MiskinDizin[S] =
-      Stream.iterate(başlangıç)(işlev)
+      LazyList.iterate(başlangıç)(işlev)
   }
 
   implicit class MiskinDizinMetotları[T](d: MiskinDizin[T]) {
