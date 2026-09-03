@@ -53,6 +53,8 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
 
   // ---- görünürlük ----
   def sil(): Birim = englishTurtle.clear()
+  // cleari: tuvali temizler VE kaplumbağayı gizler (clear + invisible).
+  def temizle(): Birim = englishTurtle.cleari()
   def göster(): Birim = görünür()
   def gizle(): Birim = görünmez()
   def görünür(): Birim = englishTurtle.visible()

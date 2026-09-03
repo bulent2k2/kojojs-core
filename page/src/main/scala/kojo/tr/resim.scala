@@ -62,6 +62,24 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   // gibi örnekler ekranı telefona sığdırmak için kullanıyor.
   def tuvaliYakınlaştır(xÇarpan: Kesir, yÇarpan: Kesir, mx: Kesir, my: Kesir): Birim =
     kb.zoomXY(xÇarpan, yÇarpan, mx, my)
+
+  // ---- birleştirilebilir dönüşümler (serbest işlev) ----
+  // İngilizce trans/rot/penColor... karşılığı. `*` ile zincirlenir, `->` ile
+  // resme uygulanır: boyaRengi(mavi) * kalemRengi(siyah) -> Resim.daire(30)
+  def öteleme(x: Kesir, y: Kesir): Dönüştürücü = kb.trans(x, y)
+  def döndürme(açı: Kesir): Dönüştürücü = kb.rot(açı)
+  def büyütme(k: Kesir): Dönüştürücü = kb.scale(k)
+  def kalemRengi(renk: Renk): Dönüştürücü = kb.penColor(renk)
+  def boyaRengi(renk: Renk): Dönüştürücü = kb.fillColor(renk)
+  def kalemKalınlığı(k: Kesir): Dönüştürücü = kb.penThickness(k)
+
+  // ---- resimleri diz (satır / sütun / yığın) ----
+  def resimSatırı(resimler: Resim*): Resim = kb.picRow(resimler: _*)
+  def resimSütunu(resimler: Resim*): Resim = kb.picCol(resimler: _*)
+  def resimYığını(resimler: Resim*): Resim = kb.picStack(resimler: _*)
+  def resimSatırıOrtalı(resimler: Resim*): Resim = kb.picRowCentered(resimler: _*)
+  def resimSütunuOrtalı(resimler: Resim*): Resim = kb.picColCentered(resimler: _*)
+  def resimYığınıOrtalı(resimler: Resim*): Resim = kb.picStackCentered(resimler: _*)
   def çizMerkezdeYazı(mesaj: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
     kb.drawCenteredMessage(mesaj, renk, yazıBoyu)
 

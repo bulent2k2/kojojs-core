@@ -50,6 +50,9 @@ trait TemelTürler {
   type Diz[B] = collection.Seq[B]
   type Dizi[B] = Seq[B]
   type Dizin[A] = List[A]
+  // Birleştirilebilir resim dönüşümü (öteleme/döndürme/renk...). `*` ile
+  // zincirlenir, `->` ile bir resme uygulanır. Bkz. resim.scala serbest işlevleri.
+  type Dönüştürücü = kojo.ComposableTransformer
   type SıralıDizi[A] = IndexedSeq[A]
   type Yineleyici[C] = Iterator[C]
   type Yinelenebilir[C] = Iterable[C]
