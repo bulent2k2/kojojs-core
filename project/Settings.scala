@@ -16,26 +16,21 @@ object Settings {
 
   /** Declare global dependency versions here to avoid mismatches in multi part dependencies */
   object versions {
-    val fiddle        = "1.1.1"
-    val scalatest     = "3.0.3"
-    val macroParadise = "2.1.0"
-    val kindProjector = "0.9.6"
-    val akka          = "2.5.12"
-    val akkaHttp      = "10.1.1"
-    val upickle       = "0.4.4"
-    val ace           = "1.2.2"
-    val dom           = "0.9.8"
-    val scalatags     = "0.6.7"
-    val async         = "0.9.7"
-    val coursier      = "1.0.3"
-    val kamon         = "0.6.7"
-    val base64        = "0.2.4"
-  }
+    val fiddle = "1.1.1"
 
-  val kamon = Seq(
-    "io.kamon" %% "kamon-core"   % versions.kamon,
-    "io.kamon" %% "kamon-statsd" % versions.kamon
-  )
+    // Faz 3: 2.13.18 / Scala.js 1.x uyumlu hat. kamon, macro-paradise ve
+    // kind-projector tamamen kaldırıldı (2.13'te gereksiz / 2.13 sürümleri yok).
+    val scalatest = "3.2.19"
+    val akka      = "2.5.32"  // 2.13 destekleyen son 2.5 hattı
+    val akkaHttp  = "10.1.15" // 2.13 destekleyen 10.1 hattı
+    val upickle   = "1.6.0"
+    val ace       = "1.2.2"
+    val dom       = "1.2.0"   // raw paketi hâlâ mevcut; 2.x sıçraması ayrı iş
+    val scalatags = "0.9.4"
+    val async     = "1.0.1"   // -Xasync derleyici bayrağı ister
+    val coursier  = "2.1.24"
+    val base64    = "0.3.0"
+  }
 
   val akka = Seq(
     "com.typesafe.akka" %% "akka-actor"  % versions.akka,

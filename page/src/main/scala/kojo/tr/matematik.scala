@@ -42,8 +42,7 @@ trait MatematikYöntemleri extends TemelTürler with NoktaYöntemleri {
   def taban(x: Kesir): Kesir = math.floor(x)
   def tavan(x: Kesir): Kesir = math.ceil(x)
   def yakını(x: Kesir): Kesir = math.rint(x)
-  // 2.13'teki `.sign` yerine 2.12'de math.signum
-  def işareti(x: Kesir): Sayı = math.signum(x).toInt
+  def işareti(x: Kesir): Sayı = x.sign.toInt
   def sayıya(x: Kesir): Sayı = x.toInt
   def rasgele: Kesir = math.random()
 

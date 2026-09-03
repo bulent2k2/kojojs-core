@@ -38,4 +38,9 @@ class LRUCache[T](name: String) {
     val hash = hashLibs(libs)
     cache.remove(hash)
   }
+
+  def clear(): Unit = {
+    log.debug(s"Clearing cache: $name")
+    cache.clear()
+  }
 }

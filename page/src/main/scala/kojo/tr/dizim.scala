@@ -6,8 +6,7 @@ import scala.collection.mutable.ArrayBuffer
 /**
  * Array ve ArrayBuffer sarmalayıcıları (eski adlandırma; dizik.scala daha yeni).
  *
- * 2.12 uyarlamaları: `ArrayBuffer.from(...)` -> `ArrayBuffer(... : _*)`,
- * `filterInPlace` (2.13) yok; 2.12'de ArrayBuffer'da `retain` de yok, elle.
+ * 2.13 (Faz 2): `filterInPlace` artık gerçek; 2.12 uyarlamaları söküldü.
  */
 trait DizimYöntemleri extends TemelTürler {
 
@@ -21,22 +20,13 @@ trait DizimYöntemleri extends TemelTürler {
     def +=(öge: T) = ekle(öge)
     def çıkar(yer: Sayı) = a.remove(yer)
     def sil() = a.clear()
-    // 2.12'de ArrayBuffer.toSeq KOPYA DEĞİL, kendisini döndürüyor: `val d =
-    // e.diziye; e += 4` çağıranın elindeki diziyi de değiştirirdi.
     def dizi = a.toVector
     def diziye = a.toVector
     def dizine = a.toList
     def boşMu: İkil = a.isEmpty
     def doluMu: İkil = a.nonEmpty
     def ele(deneme: T => İkil): Col = new EsnekDizim(a.filter(deneme))
-    // 2.13'te filterInPlace var; 2.12'de ArrayBuffer'da ne o ne de retain
-    // bulunuyor, elle yapıyoruz.
-    def eleYerinde(deneme: T => İkil): this.type = {
-      val kalan = a.filter(deneme)
-      a.clear()
-      a ++= kalan
-      this
-    }
+    def eleYerinde(deneme: T => İkil): this.type = { a.filterInPlace(deneme); this }
     def işle[B](işlev: T => B): C2[B] = new EsnekDizim(a.map(işlev))
     def herbiriİçin[B](işlev: T => B): Birim = a.foreach(işlev)
     override def toString = a.mkString("EsnekDizim(", ", ", ")")

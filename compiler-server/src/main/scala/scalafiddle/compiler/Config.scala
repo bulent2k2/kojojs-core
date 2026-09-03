@@ -31,6 +31,8 @@ object Config {
   val scalaMainVersion   = scalaVersion.split('.').take(2).mkString(".")
   val scalaJSVersion     = versionProps.getProperty("scalaJSVersion")
   val scalaJSMainVersion = scalaJSVersion.split('.').take(2).mkString(".")
+  // sjs1'de artefakt eki yalnızca majör sürümü taşıyor: page_sjs1_2.13
+  val scalaJSMajorVersion = scalaJSVersion.split('.').head
   val aceVersion         = versionProps.getProperty("aceVersion")
 
 }

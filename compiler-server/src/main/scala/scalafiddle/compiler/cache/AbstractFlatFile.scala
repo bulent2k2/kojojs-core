@@ -17,6 +17,10 @@ class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem
   override def delete(): Unit          = unsupported()
   override def isDirectory: Boolean    = false
   val lastModified: Long               = System.currentTimeMillis
+  // sizeOption olmadan nsc'nin ReusableDataReader'ı dosyayı BAYT BAYT okuyup
+  // her büyümede Arrays.copyOf yapıyor -- boyut bilinince tek geçişte okuyor
+  override def sizeOption: Option[Int] = Some(flatFile.origSize)
+
   override def input: InputStream = {
     new ByteArrayInputStream(ffs.load(flatFile.path))
   }
@@ -34,7 +38,7 @@ class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem
 }
 
 class AbstractFlatDir(val path: String, val children: ArrayBuffer[AbstractFile] = ArrayBuffer.empty) extends AbstractFile {
-  private lazy val files: Map[String, AbstractFile] = children.map(c => c.name -> c)(collection.breakOut)
+  private lazy val files: Map[String, AbstractFile] = children.iterator.map(c => c.name -> c).toMap
   override val name: String                         = path.split('/').last
   override def absolute: AbstractFile               = this
   override def container: AbstractFile              = NoAbstractFile

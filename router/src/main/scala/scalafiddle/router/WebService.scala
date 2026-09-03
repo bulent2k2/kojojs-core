@@ -19,9 +19,8 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives
+import ch.megard.akka.http.cors.scaladsl.model.HttpOriginMatcher
 import ch.megard.akka.http.cors.scaladsl.settings.CorsSettings
-import kamon.Kamon
-import kamon.metric.instrument.Counter
 import org.slf4j.LoggerFactory
 import upickle.default._
 
@@ -41,7 +40,9 @@ case class CacheError(error: String) extends CacheValue
 
 case object NotFound extends CacheValue
 
-case class CacheCounter(hit: Counter, miss: Counter, error: Counter)
+// Faz 3: kamon kaldırıldı (2.13 sürümü yok); sayaçlar no-op
+class NoopCounter { def increment(): Unit = () }
+case class CacheCounter(hit: NoopCounter, miss: NoopCounter, error: NoopCounter)
 
 class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
   import HttpCharsets._
@@ -54,7 +55,7 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
   val log                   = LoggerFactory.getLogger(getClass)
 
   val corsSettings =
-    CorsSettings.defaultSettings.withAllowedOrigins(HttpOriginRange(Config.corsOrigins.map(HttpOrigin(_)): _*))
+    CorsSettings.defaultSettings.withAllowedOrigins(HttpOriginMatcher(Config.corsOrigins.map(HttpOrigin(_)): _*))
 
   type ParamValidator = Map[String, Validator]
   val embedValidator: ParamValidator = Map(
@@ -82,11 +83,7 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
     "embed",
     "complete"
   ).map { name =>
-    name -> CacheCounter(
-      Kamon.metrics.counter(s"$name-cache-hit"),
-      Kamon.metrics.counter(s"$name-cache-miss"),
-      Kamon.metrics.counter(s"$name-validation-error")
-    )
+    name -> CacheCounter(new NoopCounter, new NoopCounter, new NoopCounter)
   }.toMap
 
   def validateParams(params: Map[String, String], validator: ParamValidator): Option[String] = {

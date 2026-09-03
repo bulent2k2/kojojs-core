@@ -1,12 +1,15 @@
 package scalafiddle.compiler
 
-import org.scalajs.core.tools.io._
-import org.scalajs.core.tools.linker.Linker
-import org.scalajs.core.tools.linker.backend.{ModuleKind, OutputMode}
-import org.scalajs.core.tools.logging._
-import org.scalajs.core.tools.sem.Semantics
+import java.nio.charset.StandardCharsets
+
+import org.scalajs.linker.interface._
+import org.scalajs.linker.{MemOutputDirectory, StandardImpl}
+import org.scalajs.linker.standard.MemIRFileImpl
+import org.scalajs.logging.{Level, Logger}
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
 import scala.reflect.internal.util.Position
 import scala.reflect.io
 import scala.tools.nsc.Settings
@@ -16,7 +19,12 @@ import scalafiddle.shared.ExtLib
 
 /**
   * Handles the interaction between scala-js-fiddle and
-  * scalac/scalajs-tools to compile and optimize code submitted by users.
+  * scalac/scalajs-linker to compile and optimize code submitted by users.
+  *
+  * Faz 3: scalajs-tools (0.6) -> scalajs-linker (1.x). Görünür farklar:
+  *  - IR artık VirtualScalaJSIRFile değil linker-interface IRFile.
+  *  - Linker çıktısı MemOutputDirectory içinden okunuyor; link() Future döner.
+  *  - Closure yalnızca fullOpt'ta (withClosureCompilerIfAvailable).
   */
 class Compiler(libManager: LibraryManager, code: String) { self =>
   val log               = LoggerFactory.getLogger(getClass)
@@ -60,7 +68,7 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
         val settings = new Settings
         settings.outputDirs.setSingleOutput(vd)
         settings.processArgumentString("-Ypresentation-any-thread")
-        GlobalInitCompat.initInteractiveGlobal(settings, new StoreReporter, libManager.compilerLibraries(extLibs))
+        GlobalInitCompat.initInteractiveGlobal(settings, new StoreReporter(settings), libManager.compilerLibraries(extLibs))
       }
     )
 
@@ -70,18 +78,16 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
     val run         = new compiler.TyperRun
     val unit        = compiler.newCompilationUnit(source, "ScalaFiddle.scala")
     val richUnit    = new compiler.RichCompilationUnit(unit.source)
-    //log.debug(s"Source: ${source.take(startOffset)}${scala.Console.RED}|${scala.Console.RESET}${source.drop(startOffset)}")
     compiler.unitOfFile(richUnit.source.file) = richUnit
     val results = compiler.completionsAt(richUnit.position(startOffset)).matchingResults()
 
     val endTime = System.nanoTime()
     log.debug(s"AutoCompletion time: ${(endTime - startTime) / 1000} us")
-    // log.debug(s"AutoCompletion results: ${results.take(20)}")
 
     results.map(r => (r.sym.signatureString, r.symNameDropLocal.decoded)).distinct
   }
 
-  def compile(logger: String => Unit = _ => ()): (String, Option[Seq[VirtualScalaJSIRFile]]) = {
+  def compile(logger: String => Unit = _ => ()): (String, Option[Seq[IRFile]]) = {
 
     val startTime = System.nanoTime()
     log.debug("Compiling source:\n" + code)
@@ -92,8 +98,7 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
     val compiler = CompilerCache.getOrUpdate(
       extLibs, {
         val settings = new Settings
-        settings.processArgumentString("-Ydebug")
-        GlobalInitCompat.initGlobal(settings, new StoreReporter, libManager.compilerLibraries(extLibs))
+        GlobalInitCompat.initGlobal(settings, new StoreReporter(settings), libManager.compilerLibraries(extLibs))
       }
     )
 
@@ -122,14 +127,12 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
         (errors, None)
       } else {
         val things = for {
-          x <- vd.iterator.to[collection.immutable.Traversable]
+          x <- vd.iterator.toSeq
           if x.name.endsWith(".sjsir")
         } yield {
-          val f = new MemVirtualSerializedScalaJSIRFile(x.path)
-          f.content = x.toByteArray
-          f: VirtualScalaJSIRFile
+          new MemIRFileImpl(x.path, org.scalajs.ir.Version.Unversioned, x.toByteArray): IRFile
         }
-        (errors, Some(things.toSeq))
+        (errors, Some(things))
       }
     } catch {
       case e: Throwable =>
@@ -138,16 +141,14 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
     }
   }
 
-  def export(output: VirtualJSFile): String =
-    output.content
-
-  def fastOpt(userFiles: Seq[VirtualScalaJSIRFile]): VirtualJSFile =
+  def fastOpt(userFiles: Seq[IRFile]): String =
     link(userFiles, fullOpt = false)
 
-  def fullOpt(userFiles: Seq[VirtualScalaJSIRFile]): VirtualJSFile =
+  def fullOpt(userFiles: Seq[IRFile]): String =
     link(userFiles, fullOpt = true)
 
-  def link(userFiles: Seq[VirtualScalaJSIRFile], fullOpt: Boolean): VirtualJSFile = {
+  def link(userFiles: Seq[IRFile], fullOpt: Boolean): String = {
+    implicit val ec = ExecutionContext.global
     val semantics =
       if (fullOpt) Semantics.Defaults.optimized
       else Semantics.Defaults
@@ -155,21 +156,34 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
     // add parameters as fake libraries to make caching work correctly
     val libs = extLibs + ExtLib("semantics", "optimized", fullOpt.toString, false)
 
-    val output = WritableMemVirtualJSFile("output.js")
     try {
-      val linker =
-        LinkerCache.getOrUpdate(libs,
-                                Linker(semantics,
-                                       OutputMode.Default,
-                                       ModuleKind.NoModule,
-                                       Linker.Config().withSourceMap(false).withClosureCompiler(fullOpt)))
-      linker.link(libManager.linkerLibraries(extLibs) ++ userFiles, Nil, output, sjsLogger)
+      val linker = LinkerCache.getOrUpdate(
+        libs,
+        StandardImpl.linker(
+          StandardConfig()
+            .withSemantics(semantics)
+            .withModuleKind(ModuleKind.NoModule)
+            .withSourceMap(false)
+            .withClosureCompilerIfAvailable(fullOpt)
+        )
+      )
+      val output = MemOutputDirectory()
+      val report = Await.result(
+        linker.link(libManager.linkerLibraries(extLibs) ++ userFiles, Nil, output, sjsLogger),
+        5.minutes
+      )
+      val fileName = report.publicModules.headOption
+        .map(_.jsFileName)
+        .getOrElse(throw new Exception("Linker produced no public module"))
+      val content = output
+        .content(fileName)
+        .getOrElse(throw new Exception(s"Linker output $fileName not found"))
+      new String(content, StandardCharsets.UTF_8)
     } catch {
       case e: Throwable =>
         LinkerCache.remove(libs)
         throw e
     }
-    output
   }
 
   def getLog = sjsLogger.logLines
@@ -187,7 +201,6 @@ class Compiler(libManager: LibraryManager, code: String) { self =>
       internalLogLines :+= message
     }
 
-    def success(message: => String): Unit = info(message)
     def trace(t: => Throwable): Unit = {
       self.log.error("Compilation error", t)
     }

@@ -22,7 +22,10 @@ object Static {
     s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/ace.js",
     s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/ext-language_tools.js",
     s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/ext-static_highlight.js",
-    s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/mode-scala.js",
+    // Türkçe anahtar kelimeli Ace Scala modu (Faz 5): webjar'daki stok
+    // mode-scala.js yerine yamalı kopya -- modül adı ace/mode/scala kaldığı
+    // için istemci kodu değişmedi. Bkz. web/mode-scala.js başlığı.
+    s"/web/mode-scala.js",
     s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/theme-eclipse.js",
     s"/META-INF/resources/webjars/ace/${Config.aceVersion}/src-min/theme-tomorrow_night.js",
     s"/META-INF/resources/webjars/js-sha1/0.4.0/build/sha1.min.js",

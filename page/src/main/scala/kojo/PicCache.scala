@@ -22,7 +22,9 @@ object PicCache {
       pic
     }
   }
-  def freshPics(ps: Seq[Picture]): Seq[Picture] = {
-    ps map freshPic
+  // 2.13: Seq artık immutable.Seq; mutable çağıranlar (ArrayBuffer vb.) da
+  // gelebilsin diye parametre collection.Seq, dönüş yine immutable.
+  def freshPics(ps: collection.Seq[Picture]): Seq[Picture] = {
+    ps.iterator.map(freshPic).toSeq
   }
 }
