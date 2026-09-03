@@ -1,6 +1,7 @@
 package kojo
 
 import com.vividsolutions.jts.geom.Geometry
+import org.scalajs.dom.document
 
 // Turkish (Koco) turtle wrapper for KojoJS.
 //
@@ -277,9 +278,40 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
 
   // ---- giriş / çıkış ----
   def satıroku(istem: Yazı = ""): Yazı = builtins.readln(istem)
-  def satıryaz(): Birim = println()
-  def satıryaz(veri: Any): Birim = println(veri)
-  def yaz(veri: Any): Birim = print(veri)
+
+  /**
+   * `Predef.println`/`print` DEĞİL: Scala.js'te onlar `console.log`'a gidiyor,
+   * sayfadaki çıktı paneline değil -- `satıryaz("merhaba")` yazan kullanıcı
+   * ekranda hiçbir şey görmüyordu (2026-09-03'te canlıda bulundu).
+   *
+   * Panele yazan `fiddle.Fiddle` kojojs-core/page'de duruyor, bu repoda YOK;
+   * o yüzden onun kullandığı DOM sözleşmesine (id="output") doğrudan yazıyoruz
+   * -- `KojoWorldImpl`in fiddle-container/canvas-holder'a doğrudan bağlanması
+   * gibi. Panel bulunamazsa (tarayıcı dışı koşum, testler) konsola düşüyoruz.
+   */
+  def satıryaz(): Birim = satıryaz("")
+  def satıryaz(veri: Any): Birim = paneleYaz(veri, satırOlarak = true)
+  def yaz(veri: Any): Birim = paneleYaz(veri, satırOlarak = false)
+
+  private def paneleYaz(veri: Any, satırOlarak: İkil): Birim = {
+    val panel = document.getElementById("output")
+    val metin = String.valueOf(veri)
+    if (panel == null) {
+      if (satırOlarak) println(metin) else print(metin)
+    }
+    else {
+      if (satırOlarak) {
+        // Fiddle.println da her satırı bir div'e sarıyor; aynı görünüm.
+        val satır = document.createElement("div")
+        satır.textContent = metin
+        panel.appendChild(satır)
+      }
+      else {
+        panel.appendChild(document.createTextNode(metin))
+      }
+      panel.scrollTop = panel.scrollHeight - panel.clientHeight
+    }
+  }
 
   // ---- sayılar ----
   def rastgele(üstSınır: Sayı): Sayı = builtins.random(üstSınır)

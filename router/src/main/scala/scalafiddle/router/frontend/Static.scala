@@ -271,8 +271,11 @@ object Static {
               |      break;
               |    case "code":
               |      try {
-              |        eval(msg.data);
-              |        eval("var sf = ScalaFiddle;if(typeof sf === 'function' && typeof sf().main === 'function') sf().main();");
+              |        // TEK eval, iki degil -- bkz. kojojs-editor resultframe.scala.html.
+              |        // Scala.js 1.x `let Fiddle,ScalaFiddle;` bildiriyor; let bildirimleri
+              |        // eval'in kendi kapsaminda kalip disari sizmadigi icin ayri bir ikinci
+              |        // eval "ScalaFiddle is not defined" ile patliyor.
+              |        eval(msg.data + "\n;if (typeof ScalaFiddle !== 'undefined') { var sf = ScalaFiddle; if (typeof sf === 'function' && typeof sf().main === 'function') sf().main(); }");
               |      } catch(ex) {
               |        panel.insertAdjacentHTML('beforeend', '<pre class="error">ERROR: ' + ex.message + '\n' + ex.stack + '</pre>')
               |      } finally {
