@@ -36,6 +36,7 @@ trait YöneyYöntemleri extends TemelTürler {
     def topla[B >: A](implicit num: Numeric[B]) = y.sum(num)
     def çarp[B >: A](implicit num: Numeric[B]) = y.product(num)
     def yinelemesiz: Yöney[A] = y.distinct
+    def güncellenmiş(dizin: Sayı, değer: A): Yöney[A] = y.updated(dizin, değer) // updated
     def yinelemesizİşlevle[B](işlev: A => B): Yöney[A] = y.distinctBy(işlev)
     def yazıYap: Yazı = y.mkString
     def yazıYap(ara: Yazı): Yazı = y.mkString(ara)

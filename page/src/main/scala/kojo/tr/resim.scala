@@ -91,6 +91,8 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def oyunSüresiniGöster(sınırSn: Sayı, bitişİletisi: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
     kb.showGameTime(sınırSn, bitişİletisi, renk, yazıBoyu)                   // showGameTime
   def ada(ton: Kesir, doygunluk: Kesir, açıklık: Kesir): Renk = kojo.doodle.Color.hsl(ton, doygunluk, açıklık) // cm.hsl
+  def resimleriSil(): Birim = kb.erasePictures() // erasePictures
+  def kur(işlev: => Birim): Birim = kb.setup(işlev) // setup
 
   // ---- resimleri diz (satır / sütun / yığın) ----
   def resimSatırı(resimler: Resim*): Resim = kb.picRow(resimler: _*)
@@ -181,5 +183,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def sınırları: Dikdörtgen = r.bounds
     def çarpışıyorMu(öbürü: Resim): İkil = r.collidesWith(öbürü)
     def fareyeTıklayınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseClick((x, y) => işlev(x, y)) // onMouseClick
+    def fareyleSürükleyince(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseDrag((x, y) => işlev(x, y)) // onMouseDrag
+    def fareBasılınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMousePress((x, y) => işlev(x, y)) // onMousePress
   }
 }
