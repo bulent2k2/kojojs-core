@@ -30,8 +30,11 @@ trait KuyrukYöntemleri extends TemelTürler {
   implicit class YığınMetotları[T](d: Yığın[T]) {
     def it(öge: T): Yığın[T] = d.push(öge)
     def çek(): T = d.pop()
+    def koy(öge: T): Yığın[T] = d.push(öge) // it ile aynı (kitapçık adı)
+    def al(): T = d.pop()          // çek ile aynı (kitapçık adı)
     def tepesi: T = d.top
     def boyu: Sayı = d.size
+    def tane: Sayı = d.size // boyu ile aynı (kitapçık adı)
     def boşMu: İkil = d.isEmpty
     def doluMu: İkil = d.nonEmpty
     def sil(): Birim = d.clear()
@@ -42,8 +45,10 @@ trait KuyrukYöntemleri extends TemelTürler {
   implicit class KuyrukMetotları[T](d: Kuyruk[T]) {
     def ekle(öge: T): Kuyruk[T] = d += öge
     def çıkar(): T = d.dequeue()
+    def baştanAl(): T = d.dequeue() // çıkar ile aynı (kitapçık adı)
     def başı: T = d.head
     def boyu: Sayı = d.size
+    def tane: Sayı = d.size // boyu ile aynı (kitapçık adı)
     def boşMu: İkil = d.isEmpty
     def doluMu: İkil = d.nonEmpty
     def sil(): Birim = d.clear()
@@ -56,6 +61,7 @@ trait KuyrukYöntemleri extends TemelTürler {
     def çıkar(): T = d.dequeue()
     def başı: T = d.head
     def boyu: Sayı = d.size
+    def tane: Sayı = d.size // boyu ile aynı (kitapçık adı)
     def boşMu: İkil = d.isEmpty
     def doluMu: İkil = d.nonEmpty
     def sil(): Birim = d.clear()

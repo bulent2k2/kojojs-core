@@ -62,6 +62,11 @@ trait MatematikYöntemleri extends TemelTürler with NoktaYöntemleri {
   def enİrisi(x: UfakKesir, y: UfakKesir): UfakKesir = math.max(x, y)
   def enUfağı(x: UfakKesir, y: UfakKesir): UfakKesir = math.min(x, y)
 
+  // Kitapçık yardımcıları:
+  def bölünüyorMu(sayı: Sayı, bölen: Sayı): İkil = sayı % bölen == 0
+  def bölünüyorMu(sayı: Uzun, bölen: Uzun): İkil = sayı % bölen == 0
+  def buSaniye: Kesir = System.currentTimeMillis() / 1000.0 // şu anın saniyesi
+
   // Commons Math yerine Öklid algoritması
   def enİriOrtakPayda(s1: Sayı, s2: Sayı): Sayı = {
     var (a, b) = (math.abs(s1), math.abs(s2))

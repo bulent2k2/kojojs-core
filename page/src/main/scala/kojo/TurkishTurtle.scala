@@ -282,6 +282,9 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
 
   // ---- giriş / çıkış ----
   def satıroku(istem: Yazı = ""): Yazı = builtins.readln(istem)
+  def sayıOku(istem: Yazı = ""): Sayı = builtins.readInt(istem)
+  def belirt(koşul: İkil, mesaj: Yazı = ""): Birim = if (!koşul) throw new ÇalışmaSırasıKuralDışı(s"belirt başarısız: $mesaj") // assert
+  def kesirOku(istem: Yazı = ""): Kesir = builtins.readDouble(istem)
 
   /**
    * `Predef.println`/`print` DEĞİL: Scala.js'te onlar `console.log`'a gidiyor,
