@@ -7,16 +7,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.tools.nsc.io.AbstractFile
 import scala.reflect.io._
 
-object AbstractFlatFile {
-  // GEÇİCİ tanı: hangi classfile kaç kez okunuyor
-  private val counts = new java.util.concurrent.ConcurrentHashMap[String, java.util.concurrent.atomic.AtomicLong]()
-  private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
-  def readLog(path: String): Unit = {
-    val n = counts.computeIfAbsent(path, _ => new java.util.concurrent.atomic.AtomicLong()).incrementAndGet()
-    if (n == 10 || n == 100 || n % 1000 == 0) logger.warn(s"HOT-READ x$n: $path")
-  }
-}
-
 class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem) extends AbstractFile {
   override val path                    = flatFile.path
   override val name: String            = path.split('/').last
@@ -36,7 +26,6 @@ class AbstractFlatFile(flatFile: FlatFile, flatJar: FlatJar, ffs: FlatFileSystem
   }
 
   override def toByteArray: Array[Byte] = {
-    AbstractFlatFile.readLog(flatFile.path)
     ffs.load(flatJar, flatFile.path)
   }
 
