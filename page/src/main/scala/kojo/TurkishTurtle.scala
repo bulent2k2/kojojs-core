@@ -290,24 +290,34 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
    * gibi. Panel bulunamazsa (tarayıcı dışı koşum, testler) konsola düşüyoruz.
    */
   def satıryaz(): Birim = satıryaz("")
-  def satıryaz(veri: Any): Birim = paneleYaz(veri, satırOlarak = true)
-  def yaz(veri: Any): Birim = paneleYaz(veri, satırOlarak = false)
+  def satıryaz(veri: Any): Birim = paneleYaz(veri, satırSonu = true)
+  def yaz(veri: Any): Birim = paneleYaz(veri, satırSonu = false)
 
-  private def paneleYaz(veri: Any, satırOlarak: İkil): Birim = {
+  /**
+   * Açık (henüz satır sonu verilmemiş) çıktı satırı. `yaz` buna ekliyor,
+   * `satıryaz` ekleyip KAPATIYOR -- uçbirimdeki print/println gibi.
+   */
+  private var açıkSatır: org.scalajs.dom.Element = null
+
+  private def paneleYaz(veri: Any, satırSonu: İkil): Birim = {
     val panel = document.getElementById("output")
     val metin = String.valueOf(veri)
     if (panel == null) {
-      if (satırOlarak) println(metin) else print(metin)
+      if (satırSonu) println(metin) else print(metin)
     }
     else {
-      if (satırOlarak) {
-        // Fiddle.println da her satırı bir div'e sarıyor; aynı görünüm.
-        val satır = document.createElement("div")
-        satır.textContent = metin
-        panel.appendChild(satır)
+      // Açık satır hâlâ panelin SON çocuğu mu? Değilse araya başkası yazmış
+      // (fiddle.Fiddle.println kendi div'ini ekliyor, sil() paneli boşaltıyor)
+      // ve eskisine eklemek metni yanlış yere koyardı.
+      if (açıkSatır == null || !(panel.lastChild eq açıkSatır)) {
+        açıkSatır = document.createElement("div")
+        panel.appendChild(açıkSatır)
       }
-      else {
-        panel.appendChild(document.createTextNode(metin))
+      açıkSatır.appendChild(document.createTextNode(metin))
+      if (satırSonu) {
+        // Bomboş div'in yüksekliği sıfır: satıryaz() boş satır göstermiyordu.
+        if (açıkSatır.textContent.isEmpty) açıkSatır.appendChild(document.createTextNode("\u00a0"))
+        açıkSatır = null
       }
       panel.scrollTop = panel.scrollHeight - panel.clientHeight
     }
