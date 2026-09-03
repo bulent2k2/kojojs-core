@@ -71,11 +71,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
     turtleImage.rotation = Utils.deg2radians(90)
   }
 
-  private def position = turtleImage.position
+  // private[kojo]: TurkishTurtle bunları `sync` ile kuyruğun doğru noktasında
+  // okuyor (konumuOku / yönüOku). Dışarıya AÇILMIYOR -- anlık bir okuma
+  // kuyruktaki komutlardan önceki değeri verirdi.
+  private[kojo] def position = turtleImage.position
 
   private def headingRadians = turtleImage.rotation
 
-  private def heading = Utils.rad2degrees(headingRadians)
+  private[kojo] def heading = Utils.rad2degrees(headingRadians)
 
   private def loadTurtle(x: Double, y: Double, loader: PIXI.loaders.Loader): PIXI.Container = {
     val turtle = {

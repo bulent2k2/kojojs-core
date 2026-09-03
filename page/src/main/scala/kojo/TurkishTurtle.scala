@@ -1,5 +1,7 @@
 package kojo
 
+import com.vividsolutions.jts.geom.Geometry
+
 // Turkish (Koco) turtle wrapper for KojoJS.
 //
 // ÖNEMLİ: englishTurtle'ın türü `TurtleAPI` ve Builtins buraya `turtle`
@@ -89,10 +91,117 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def batı(): Birim = englishTurtle.setHeading(180)
   def kuzey(): Birim = englishTurtle.setHeading(90)
   def güney(): Birim = englishTurtle.setHeading(-90)
-  // `doğrultu` ve `konum` yok: KojoJS'te her komut bir kuyruğa giriyor, hemen
-  // çalışmıyor. Anlık bir okuma kuyruktaki komutlardan ÖNCEKİ değeri verirdi.
-  // def doğrultu: Kesir = englishTurtle.heading
-  // def konum: Nokta = englishTurtle.position
+  /**
+   * Kaplumbağanın o andaki konumu ve yönü -- GERİ ÇAĞIRMAYLA.
+   *
+   * Neden düz bir `konum` değeri yok: KojoJS'te her kaplumbağa komutu bir
+   * kuyruğa giriyor, çağrıldığı anda çalışmıyor. `ileri(100)` yazdığında
+   * kaplumbağa daha kıpırdamamıştır. Anlık bir okuma bu yüzden kuyruktaki
+   * komutlardan ÖNCEKİ değeri verirdi -- sessizce yanlış cevap.
+   *
+   * `konumuOku` bunun yerine okumayı KUYRUĞA sokuyor: işlevin, kendisinden
+   * önce yazdığın bütün komutlar bittikten sonra çalışıyor.
+   *
+   * {{{
+   * yinele(4) { ileri(100); sağ() }
+   * konumuOku { n => yaz(s"kare bitti, buradayım: ${n.x}, ${n.y}") }
+   * }}}
+   *
+   * DİKKAT: işlevin İÇİNDE verdiğin kaplumbağa komutları kuyruğun SONUNA
+   * eklenir, okumanın yapıldığı yere değil. Yani `konumuOku`dan sonra
+   * yazdığın komutlar, işlevin içindekilerden önce çalışır.
+   */
+  def konumuOku(işlev: Nokta => Birim): Birim =
+    kuyruktanOku(t => işlev(Nokta(t.position.x, t.position.y)))
+
+  /**
+   * Kaplumbağa bu resme değiyor mu? -- `konumuOku` gibi geri çağrımalı.
+   *
+   * Kaplumbağayı NOKTA sayıyor: gövdesinin resmi değil, burnunun bulunduğu
+   * konumun resmin içinde olup olmadığına bakıyor. Öngörülebilir olsun diye
+   * böyle; kaplumbağa simgesinin köşesi resme değdiğinde "değdi" demiyor.
+   *
+   * {{{
+   * val duvar = Resim.kare(80).konumlu(100, 0)
+   * çiz(duvar)
+   * canlandır {
+   *   ileri(2)
+   *   dokunuyorMu(duvar) { değdi => if (değdi) sağ(90) }
+   * }
+   * }}}
+   *
+   * İKİ RESİM arasındaki çarpışma için buna gerek yok: `resim.çarpışıyorMu(öbürü)`
+   * doğrudan, geri çağrısız çalışıyor. Oyun yazarken genelde istediğin odur --
+   * `dokunuyorMu` kaplumbağayla çizim yaparken işe yarıyor.
+   */
+  def dokunuyorMu(resim: Resim)(işlev: İkil => Birim): Birim =
+    kuyruktanOku { t =>
+      val çizgi = resim.picGeom
+      if (çizgi == null)
+        throw new ÇalışmaSırasıKuralDışı(
+          "dokunuyorMu: resim henüz çizilmemiş. Önce çiz(resim) demelisin -- " +
+            "çizilmemiş bir resmin sınırları hesaplanmamış oluyor."
+        )
+      val nokta = kojo.Utils.Gf.createPoint(kojo.Utils.newCoordinate(t.position.x, t.position.y))
+      işlev(çizgi.intersects(nokta) || alanıİçeriyorMu(çizgi, nokta))
+    }
+
+  /**
+   * Resmin İÇİ noktayı kapsıyor mu?
+   *
+   * Gerekli, çünkü `picGeom` bir LineString -- yani yalnızca DIŞ ÇİZGİ.
+   * Karenin tam ortasındaki bir nokta o çizgiye değmiyor, dolayısıyla düz
+   * `intersects` "hayır" diyor. (İki resim çarpıştığında dış çizgileri
+   * kesiştiği için `çarpışıyorMu` bu sorunu yaşamıyor.)
+   *
+   * Çözüm: dış çizginin köşelerinden bir çokgen kurup `contains` sormak.
+   * Çokgen kurulamıyorsa (açık bir çizgi, çok az nokta) `false` -- öyle bir
+   * şeklin zaten içi yok.
+   */
+  private def alanıİçeriyorMu(çizgi: Geometry, nokta: Geometry): İkil = {
+    import scala.scalajs.js.JSConverters._
+    val k = çizgi.getCoordinates()
+    if (k.length < 3) return false
+    val ilk = k(0)
+    val son = k(k.length - 1)
+    // createLinearRing kapalı halka istiyor; kapalı değilse ilk noktayı ekle.
+    val halka =
+      if (ilk.x == son.x && ilk.y == son.y) k.toSeq
+      else k.toSeq :+ ilk
+    if (halka.length < 4) return false
+    try kojo.Utils.Gf.createPolygon(halka.toJSArray).contains(nokta)
+    catch { case _: Throwable => false }
+  }
+
+  /**
+   * `konumuOku` gibi, ama yönü verir -- derece cinsinden, 0 ile 360 arasında.
+   *
+   * KojoJS'in ham `heading`'i dönüşleri biriktiriyor: dört kez sağa dönen bir
+   * kaplumbağa için -270 diyor. Aynı yön, ama çocuğa 90 demek gerekiyor.
+   */
+  def yönüOku(işlev: Kesir => Birim): Birim =
+    kuyruktanOku { t =>
+      val ham = t.heading % 360
+      işlev(if (ham < 0) ham + 360 else ham)
+    }
+
+  /**
+   * Etkin kaplumbağa. `englishTurtle` bir GlobalTurtleForPicture; hangi
+   * kaplumbağaya bağlı olduğu `Resim { ... }` bloğu içinde mi dışında mı
+   * olduğumuza göre değişiyor (TurtlePicture takas ediyor), bu yüzden her
+   * çağrıda yeniden soruyoruz.
+   */
+  private def etkinKaplumbağa: Turtle = englishTurtle match {
+    case g: GlobalTurtleForPicture => g.globalTurtle
+    case t: Turtle                 => t
+    case başka =>
+      throw new ÇalışmaSırasıKuralDışı(s"konum okunamıyor: beklenmeyen kaplumbağa türü ${başka.getClass.getName}")
+  }
+
+  private def kuyruktanOku(işlev: Turtle => Birim): Birim = {
+    val t = etkinKaplumbağa
+    t.sync(() => işlev(t))
+  }
 
   // ---- kalem ----
   def kalemiİndir(): Birim = englishTurtle.penDown()
@@ -196,12 +305,30 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def kareSüresi: Kesir = builtins.frameDeltaTime
 
   // ---- sekme (oyun fiziği) ----
-  def sahnedenSek(resim: Resim, hız: Yöney2B): Yöney2B = builtins.bouncePicOffStage(resim, hız)
+  /**
+   * Sahne kenarları `çizSahne(...)` çağrılana kadar null.
+   *
+   * Bu olmadan `sahnedenSek` `collidesWith(null)` ile TypeError atıyor;
+   * `canlandır` döngüsü ilk karede sessizce ölüyor ve resim hiç kıpırdamıyor --
+   * ekranda hata yok, hiçbir ipucu yok. `artalanıKur` yetmiyor: o yalnızca
+   * tuvalin rengini değiştiriyor, kenarları kurmuyor.
+   */
+  private def sahneKurulduMu(nereden: Yazı): Birim =
+    if (builtins.stageTop == null)
+      throw new ÇalışmaSırasıKuralDışı(
+        s"$nereden kullanabilmek için önce sahneyi çizmelisin: çizSahne(siyah). " +
+          "artalanıKur yalnızca rengi değiştirir, sahne kenarlarını kurmaz."
+      )
+
+  def sahnedenSek(resim: Resim, hız: Yöney2B): Yöney2B = {
+    sahneKurulduMu("sahnedenSek'i")
+    builtins.bouncePicOffStage(resim, hız)
+  }
   def resimdenSek(resim: Resim, hız: Yöney2B, engel: Resim): Yöney2B =
     builtins.bouncePicOffPic(resim, hız, engel)
-  def sahneKenarı: Resim = builtins.stageBorder
-  def sahneÜstü: Resim = builtins.stageTop
-  def sahneAltı: Resim = builtins.stageBot
-  def sahneSolu: Resim = builtins.stageLeft
-  def sahneSağı: Resim = builtins.stageRight
+  def sahneKenarı: Resim = { sahneKurulduMu("sahneKenarı'nı"); builtins.stageBorder }
+  def sahneÜstü: Resim = { sahneKurulduMu("sahneÜstü'nü"); builtins.stageTop }
+  def sahneAltı: Resim = { sahneKurulduMu("sahneAltı'nı"); builtins.stageBot }
+  def sahneSolu: Resim = { sahneKurulduMu("sahneSolu'nu"); builtins.stageLeft }
+  def sahneSağı: Resim = { sahneKurulduMu("sahneSağı'nı"); builtins.stageRight }
 }
