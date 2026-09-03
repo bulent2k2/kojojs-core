@@ -99,7 +99,13 @@ class CompilerManager extends Actor with ActorLogging {
     // extract libs from the source
     log.debug(s"Source\n${req.source}")
     val (libs, scalaVersionOpt) = extractLibs(req.source)
-    val scalaVersion            = scalaVersionOpt.getOrElse("2.13")
+    // eski kayıtlı fiddle'lar "// $ScalaVersion 2.12" taşıyor; 2.13 geçişinden
+    // (Faz 3) sonra 2.12 derleyicisi yok -- eski bağlantılar kırılmasın diye
+    // 2.13'e eşleniyor (Kojo API'si kaynak uyumlu)
+    val scalaVersion = scalaVersionOpt.getOrElse("2.13") match {
+      case "2.12" => "2.13"
+      case v      => v
+    }
 
     log.debug(s"Selecting compiler for Scala $scalaVersion and libs $libs")
     // check that all libs are supported
