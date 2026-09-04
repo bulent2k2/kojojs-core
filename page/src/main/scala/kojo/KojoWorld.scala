@@ -16,6 +16,9 @@ trait KojoWorld {
   def canvasHeight: Double
   def addLayer(layer: PIXI.Container): Unit
   def removeLayer(layer: PIXI.Container): Unit
+  // Bir resmin değiştiğini (taşındı/döndü/boyandı...) bildirir; pişirme
+  // (bake) katmanı bunu son-değişim damgası olarak kullanır. Bkz. maybeBake.
+  def noteMutation(node: PIXI.DisplayObject): Unit
   def scheduleLater(fn: => Unit): Unit
   def runLater(ms: Double)(fn: => Unit): Unit
   def render(): Unit
@@ -54,6 +57,35 @@ trait KojoWorld {
   def toggleFullScreenCanvas(): Unit
   def canvasBounds: Rectangle
   def noZoom(): Unit
+}
+
+// Pişirme kararının SAF (DOM'suz) çekirdeği -- Node testinde doğrulanabilsin
+// diye ayrıldı (KojoWorldImpl'in geri kalanı Swing/PIXI/DOM'a bağlı).
+object BakePolicy {
+  val bakeAfterFrames = 3
+  val bakeChildThreshold = 150
+
+  // Sahne kalabalıklaşınca ve yakınlaştırılmamışken pişir.
+  def shouldConsider(childCount: Int, unzoomed: Boolean): Boolean =
+    childCount >= bakeChildThreshold && unzoomed
+
+  // Ucuz ön kontrol (ad + durağanlık). Etkileşim kontrolü pahalı (ağaç
+  // dolaşımı) olduğundan ayrı: yalnız bunu geçen adaylar için hesaplanır.
+  def isStaleByName(name: String, lastMut: Long, frame: Long): Boolean =
+    name != "Turtle Layer" && (frame - lastMut > bakeAfterFrames)
+
+  // Bir sahne çocuğu pişmeye aday mı? Kaplumbağa katmanı ve etkileşimli
+  // düğümler muaf; yalnızca bakeAfterFrames karedir damgalanmayanlar aday.
+  def isStaleCandidate(name: String, interactive: Boolean, lastMut: Long, frame: Long): Boolean =
+    isStaleByName(name, lastMut, frame) && !interactive
+
+  // Çırpınma sigortası: "en eski izi her kare sil" gibi kalıplar her kare
+  // geri almaya yol açar (pişir->sil->geri al->pişir); bu tabandan yavaş.
+  // Kısa pencerede art arda bu kadar geri alma olursa pişirmeyi kapat, taban
+  // davranışa (hepsi canlı) dön.
+  val unbakeStreakWindow = 10 // kare
+  val maxUnbakeStreak = 5
+  def shouldDisableAfterUnbake(streak: Int): Boolean = streak >= maxUnbakeStreak
 }
 
 class KojoWorldImpl extends KojoWorld {
@@ -114,6 +146,7 @@ class KojoWorldImpl extends KojoWorld {
     //    stage.height = h
     renderer.resize(w, h)
     stage.setTransform(canvasWidth / 2, canvasHeight / 2, 1, -1, 0, 0, 0, 0, 0)
+    resetBake() // doku eski boyut/dönüşüme göre pişmişti; yeniden kurulsun
     render()
   }
 
@@ -137,6 +170,8 @@ class KojoWorldImpl extends KojoWorld {
     canvasHeight = ch / yfactor.abs
     canvasOriginX = cx - canvasWidth / 2
     canvasOriginY = cy - canvasHeight / 2
+    resetBake() // yakınlaştırma sahne dönüşümünü değiştirir; pişmiş doku
+    // sabit çözünürlükte ekran-uzayı olduğundan geçersiz kalır
     render()
   }
 
@@ -146,15 +181,214 @@ class KojoWorldImpl extends KojoWorld {
 
   def addLayer(layer: PIXI.Container): Unit = {
     stage.addChild(layer)
+    // yeni düğümü bu kareyle damgala: yoksa hiç damgalanmadığından çizildiği
+    // karenin sonunda pişer; "kur, birkaç kare sonra hareket ettir" kalıbı
+    // pişir->unbake->pişir gel-gitine girerdi. Damgayla bakeAfterFrames kare
+    // sessiz kalması gerekir.
+    noteMutation(layer)
     render()
   }
 
   def removeLayer(layer: PIXI.Container): Unit = {
+    if (bakedNodes.contains(layer)) {
+      // silinen resim pişmiş dokudaydı -> dokuyu yeniden kur
+      unbakeAll()
+    }
     stage.removeChild(layer)
     render()
   }
 
+  // --- İz/boya pişirme (PERFORMANS 2/2) --------------------------------------
+  // canlandır döngüsünde her karede yeni resim çizen betikler (ör. yörünge izi)
+  // sahneye durmadan çocuk ekliyor; PERFORMANS 1'den (kare başına tek çizim)
+  // sonra bile o tek çizim ekrandaki N nesneyle orantılı, yani iz uzadıkça
+  // yavaşlıyor. Çözüm: bir kaç karedir DEĞİŞMEYEN çocukları tek bir
+  // RenderTexture'a (bakeTexture) pişirip sahneden çıkarmak. Böylece iz, kaç
+  // nokta olursa olsun tek bir sprite (O(1)) olarak çiziliyor; hareket eden
+  // cisimler (her kare konumuKur ile değişenler) canlı kalıyor.
+  //
+  // Sinyal: noteMutation her değişimde çocuğun tnode'una o karenin numarasını
+  // damgalıyor. bakeAfterFrames karedir damgalanmayan bir çocuk "durağan boya"
+  // sayılıp pişiriliyor. Hareketli cisimler her kare damgalandığından hiç
+  // pişmiyor. Pişmiş bir çocuk sonradan değişirse (nadir) unbakeAll ile geri
+  // alınıyor. Pişmiş resim NESNESİ geçerli kalır (çarpışma geometrisi tnode'un
+  // sahnede olmasına bağlı değil), yalnızca ayrı bir DisplayObject olmaktan
+  // çıkar. z-sırası: pişmiş boya en alta (dip katman) düşer.
+  private var frameCount: Long = 0
+  private var bakeSprite: PIXI.Sprite = _
+  private var bakeTexture: PIXI.RenderTexture = _
+  private var bakeMatrix: PIXI.Matrix = _
+  // LinkedHashSet: geri almada pişirme sırasını koru (z-sırası bozulmasın)
+  private val bakedNodes = scala.collection.mutable.LinkedHashSet.empty[PIXI.DisplayObject]
+
+  // Damgayı SAHNE düzeyindeki ataya taşı: GPics/HPics/VPics gibi bileşik
+  // resimlerde değişen iç çocuk değil, sahne çocuğu olan konteyner damgalanmalı;
+  // yoksa konteyner "durağan" sanılıp pişer ve iç hareket donar. Pişmiş bir
+  // düğümün parent'ı null olduğundan döngü orada durur.
+  def noteMutation(node: PIXI.DisplayObject): Unit = {
+    var n = node
+    while (n != null && n.parent != null && (n.parent ne stage)) n = n.parent
+    if (n != null) {
+      n.asInstanceOf[js.Dynamic].__kojoMut = frameCount.toDouble
+      if (bakedNodes.nonEmpty && bakedNodes.contains(n)) {
+        unbakeAll()
+      }
+    }
+  }
+
+  // pişirme yalnızca sahne varsayılan (yakınlaştırılmamış) dönüşümdeyken
+  // güvenli: bakeMatrix/bakeSprite ölçeği hesaba katmaz. Yakınlaştırmada
+  // (zoomXY) resetBake pişmişi canlıya döndürür ve burada pişirme durur.
+  private def stageUnzoomed: Boolean =
+    stage.scale.x == 1.0 && stage.scale.y == -1.0
+
+  // etkileşimli düğümler (ya da etkileşimli torunu olanlar) pişirilmez:
+  // sahneden çıkınca PIXI isabet testi onları görmez, fare olayları ölür.
+  private def hasInteractive(d: PIXI.DisplayObject): Boolean = {
+    d.interactive || (d match {
+      case c: PIXI.Container => c.children.exists(hasInteractive)
+      case _                 => false
+    })
+  }
+
+  private def ensureBakeLayer(): Unit = {
+    if (bakeSprite == null) {
+      bakeTexture = js.Dynamic.global.PIXI.RenderTexture
+        .create(canvasWidth, canvasHeight, js.undefined, renderer.resolution)
+        .asInstanceOf[PIXI.RenderTexture]
+      bakeSprite = new PIXI.Sprite(bakeTexture)
+      bakeSprite.name = "Bake Layer"
+      // bakeTexture ekran uzayında (piksel) birikiyor; bakeSprite sahne
+      // dönüşümünü (öteleme w/2,h/2 + y-ters) tersine çevirsin ki pikseller
+      // yerli yerine otursun.
+      bakeSprite.scale.set(1, -1)
+      // görünür sahne-yerel pencere [canvasOriginX, +canvasWidth] x ...;
+      // merkez her zaman 0 DEĞİL (originAt/zoom sonrası). canvasOrigin kullan.
+      bakeSprite.position.set(canvasOriginX, canvasOriginY + canvasHeight)
+      stage.addChildAt(bakeSprite, 0)
+      // sahne-yerel -> ekran-piksel dönüşümü. renderer.render(c, doku) çocuğu
+      // KİMLİK ebeveyne bağlayıp sahne-yerel çizer; bu matrisi projeksiyon
+      // olarak vererek ekran-uzayına taşıyoruz. (yalnızca yakınlaştırılmamış
+      // durumda pişiriyoruz, o yüzden ölçek 1/-1.)
+      bakeMatrix = new PIXI.Matrix()
+      bakeMatrix.set(1, 0, 0, -1, -canvasOriginX, canvasOriginY + canvasHeight)
+    }
+  }
+
+  private var bakeDisabled = false
+  private def maybeBake(): Unit = {
+    if (bakeDisabled) return
+    try maybeBakeUnsafe()
+    catch {
+      case t: Throwable =>
+        // pişirme bir performans iyileştirmesi; başarısız olursa animasyonu
+        // ASLA durdurma, sessizce devre dışı bırak (canlı çocuklarla sürer)
+        bakeDisabled = true
+        try resetBake() catch { case _: Throwable => }
+    }
+  }
+
+  private def maybeBakeUnsafe(): Unit = {
+    val kids = stage.children
+    // kalabalık + yakınlaştırılmamış (bakeMatrix/bakeSprite ölçeği hesaba katmaz)
+    if (!BakePolicy.shouldConsider(kids.length, stageUnzoomed)) return
+    ensureBakeLayer()
+    val toBake = scala.collection.mutable.ArrayBuffer.empty[PIXI.DisplayObject]
+    var i = 0
+    while (i < kids.length) {
+      val c = kids(i)
+      if (c ne bakeSprite) {
+        val stamp = c.asInstanceOf[js.Dynamic].__kojoMut
+        val last = if (js.isUndefined(stamp)) -1L else stamp.asInstanceOf[Double].toLong
+        // "Turtle Layer": kaplumbağa/Picture{} katmanları (Turtle.init hepsine
+        // bu adı verir) muaf. Etkileşimli düğümler de muaf (isabet testi).
+        // Ucuz ad/durağanlık kontrolünü ÖNCE yap; pahalı hasInteractive ağaç
+        // dolaşımını yalnız o kontrolü geçen adaylar için çalıştır.
+        if (BakePolicy.isStaleByName(c.name, last, frameCount) && !hasInteractive(c)) {
+          toBake += c
+        }
+      }
+      i += 1
+    }
+    if (toBake.nonEmpty) {
+      toBake.foreach { c =>
+        // bakeMatrix'i projeksiyon olarak ver: çocuk sahne-yerelden ekran
+        // pikseline taşınıp dokuya iner. clear=false -> iz birikir.
+        renderer.asInstanceOf[js.Dynamic].render(c, bakeTexture, false, bakeMatrix, false)
+        stage.removeChild(c)
+        bakedNodes += c
+      }
+      render()
+    }
+  }
+
+  // Pişmiş çocukları sahneye geri koyar ve pişmiş dokuyu atar. Herhangi bir
+  // yerden (kullanıcı betiği, fare tekerleği zoom'u, pencere boyutu...)
+  // çağrılabildiği için KENDİ güvenlik ağı var: patlarsa pişirmeyi devre dışı
+  // bırak, animasyonu asla durdurma.
+  //
+  // NOT: PIXI 4.8.9 RenderTexture'da clear() YOK; bu yüzden dokuyu boşaltmak
+  // yerine yok edip bakeSprite'ı kaldırıyoruz. Sonraki pişirme ensureBakeLayer
+  // ile yeniden yaratır (hem WebGL hem Canvas renderer'da çalışır).
+  //
+  // Sınırlama (bilinçli): geri alma ya hep ya hiç. Kalabalık sahnede yanıp
+  // sönen (görünür/görünmez) tek bir durağan resim her geçişte tüm dokuyu
+  // yeniden pişirtir. İleride düğüm-bazlı geri alma düşünülebilir.
+  private var lastUnbakeFrame = -1000L
+  private var unbakeStreak = 0
+  private def unbakeAll(): Unit = {
+    if (bakedNodes.isEmpty) return
+    // çırpınma takibi: kısa pencerede art arda geri alma sayılır. Yalnız
+    // animasyon çalışırken: frameCount yalnız animateHelper'da arttığından,
+    // stopAnimation SONRASI bir betiğin birçok pişmiş resmi silmesi/değiştirmesi
+    // aynı "kare"de sayılıp sigortayı boşuna tetiklerdi (o KojoWorld için
+    // pişirmeyi kalıcı kapatırdı). Animasyon dururken tek-seferlik geri almalar
+    // çırpınma değildir.
+    if (animating) {
+      unbakeStreak = if (frameCount - lastUnbakeFrame < BakePolicy.unbakeStreakWindow) unbakeStreak + 1 else 0
+      lastUnbakeFrame = frameCount
+    }
+    try {
+      // pişirme sırasını koruyarak bakeSprite'ın hemen üstüne (dibe) koy;
+      // canlı çocuklar üstte kalır -- pişmeden önceki z-sırasıyla tutarlı
+      var i = 1 // 0 = bakeSprite
+      bakedNodes.foreach { c => stage.addChildAt(c, i); i += 1 }
+      bakedNodes.clear()
+      if (bakeSprite != null) { stage.removeChild(bakeSprite); bakeSprite = null }
+      // destroy(true): BaseRenderTexture + GL framebuffer'ını da bırak. Argümansız
+      // destroy yalnız Texture kabuğunu koparır, render hedefi GL belleği sızar
+      // (PIXI doku çöp toplayıcısı render hedeflerini atlar). RenderTexture'ın
+      // no-arg destroy'unu gölgelememek için Texture'a yükselt.
+      if (bakeTexture != null) { bakeTexture.asInstanceOf[PIXI.Texture].destroy(true); bakeTexture = null }
+      render()
+      // sürekli geri alma pişirmeyi kârsızlaştırır -> tabana dön (kalıcı).
+      if (BakePolicy.shouldDisableAfterUnbake(unbakeStreak)) bakeDisabled = true
+    }
+    catch {
+      case _: Throwable =>
+        // son çare: ortada patlarsa geri eklenemeyen düğümler sahneden düşebilir
+        // (kabul edilebilir; pişirme zaten kapanıyor). Animasyon durmaz.
+        bakeDisabled = true
+        bakedNodes.clear()
+    }
+  }
+
+  // boyut/yakınlaştırma/silme pişmiş dokuyu geçersiz kılar. unbakeAll zaten
+  // pişmişleri geri koyup dokuyu atıyor; ayrıca bir şey kalmadıysa no-op.
+  private def resetBake(): Unit = {
+    unbakeAll()
+    if (bakeSprite != null) {
+      stage.removeChild(bakeSprite)
+      bakeSprite = null
+    }
+    if (bakeTexture != null) {
+      bakeTexture.asInstanceOf[PIXI.Texture].destroy(true) // GL framebuffer'ı da bırak (sızıntı)
+      bakeTexture = null
+    }
+  }
+
   def erasePictures(): Unit = {
+    resetBake() // pişmiş boyayı da temizle (yoksa dokuda hayalet kalır)
     val children = stage.children.toBuffer
     children.foreach { c =>
       if (c.name != "Turtle Layer") {
@@ -181,17 +415,49 @@ class KojoWorldImpl extends KojoWorld {
     window.setTimeout(() => fn, ms)
   }
 
+  // PERFORMANS: render() her resim değişiminde çağrılıyor (taşı/döndür/boya/çiz
+  // hepsi transformDone -> render zincirinden geçer). Eskiden her çağrı ANINDA
+  // tam bir sahne çizimiydi; canlandır döngüsündeki tipik bir kare 5-10 tam
+  // çizim yapıyordu (üç-cisim benzetiminde ölçüldü: kare başına 6). Artık
+  // render() yalnızca işaret koyar; gerçek renderer.render(stage) kare başına
+  // EN FAZLA BİR kez koşar. Ölçülen etki: kare başına çizim 6 -> 1, üç-cisim
+  // fiddle'ında ~2 kat FPS. Görsel fark yok: tarayıcı zaten kareler arasında
+  // boyamaz.
+  //
+  // Bekleyen çizim iki yoldan boşalır:
+  //  - canlandır DIŞINDA (tek seferlik çizim/etkileşim): kaydedilen rAF'te.
+  //  - canlandır İÇİNDE: animateHelper her kare fn'den sonra flushRender()
+  //    çağırır. Bu olmadan, rAF geri çağrısı içinde kaydedilen istek tarayıcı
+  //    tarafından BİR SONRAKİ kareye kuyruklanır ve ekran hep bir adım geride
+  //    kalırdı (~16 ms gecikme). flushRender bekleyeni aynı karede boşaltır.
+  private var renderPending = false
+  private var renderHandle = 0
   def render(): Unit = {
-    renderer.render(stage)
+    if (!renderPending) {
+      renderPending = true
+      renderHandle = window.requestAnimationFrame(_ => flushRender())
+    }
+  }
+
+  private def flushRender(): Unit = {
+    if (renderPending) {
+      renderPending = false
+      window.cancelAnimationFrame(renderHandle)
+      renderer.render(stage)
+    }
   }
 
   def moveToFront(obj: PIXI.DisplayObject): Unit = {
+    // pişmiş düğüm sahnede değil: removeChild null döner, addChild(null) çöker.
+    // önce geri al ki gerçek düğüm sahnede olsun.
+    if (bakedNodes.contains(obj)) unbakeAll()
     val c = stage.removeChild(obj)
     stage.addChild(c)
     render()
   }
 
   def moveToBack(obj: PIXI.DisplayObject): Unit = {
+    if (bakedNodes.contains(obj)) unbakeAll()
     val c = stage.removeChild(obj)
     stage.addChildAt(c, 0)
     render()
@@ -244,7 +510,10 @@ class KojoWorldImpl extends KojoWorld {
   def animateHelper(fn: => Unit): Unit = {
     window.requestAnimationFrame { t =>
       if (notAssetLoading) {
+        frameCount += 1
         fn
+        maybeBake()
+        flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
       }
       if (animating) {
         animateHelper(fn)

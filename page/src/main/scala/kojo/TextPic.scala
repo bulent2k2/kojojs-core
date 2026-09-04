@@ -35,11 +35,13 @@ class TextPic(text: Any, fontSize: Int, color: Color)(implicit val kojoWorld: Ko
 
   override def setPenColor(c: Color): Unit = {
     textNode.style.fill = c.toCanvas
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
   override def setPenThickness(t: Double): Unit = {
     textNode.style.strokeThickness = t
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
@@ -49,6 +51,7 @@ class TextPic(text: Any, fontSize: Int, color: Color)(implicit val kojoWorld: Ko
 
   def update(text: Any): Unit = {
     textNode.text = text.toString
+    kojoWorld.noteMutation(tnode) // skor/sayaç yazısı her kare güncellenir; pişmesin
     kojoWorld.render()
   }
 
