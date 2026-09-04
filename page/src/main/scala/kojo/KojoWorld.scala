@@ -7,7 +7,7 @@ import org.scalajs.dom.raw.{KeyboardEvent, UIEvent}
 import org.scalajs.dom.{WheelEvent, document, html, window}
 import pixiscalajs.PIXI
 import pixiscalajs.PIXI.{Point, Rectangle, RendererOptions}
-import pixiscalajs.PIXI.interaction.InteractionData
+import pixiscalajs.PIXI.interaction.{InteractionData, InteractionEvent}
 
 import scala.scalajs.js
 
@@ -27,9 +27,11 @@ trait KojoWorld {
 
   def setBackground(color: Color): Unit
   def frameDeltaTime: Double
+  def frameCounter: Long
   def animate(fn: => Unit): Unit
   def animateWithState[S](initState: S)(nextState: S => S): Unit
   def timer(ms: Long)(fn: => Unit): Unit
+  def setRefreshRate(fps: Int): Unit
   def stopAnimation(): Unit
   def setup(fn: => Unit): Unit
 
@@ -215,6 +217,7 @@ class KojoWorldImpl extends KojoWorld {
   // sahnede olmasına bağlı değil), yalnızca ayrı bir DisplayObject olmaktan
   // çıkar. z-sırası: pişmiş boya en alta (dip katman) düşer.
   private var frameCount: Long = 0
+  def frameCounter: Long = frameCount
   private var bakeSprite: PIXI.Sprite = _
   private var bakeTexture: PIXI.RenderTexture = _
   private var bakeMatrix: PIXI.Matrix = _
@@ -487,6 +490,14 @@ class KojoWorldImpl extends KojoWorld {
   def notAssetLoading = !AssetLoader.loading
   var timers = Vector.empty[Int]
   private var prevFrameTime: Double = _
+  // Ekran tazeleme hızı kısıtlaması: 0 => her tarayıcı karesinde çalış (~60/sn).
+  // Hedef aralık paylaşılır; her canlandır döngüsü kendi "son çalışma" damgasını
+  // tutar (aşağıda animateHelper'a parametreyle geçilir) -- yoksa eşzamanlı iki
+  // canlandır döngüsü aynı damgayı paylaşıp birbirini aç bırakır.
+  private var refreshIntervalMs: Double = 0
+  def setRefreshRate(fps: Int): Unit = {
+    refreshIntervalMs = if (fps <= 0) 0 else 1000.0 / fps
+  }
 
   def frameDeltaTime: Double = {
     val currFrameTime = System.currentTimeMillis() / 1000.0
@@ -507,16 +518,29 @@ class KojoWorldImpl extends KojoWorld {
     animateHelper(fn)
   }
 
-  def animateHelper(fn: => Unit): Unit = {
-    window.requestAnimationFrame { t =>
+  def animateHelper(fn: => Unit): Unit = animateHelper(fn, -1)
+
+  // lastRunMs: bu döngünün fn'i en son çalıştırdığı duvar-saati anı, ms (-1: hiç).
+  // Döngüye özgü (parametreyle geçilir) ki eşzamanlı canlandır döngüleri hedef
+  // aralıktan bağımsız beslensin. rAF'ın verdiği zaman damgası yerine
+  // System.currentTimeMillis kullanıyoruz (frameDeltaTime de öyle yapıyor).
+  private def animateHelper(fn: => Unit, lastRunMs: Double): Unit = {
+    window.requestAnimationFrame { _ =>
+      var nextLast = lastRunMs
       if (notAssetLoading) {
-        frameCount += 1
-        fn
-        maybeBake()
-        flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+        // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
+        val now = System.currentTimeMillis().toDouble
+        val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs
+        if (due) {
+          nextLast = now
+          frameCount += 1
+          fn
+          maybeBake()
+          flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+        }
       }
       if (animating) {
-        animateHelper(fn)
+        animateHelper(fn, nextLast)
       }
     }
   }
@@ -758,6 +782,41 @@ class KojoWorldImpl extends KojoWorld {
     window.addEventListener("keydown", keyDown(_), false)
     window.addEventListener("keyup", keyUp(_), false)
     window.addEventListener("wheel", mouseWheel(_), false)
+
+    // Tuvali fareyle tutup çekerek kaydırma (pan).
+    // Boş tuvale basınca çalışır; etkileşimli bir resme (tıklama, sürükleme,
+    // joystick) basınca o resim olayı yuttuğu (stopPropagation) için pan başlamaz.
+    stage.hitArea = new Rectangle(-1e6, -1e6, 2e6, 2e6)
+    var panning = false
+    var panStartGX = 0.0
+    var panStartGY = 0.0
+    var panStartPX = 0.0
+    var panStartPY = 0.0
+    def panDown(e: InteractionEvent): Unit = {
+      if (zoomEnabled) {
+        panning = true
+        panStartGX = e.data.global.x
+        panStartGY = e.data.global.y
+        panStartPX = stage.position.x
+        panStartPY = stage.position.y
+      }
+    }
+    def panMove(e: InteractionEvent): Unit = {
+      if (panning) {
+        stage.position.set(
+          panStartPX + (e.data.global.x - panStartGX),
+          panStartPY + (e.data.global.y - panStartGY)
+        )
+        render()
+      }
+    }
+    def panUp(e: InteractionEvent): Unit = {
+      panning = false
+    }
+    stage.on("pointerdown", panDown(_))
+    stage.on("pointermove", panMove(_))
+    stage.on("pointerup", panUp(_))
+    stage.on("pointerupoutside", panUp(_))
   }
 
   def isKeyPressed(keyCode: Int) = pressedKeys.contains(keyCode)

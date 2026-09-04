@@ -136,6 +136,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     kojoWorld.timer(ms)(fn)
   }
 
+  def setRefreshRate(fps: Int): Unit = {
+    kojoWorld.setRefreshRate(fps)
+  }
+
   def drawStage(fillc: Color)(implicit kojoWorld: KojoWorld): Unit = {
     kojoWorld.drawStage(fillc)
   }
@@ -450,20 +454,22 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   val ArrayBuffer = collection.mutable.ArrayBuffer
   type ArrayBuffer[V] = collection.mutable.ArrayBuffer[V]
 
-  def showFps(color: Color = Color.black, fontSize: Int = 15)(implicit kojoWorld: KojoWorld) {
+  def showFps(color: Color = Color.black, fontSize: Int = 15, label: String = "Fps: ")(implicit kojoWorld: KojoWorld) {
     val cb = canvasBounds
-    var frameCnt = 0
-    val fpsLabel = Picture.textu("Fps: ", fontSize, color)
+    val fpsLabel = Picture.textu(label, fontSize, color)
     fpsLabel.setPosition(cb.x + 10, cb.y + cb.height - 10)
     draw(fpsLabel)
     //    fpsLabel.forwardInputTo(TSCanvas.stageArea)
 
+    // Çalışan canlandırmanın (animate) küresel kare sayacındaki 1 saniyelik
+    // artışı okuruz. AYRI bir animate döngüsü AÇMAYIZ: iki eşzamanlı animate
+    // döngüsü (kullanıcının canlandır'ı + bunun kendi döngüsü) ortak render/
+    // cancelAnimationFrame düzeneğinde çakışıp ikisini de dondururdu.
+    var lastCount = kojoWorld.frameCounter
     timer(1000) {
-      fpsLabel.update(s"Fps: $frameCnt")
-      frameCnt = 0
-    }
-    animate {
-      frameCnt += 1
+      val now = kojoWorld.frameCounter
+      fpsLabel.update(s"$label${now - lastCount}")
+      lastCount = now
     }
   }
 

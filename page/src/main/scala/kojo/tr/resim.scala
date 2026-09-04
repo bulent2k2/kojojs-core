@@ -90,7 +90,9 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def tümEkran(): Birim = kb.toggleFullScreenCanvas()                        // toggleFullScreenCanvas
   def oyunSüresiniGöster(sınırSn: Sayı, bitişİletisi: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
     kb.showGameTime(sınırSn, bitişİletisi, renk, yazıBoyu)                   // showGameTime
-  def ekranTazelemeHızınıGöster(renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim = kb.showFps(renk, yazıBoyu) // showFps (kare/saniye)
+  def ekranTazelemeHızınıGöster(renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
+    kb.showFps(renk, yazıBoyu, "çerçeve/saniye: ")                          // showFps (çerçeve/saniye)
+  def ekranTazelemeHızınıKur(saniyedeKaçKere: Sayı): Birim = kb.setRefreshRate(saniyedeKaçKere) // setRefreshRate
   def ada(ton: Kesir, doygunluk: Kesir, açıklık: Kesir): Renk = kojo.doodle.Color.hsl(ton, doygunluk, açıklık) // cm.hsl
   def resimleriSil(): Birim = kb.erasePictures() // erasePictures
   def kur(işlev: => Birim): Birim = kb.setup(işlev) // setup
