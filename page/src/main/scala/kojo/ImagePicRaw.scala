@@ -34,6 +34,7 @@ class ImagePicRaw(subImg: SubImage, envelope: Option[Picture])(implicit val kojo
           p.ready.foreach { _ => makeDone() }
       }
 
+      kojoWorld.noteMutation(tnode) // doku geç yüklendi; boş konteyner pişmişse geri al
       kojoWorld.render()
 
     case Failure(exception) =>

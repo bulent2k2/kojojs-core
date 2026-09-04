@@ -29,6 +29,7 @@ trait VectorGraphicsPic extends Picture with ReadyPromise {
     }
     path.dirty += 1
     path.clearDirty += 1
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
@@ -40,6 +41,7 @@ trait VectorGraphicsPic extends Picture with ReadyPromise {
     }
     path.dirty += 1
     path.clearDirty += 1
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
@@ -50,6 +52,7 @@ trait VectorGraphicsPic extends Picture with ReadyPromise {
     }
     path.dirty += 1
     path.clearDirty += 1
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 }

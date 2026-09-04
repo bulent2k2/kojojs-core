@@ -26,10 +26,12 @@ trait Picture {
 
   def invisible(): Unit = {
     tnode.visible = false
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
   def visible(): Unit = {
     tnode.visible = true
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
   def isVisible = tnode.visible
@@ -41,6 +43,7 @@ trait Picture {
   def heading = tnode.rotation.toDegrees
   def setOpacity(opac: Double) {
     tnode.alpha = opac
+    kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
@@ -64,6 +67,7 @@ trait Picture {
 
   private def transformDone() = {
     preDrawHook()
+    kojoWorld.noteMutation(tnode) // pişirme katmanı için: bu resim değişti
     kojoWorld.render()
     updateGeomTransform()
   }

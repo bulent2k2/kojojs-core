@@ -26,6 +26,7 @@ class ImagePic(url: String, envelope: Option[Picture])(implicit val kojoWorld: K
         p.ready.foreach { _ => makeDone() }
     }
 
+    kojoWorld.noteMutation(tnode) // doku geç yüklendi; boş konteyner pişmişse geri al
     kojoWorld.render()
   }
 
