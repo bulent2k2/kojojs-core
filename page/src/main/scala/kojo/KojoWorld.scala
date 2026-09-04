@@ -776,7 +776,14 @@ class KojoWorldImpl extends KojoWorld {
         else {
           zoomf = zoomf * 1.1
         }
-        zoomXY(zoomf, zoomf, 0, 0)
+        // Şu anda ekran MERKEZİNDE duran dünya noktasını bul ve onu merkez alarak
+        // yakınlaştır -- yoksa zoomXY stage.position'ı sıfırlayıp daima dünya-(0,0)
+        // üzerinden yakınlaşır ve fareyle kaydırma (pan) iptal olurdu.
+        // (screen = pos + scale*world, scale=(s,-s) olduğundan ters çözüm:)
+        val sOld = stage.scale.x
+        val merkezX = (screenWidth / 2 - stage.position.x) / sOld
+        val merkezY = (stage.position.y - screenHeight / 2) / sOld
+        zoomXY(zoomf, zoomf, merkezX, merkezY)
       }
     }
     window.addEventListener("keydown", keyDown(_), false)
