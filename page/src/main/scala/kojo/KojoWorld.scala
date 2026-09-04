@@ -54,6 +54,7 @@ trait KojoWorld {
   def mouseMoveOnlyWhenInside(on: Boolean): Unit
   def size(width: Double, height: Double): Unit
   def zoomXY(xfactor: Double, yfactor: Double, cx: Double, cy: Double): Unit
+  def resetView(): Unit
   def mouseXY: Point
   def erasePictures(): Unit
   def toggleFullScreenCanvas(): Unit
@@ -757,6 +758,15 @@ class KojoWorldImpl extends KojoWorld {
     zoomEnabled = false
   }
 
+  // Biriken yakınlaştırma çarpanı (tekerlekle güncellenir). resetView sıfırlar.
+  private var zoomf = 1.0
+  // Tuvali başlangıç görünümüne döndür: dünya-(0,0) merkezde, yakınlaştırma 1.
+  // (Fareyle kaydırma da stage.position'ı değiştirir; zoomXY onu geri kurar.)
+  def resetView(): Unit = {
+    zoomf = 1.0
+    zoomXY(1, 1, 0, 0)
+  }
+
   val pressedKeys = new collection.mutable.HashSet[Int]
 
   def initEvents(): Unit = {
@@ -766,7 +776,12 @@ class KojoWorldImpl extends KojoWorld {
     def keyUp(e: KeyboardEvent): Unit = {
       pressedKeys.remove(e.keyCode)
     }
-    var zoomf = 1.0
+    // Editör çerçevesindeki "Ev" düğmesi buradan çağırır (iframe aynı-köken).
+    // js.Dynamic.global'a değil, somut `window` nesnesine atıyoruz: katı-kipte
+    // çıplak atama (global.foo=) "kocoResetView is not defined" atardı.
+    window.asInstanceOf[scala.scalajs.js.Dynamic]
+      .updateDynamic("kocoResetView")((() => resetView()): scala.scalajs.js.Function0[Unit])
+
     def mouseWheel(e: WheelEvent): Unit = {
       if (zoomEnabled) {
         val direction = e.deltaY

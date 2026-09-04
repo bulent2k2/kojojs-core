@@ -87,6 +87,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def rastgeleDiziden[T](dizi: collection.Seq[T]): T = kb.randomFrom(dizi)   // randomFrom
   def sırayaSok(saniye: Kesir)(kod: => Birim): Birim = kb.schedule(saniye)(kod) // schedule
   def yaklaşmayaİzinVerme(): Birim = kb.disablePanAndZoom()                  // disablePanAndZoom
+  def görünümüSıfırla(): Birim = kb.resetView()                              // resetView (merkez + zoom 1)
   def tümEkran(): Birim = kb.toggleFullScreenCanvas()                        // toggleFullScreenCanvas
   def oyunSüresiniGöster(sınırSn: Sayı, bitişİletisi: Yazı, renk: Renk = Renkler.siyah, yazıBoyu: Sayı = 15): Birim =
     kb.showGameTime(sınırSn, bitişİletisi, renk, yazıBoyu)                   // showGameTime

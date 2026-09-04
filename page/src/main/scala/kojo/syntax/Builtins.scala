@@ -117,6 +117,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     kojoWorld.noZoom()
   }
 
+  def resetView(): Unit = {
+    kojoWorld.resetView()
+  }
+
   def frameDeltaTime = kojoWorld.frameDeltaTime
 
   def animate(fn: => Unit): Unit = {
