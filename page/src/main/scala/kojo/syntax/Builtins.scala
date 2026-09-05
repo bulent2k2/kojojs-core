@@ -117,6 +117,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     kojoWorld.noZoom()
   }
 
+  def resetView(): Unit = {
+    kojoWorld.resetView()
+  }
+
   def frameDeltaTime = kojoWorld.frameDeltaTime
 
   def animate(fn: => Unit): Unit = {
@@ -134,6 +138,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
 
   def timer(ms: Long)(fn: => Unit): Unit = {
     kojoWorld.timer(ms)(fn)
+  }
+
+  def setRefreshRate(fps: Int): Unit = {
+    kojoWorld.setRefreshRate(fps)
   }
 
   def drawStage(fillc: Color)(implicit kojoWorld: KojoWorld): Unit = {
@@ -450,20 +458,26 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   val ArrayBuffer = collection.mutable.ArrayBuffer
   type ArrayBuffer[V] = collection.mutable.ArrayBuffer[V]
 
-  def showFps(color: Color = Color.black, fontSize: Int = 15)(implicit kojoWorld: KojoWorld) {
+  def showFps(color: Color = Color.black, fontSize: Int = 15, label: String = "Fps: ")(implicit kojoWorld: KojoWorld) {
     val cb = canvasBounds
-    var frameCnt = 0
-    val fpsLabel = Picture.textu("Fps: ", fontSize, color)
+    val fpsLabel = Picture.textu(label, fontSize, color)
     fpsLabel.setPosition(cb.x + 10, cb.y + cb.height - 10)
     draw(fpsLabel)
     //    fpsLabel.forwardInputTo(TSCanvas.stageArea)
 
+    // Çalışan canlandırmanın (animate) küresel kare sayacındaki 1 saniyelik
+    // artışını okuruz; AYRI bir animate döngüsü AÇMAYIZ. Gerekçe: setRefreshRate
+    // etkinken kısıt bir "son çalışma" zaman damgasına bakar; iki eşzamanlı döngü
+    // bu damgayı PAYLAŞIRSA ilk çalışan hep "vadesi gelmiş" olur, öbürü sürekli
+    // atlanır (donma). Damga artık döngüye özgü (bkz. KojoWorld.animateHelper) ama
+    // yine de tek döngü hem daha yalın hem de kısıtı showFps'in ayrı döngüsüyle
+    // paylaşmamış olur. NOT: hiç animate döngüsü yoksa (yalnız timer'la canlandıran
+    // betik) sayaç 0 gösterir -- eskiden ham tarayıcı karelerini sayardı.
+    var lastCount = kojoWorld.frameCounter
     timer(1000) {
-      fpsLabel.update(s"Fps: $frameCnt")
-      frameCnt = 0
-    }
-    animate {
-      frameCnt += 1
+      val now = kojoWorld.frameCounter
+      fpsLabel.update(s"$label${now - lastCount}")
+      lastCount = now
     }
   }
 
