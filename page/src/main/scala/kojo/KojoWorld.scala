@@ -768,9 +768,11 @@ class KojoWorldImpl extends KojoWorld {
   def resetView(): Unit = zoomXY(1, 1, 0, 0)
 
   // Şu anda ekran merkezinde duran dünya noktası -- pan/zoom'u o noktadan yapmak
-  // için. (screen = pos + scale*world, scale=(s,-s) olduğundan ters çözüm.)
+  // için. (screen = pos + scale*world; zoomXY scale.set(xf, -yf) yaptığından
+  // scale.x = xf, scale.y = -yf. yaklaşXY eşit olmayan ölçek kurabildiği için y'de
+  // x-ölçeğini DEĞİL, y-ölçeğini (-scale.y) kullanmak gerekir.)
   private def merkezDünyaX = (screenWidth / 2 - stage.position.x) / stage.scale.x
-  private def merkezDünyaY = (stage.position.y - screenHeight / 2) / stage.scale.x
+  private def merkezDünyaY = (stage.position.y - screenHeight / 2) / -stage.scale.y
 
   val pressedKeys = new collection.mutable.HashSet[Int]
 
@@ -791,10 +793,11 @@ class KojoWorldImpl extends KojoWorld {
       if (zoomEnabled) {
         // Ölçeği biriken bir sayaçtan değil, GERÇEK stage.scale'den türetiriz;
         // yoksa yaklaşXY (koddan zoomXY) sonrası ilk tekerlek tıkında zıplardı.
-        // Ekran merkezindeki dünya noktasını koruyarak yakınlaşırız (yoksa zoomXY
-        // dünya-(0,0)'ı merkeze koyup fareyle kaydırmayı iptal ederdi).
-        val newScale = if (e.deltaY > 0) stage.scale.x * 0.9 else stage.scale.x * 1.1
-        zoomXY(newScale, newScale, merkezDünyaX, merkezDünyaY)
+        // Her iki ekseni AYNI çarpanla ölçekleriz ki eşit olmayan en-boy oranı
+        // (yaklaşXY) korunsun. Ekran merkezindeki dünya noktasını koruyarak
+        // yakınlaşırız (yoksa zoomXY dünya-(0,0)'ı merkeze koyup pan'ı iptal ederdi).
+        val f = if (e.deltaY > 0) 0.9 else 1.1
+        zoomXY(stage.scale.x * f, -stage.scale.y * f, merkezDünyaX, merkezDünyaY)
       }
     }
     window.addEventListener("keydown", keyDown(_), false)
@@ -838,8 +841,8 @@ class KojoWorldImpl extends KojoWorld {
         // stage.position'ı yeniden kurar (görsel sıçrama yok) ama bu defter
         // tutmayı ve resetBake'i yapar -- yoksa pan'la açılan bölgeye çizilen
         // durağan resimler pişirilince kaybolur, canvasBounds eskir.
-        val s = stage.scale.x
-        zoomXY(s, s, merkezDünyaX, merkezDünyaY)
+        // Mevcut ölçeği (eşit olmayan olabilir) aynen koru: xf=scale.x, yf=-scale.y.
+        zoomXY(stage.scale.x, -stage.scale.y, merkezDünyaX, merkezDünyaY)
       }
     }
     stage.on("pointerdown", panDown(_))
