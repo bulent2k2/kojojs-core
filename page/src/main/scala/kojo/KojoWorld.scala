@@ -36,7 +36,31 @@ trait KojoWorld {
   def setup(fn: => Unit): Unit
 
   def drawStage(fillc: Color)(implicit kojoWorld: KojoWorld)
-  def bounceVecOffStage(v: Vector2D, p: Picture): Vector2D
+  // SOMUT (trait'te): KojoWorldImpl ile TestKojoWorld aynı kodu paylaşsın; eskiden
+  // ikisinde ayrı kopya vardı ve test kopyası eski kalmıştı. Yalnız sahne kenarları
+  // + Picture API kullanır.
+  //
+  // Bir hız bileşenini YALNIZ o kenara DOĞRU giderken ters çevir. Yoksa top kenara
+  // girip yansıdıktan sonra hâlâ çakışıyorken tekrar yansır -> sağa-sola salınıp
+  // kenara yapışır ve kenar boyunca kayar. (Kojo y-ekseni yukarı: üst = yüksek y,
+  // alt = düşük y.) Büyüklük korunur; köşede iki bileşen birden döner (doğal yansıma).
+  //
+  // NOT -- masaüstü Kojo'dan bilinçli ayrılık: masaüstü `picture.bounceVecOffStage`
+  // köşede sabit 45° (|v|/√2) verir ve aynı yapışma sorunu orada da var. Bu fizik
+  // olarak doğru olan; masaüstüne de taşınması önerilir.
+  def bounceVecOffStage(v: Vector2D, p: Picture): Vector2D = {
+    val topCollides = p.collidesWith(stageTop)
+    val leftCollides = p.collidesWith(stageLeft)
+    val botCollides = p.collidesWith(stageBot)
+    val rightCollides = p.collidesWith(stageRight)
+    var nvx = v.x
+    var nvy = v.y
+    if (leftCollides && v.x < 0) nvx = -v.x
+    if (rightCollides && v.x > 0) nvx = -v.x
+    if (topCollides && v.y > 0) nvy = -v.y
+    if (botCollides && v.y < 0) nvy = -v.y
+    Vector2D(nvx, nvy)
+  }
   def bouncePicVectorOffPic(pic: Picture, vel: Vector2D, obstacle: Picture, rg: Random): Vector2D
   def stageBorder: Picture
   def stageLeft: Picture
@@ -662,32 +686,7 @@ class KojoWorldImpl extends KojoWorld {
     stageBorder.draw()
   }
 
-  def bounceVecOffStage(v: Vector2D, p: Picture): Vector2D = {
-    val topCollides = p.collidesWith(stageTop)
-    val leftCollides = p.collidesWith(stageLeft)
-    val botCollides = p.collidesWith(stageBot)
-    val rightCollides = p.collidesWith(stageRight)
-
-    val c = v.magnitude / math.sqrt(2)
-    if (topCollides && leftCollides)
-      Vector2D(c, -c)
-    else if (topCollides && rightCollides)
-      Vector2D(-c, -c)
-    else if (botCollides && leftCollides)
-      Vector2D(c, c)
-    else if (botCollides && rightCollides)
-      Vector2D(-c, c)
-    else if (topCollides)
-      Vector2D(v.x, -v.y)
-    else if (botCollides)
-      Vector2D(v.x, -v.y)
-    else if (leftCollides)
-      Vector2D(-v.x, v.y)
-    else if (rightCollides)
-      Vector2D(-v.x, v.y)
-    else
-      v
-  }
+  // bounceVecOffStage: trait'te somut (KojoWorld) -- kopya buradan kaldırıldı.
 
   def collidesWithStage(p: Picture): Boolean = {
     val stageparts = List(stageTop, stageBot, stageLeft, stageRight)

@@ -73,10 +73,21 @@ trait Picture {
   }
 
   private def preDrawHook() = {
-    if (tnode.parent == null) {
-      tnode.transform.onChange()
-      tnode.transform.updateLocalTransform()
-    }
+    // Her dönüşümde localTransform'u ANINDA tazele (eskiden yalnız parent == null
+    // iken). PIXI matrisi tembel günceller -- yalnız updateTransform/render'da;
+    // position/rotation/scale ataması _localID'yi artırır ama matrisi yenilemez.
+    // PR #5'ten önce transformDone -> render() eşzamanlı renderer.render(stage)
+    // çağırıp stage.updateTransform() ile bunu dolaylı yapıyordu; #5 çizimi kare
+    // sonuna erteledi, matris kare içinde bayat kaldı. Bayat matris şunları bozar:
+    //  - translate(dx,dy): localTransform.apply ile hesaplar -> aynı karede
+    //    döndür+taşı ESKİ yönde gider,
+    //  - collidesWith/bounds (picGeom localTransform'dan kurulur) -> bir kare
+    //    geriden bakar (geç tespit; while(collidesWith) döngüleri hiç çıkmaz),
+    //  - bouncePicVectorOffPic.pullbackCollision, bounceVecOffStage.
+    // Maliyet altı çarpma; updateLocalTransform _parentID=-1 yapıp render'daki
+    // dünya-dönüşümü güncellemesini de tetikler. #5 öncesi anlam aynen geri gelir.
+    tnode.transform.onChange()
+    tnode.transform.updateLocalTransform()
   }
 
   def offset(v: Vector2D): Unit = {

@@ -70,38 +70,19 @@ class JoyStick(radius: Double)(builtins: Builtins) {
   }
 
   def movePlayerWithinStage(player: Picture, scaleVelocity: Double = 1, directionConstraint: kojo.Vector2D = null): Unit = {
-    import kojo.RepeatCommands._
+    movePlayerHelper(player, scaleVelocity, directionConstraint)
 
-    val vel = movePlayerHelper(player, scaleVelocity, directionConstraint)
-
-    def handlePossibleCollision(stagePart: Picture, vel: Vector2D): Unit = {
-      if (player.collidesWith(stagePart)) {
-        val StageRight = stageRight; val StageLeft = stageLeft; val StageTop = stageTop; val StageBot = stageBot
-        val (stagePart2, stagePart3, velPart) = stagePart match {
-          case StageRight => (stageTop, stageBot, Vector2D(0, vel.y))
-          case StageLeft  => (stageTop, stageBot, Vector2D(0, vel.y))
-          case StageTop   => (stageLeft, stageRight, Vector2D(vel.x, 0))
-          case StageBot   => (stageLeft, stageRight, Vector2D(vel.x, 0))
-        }
-
-        val vel2 = -vel.normalize
-        while (player.collidesWith(stagePart)) {
-          player.offset(vel2)
-        }
-        player.offset(velPart)
-        repeatFor(Seq(stagePart2, stagePart3)) { stagePartX =>
-          if (player.collidesWith(stagePartX)) {
-            val vel2 = -velPart.normalize
-            while (player.collidesWith(stagePartX)) {
-              player.offset(vel2)
-            }
-          }
-        }
-      }
-    }
-    handlePossibleCollision(stageRight, vel)
-    handlePossibleCollision(stageLeft, vel)
-    handlePossibleCollision(stageTop, vel)
-    handlePossibleCollision(stageBot, vel)
+    // Oyuncuyu sahne sınırları içine TEK ADIMDA kıstır -- döngü ve collidesWith
+    // YOK. Eski "while (collidesWith) offset(...)" döngüsü, kare içinde bayat kalan
+    // localTransform yüzünden hiç "çıktı" demiyordu: sonsuz döngü (tüm sayfa donar)
+    // ya da bir guard'la itip resmi sahne dışına yolluyordu (yok olur).
+    // Picture.preDrawHook artık matrisi her değişimde tazelediği için `bounds`
+    // TAZE; kenarları doğrudan ondan alırız -- merkezli-resim varsayımı yok, yani
+    // kaplumbağa-çizimli (Resim { … }) oyuncular da doğru kıstırılır.
+    val cb = canvasBounds
+    val b = player.bounds
+    val dx = math.max(cb.x - b.x, math.min(0.0, cb.x + cb.width - (b.x + b.width)))
+    val dy = math.max(cb.y - b.y, math.min(0.0, cb.y + cb.height - (b.y + b.height)))
+    if (dx != 0 || dy != 0) player.offset(dx, dy)
   }
 }
