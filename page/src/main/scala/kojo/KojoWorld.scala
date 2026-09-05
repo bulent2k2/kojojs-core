@@ -240,7 +240,8 @@ class KojoWorldImpl extends KojoWorld {
   // pişmiyor. Pişmiş bir çocuk sonradan değişirse (nadir) unbakeAll ile geri
   // alınıyor. Pişmiş resim NESNESİ geçerli kalır (çarpışma geometrisi tnode'un
   // sahnede olmasına bağlı değil), yalnızca ayrı bir DisplayObject olmaktan
-  // çıkar. z-sırası: pişmiş boya en alta (dip katman) düşer.
+  // çıkar. z-sırası: pişmiş boya, pişirilen en ALTTAKİ çocuğun yerine (bakeSprite)
+  // iner; ondan aşağıdaki muaf canlı çocuklar (ör. çizSahne dolgusu) altında kalır.
   private var frameCount: Long = 0
   def frameCounter: Long = frameCount
   private var bakeSprite: PIXI.Sprite = _
@@ -285,6 +286,11 @@ class KojoWorldImpl extends KojoWorld {
   // çocuğun yerine girer. Yoksa pişirmeden muaf canlı çocuklar (ör. çizSahne'nin
   // opak "Turtle Layer" dolgusu stageArea) pişmiş her şeyi örtüyordu: iz
   // noktaları pişer pişmez siyah dolgunun ARKASINDA kaybolup "siliniyordu".
+  // SINIR: sprite'ın yeri İLK pişirmede sabitlenir; sonraki pişirmeler aynı
+  // dokuya/z'ye gider. İlk pişirmeden SONRA sahneye eklenen muaf bir canlı çocuk
+  // (oyun ortasında çizilen Resim{} figürü, etkileşimli düğüm) için terslik
+  // sürer: ondan sonra çizilip pişen noktalar onun altına iner. Genel çözüm
+  // bant başına ayrı sprite (düğüm-bazlı geri almayla birlikte, gelecek işi).
   private def ensureBakeLayer(atIndex: Int): Unit = {
     if (bakeSprite == null) {
       bakeTexture = js.Dynamic.global.PIXI.RenderTexture
@@ -339,7 +345,12 @@ class KojoWorldImpl extends KojoWorld {
         // dolaşımını yalnız o kontrolü geçen adaylar için çalıştır.
         // __kojoNoBake: bir kez pişirilip sonra değişen düğüm (her saniye güncellenen
         // FPS/skor yazısı gibi) bir daha pişirilmez -- yoksa her değişimde tüm iz
-        // çözülüp yeniden pişiyordu (bkz. noteMutation).
+        // çözülüp yeniden pişiyordu (bkz. noteMutation). SINIR: bayrak kalıcıdır,
+        // resetBake dahil hiçbir yol temizlemez. Tek seferlik toplu değişiklik
+        // (pişmiş 500 noktanın rengini bir kez değiştirmek) o düğümleri sonsuza dek
+        // canlı bırakır (O(N) çizime dönüş). İyileştirme adayı: bayrak yerine sayaç
+        // (ilk geri almada yeniden pişmeye izin, 2.-3.'de dışla) ya da uzun süre
+        // durağan kalanın bayrağını silmek.
         val noBake = js.DynamicImplicits.truthValue(c.asInstanceOf[js.Dynamic].__kojoNoBake)
         if (!noBake && BakePolicy.isStaleByName(c.name, last, frameCount) && !hasInteractive(c)) {
           toBake += c
@@ -389,8 +400,9 @@ class KojoWorldImpl extends KojoWorld {
       lastUnbakeFrame = frameCount
     }
     try {
-      // pişirme sırasını koruyarak bakeSprite'ın hemen üstüne (dibe) koy;
-      // canlı çocuklar üstte kalır -- pişmeden önceki z-sırasıyla tutarlı
+      // pişirme sırasını koruyarak bakeSprite'ın hemen üstüne (onun bandına) koy;
+      // sprite pişirilen en alttaki çocuğun yerinde olduğundan bu, pişme öncesi
+      // z-sırasını korur
       var i = if (bakeSprite == null) 0 else stage.children.indexOf(bakeSprite) + 1 // sprite'ın hemen üstü
       bakedNodes.foreach { c => stage.addChildAt(c, i); i += 1 }
       bakedNodes.clear()
