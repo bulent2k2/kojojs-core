@@ -259,6 +259,8 @@ class KojoWorldImpl extends KojoWorld {
     if (n != null) {
       n.asInstanceOf[js.Dynamic].__kojoMut = frameCount.toDouble
       if (bakedNodes.nonEmpty && bakedNodes.contains(n)) {
+        // pişmişken değişti: bundan sonra pişirme adayı olmasın (thrash önlemi)
+        n.asInstanceOf[js.Dynamic].__kojoNoBake = true
         unbakeAll()
       }
     }
@@ -279,7 +281,11 @@ class KojoWorldImpl extends KojoWorld {
     })
   }
 
-  private def ensureBakeLayer(): Unit = {
+  // atIndex: sprite'ın sahnedeki z-konumu. 0 DEĞİL -- pişirilen en alttaki
+  // çocuğun yerine girer. Yoksa pişirmeden muaf canlı çocuklar (ör. çizSahne'nin
+  // opak "Turtle Layer" dolgusu stageArea) pişmiş her şeyi örtüyordu: iz
+  // noktaları pişer pişmez siyah dolgunun ARKASINDA kaybolup "siliniyordu".
+  private def ensureBakeLayer(atIndex: Int): Unit = {
     if (bakeSprite == null) {
       bakeTexture = js.Dynamic.global.PIXI.RenderTexture
         .create(canvasWidth, canvasHeight, js.undefined, renderer.resolution)
@@ -293,7 +299,7 @@ class KojoWorldImpl extends KojoWorld {
       // görünür sahne-yerel pencere [canvasOriginX, +canvasWidth] x ...;
       // merkez her zaman 0 DEĞİL (originAt/zoom sonrası). canvasOrigin kullan.
       bakeSprite.position.set(canvasOriginX, canvasOriginY + canvasHeight)
-      stage.addChildAt(bakeSprite, 0)
+      stage.addChildAt(bakeSprite, math.max(0, math.min(atIndex, stage.children.length)))
       // sahne-yerel -> ekran-piksel dönüşümü. renderer.render(c, doku) çocuğu
       // KİMLİK ebeveyne bağlayıp sahne-yerel çizer; bu matrisi projeksiyon
       // olarak vererek ekran-uzayına taşıyoruz. (yalnızca yakınlaştırılmamış
@@ -320,7 +326,6 @@ class KojoWorldImpl extends KojoWorld {
     val kids = stage.children
     // kalabalık + yakınlaştırılmamış (bakeMatrix/bakeSprite ölçeği hesaba katmaz)
     if (!BakePolicy.shouldConsider(kids.length, stageUnzoomed)) return
-    ensureBakeLayer()
     val toBake = scala.collection.mutable.ArrayBuffer.empty[PIXI.DisplayObject]
     var i = 0
     while (i < kids.length) {
@@ -332,13 +337,20 @@ class KojoWorldImpl extends KojoWorld {
         // bu adı verir) muaf. Etkileşimli düğümler de muaf (isabet testi).
         // Ucuz ad/durağanlık kontrolünü ÖNCE yap; pahalı hasInteractive ağaç
         // dolaşımını yalnız o kontrolü geçen adaylar için çalıştır.
-        if (BakePolicy.isStaleByName(c.name, last, frameCount) && !hasInteractive(c)) {
+        // __kojoNoBake: bir kez pişirilip sonra değişen düğüm (her saniye güncellenen
+        // FPS/skor yazısı gibi) bir daha pişirilmez -- yoksa her değişimde tüm iz
+        // çözülüp yeniden pişiyordu (bkz. noteMutation).
+        val noBake = js.DynamicImplicits.truthValue(c.asInstanceOf[js.Dynamic].__kojoNoBake)
+        if (!noBake && BakePolicy.isStaleByName(c.name, last, frameCount) && !hasInteractive(c)) {
           toBake += c
         }
       }
       i += 1
     }
     if (toBake.nonEmpty) {
+      // sprite, pişirilen en ALTTAKİ çocuğun z-konumuna girer (toBake sahne
+      // sırasında toplandı, head en alttaki)
+      ensureBakeLayer(stage.children.indexOf(toBake.head))
       toBake.foreach { c =>
         // bakeMatrix'i projeksiyon olarak ver: çocuk sahne-yerelden ekran
         // pikseline taşınıp dokuya iner. clear=false -> iz birikir.
@@ -379,7 +391,7 @@ class KojoWorldImpl extends KojoWorld {
     try {
       // pişirme sırasını koruyarak bakeSprite'ın hemen üstüne (dibe) koy;
       // canlı çocuklar üstte kalır -- pişmeden önceki z-sırasıyla tutarlı
-      var i = 1 // 0 = bakeSprite
+      var i = if (bakeSprite == null) 0 else stage.children.indexOf(bakeSprite) + 1 // sprite'ın hemen üstü
       bakedNodes.foreach { c => stage.addChildAt(c, i); i += 1 }
       bakedNodes.clear()
       if (bakeSprite != null) { stage.removeChild(bakeSprite); bakeSprite = null }
