@@ -466,9 +466,13 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     //    fpsLabel.forwardInputTo(TSCanvas.stageArea)
 
     // Çalışan canlandırmanın (animate) küresel kare sayacındaki 1 saniyelik
-    // artışı okuruz. AYRI bir animate döngüsü AÇMAYIZ: iki eşzamanlı animate
-    // döngüsü (kullanıcının canlandır'ı + bunun kendi döngüsü) ortak render/
-    // cancelAnimationFrame düzeneğinde çakışıp ikisini de dondururdu.
+    // artışını okuruz; AYRI bir animate döngüsü AÇMAYIZ. Gerekçe: setRefreshRate
+    // etkinken kısıt bir "son çalışma" zaman damgasına bakar; iki eşzamanlı döngü
+    // bu damgayı PAYLAŞIRSA ilk çalışan hep "vadesi gelmiş" olur, öbürü sürekli
+    // atlanır (donma). Damga artık döngüye özgü (bkz. KojoWorld.animateHelper) ama
+    // yine de tek döngü hem daha yalın hem de kısıtı showFps'in ayrı döngüsüyle
+    // paylaşmamış olur. NOT: hiç animate döngüsü yoksa (yalnız timer'la canlandıran
+    // betik) sayaç 0 gösterir -- eskiden ham tarayıcı karelerini sayardı.
     var lastCount = kojoWorld.frameCounter
     timer(1000) {
       val now = kojoWorld.frameCounter

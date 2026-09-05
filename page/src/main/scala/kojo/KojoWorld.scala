@@ -496,6 +496,11 @@ class KojoWorldImpl extends KojoWorld {
   // tutar (aşağıda animateHelper'a parametreyle geçilir) -- yoksa eşzamanlı iki
   // canlandır döngüsü aynı damgayı paylaşıp birbirini aç bırakır.
   private var refreshIntervalMs: Double = 0
+  // Yaklaşık yarım tarayıcı karesi (~60Hz). rAF kareleri ~16.7ms ızgaralı ve
+  // System.currentTimeMillis tam-sayı ms olduğundan, katı ">= aralık" eşiği hedef
+  // hızı bir alt bölene yuvarlardı (örn. 30/sn pratikte ~20/sn). Bu tolerans, tam
+  // bölen hedefleri (60/30/20/15/10...) tam tutturmayı sağlar.
+  private val kareToleransıMs = 8.0
   def setRefreshRate(fps: Int): Unit = {
     refreshIntervalMs = if (fps <= 0) 0 else 1000.0 / fps
   }
@@ -531,7 +536,7 @@ class KojoWorldImpl extends KojoWorld {
       if (notAssetLoading) {
         // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
         val now = System.currentTimeMillis().toDouble
-        val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs
+        val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs - kareToleransıMs
         if (due) {
           nextLast = now
           frameCount += 1
@@ -758,14 +763,14 @@ class KojoWorldImpl extends KojoWorld {
     zoomEnabled = false
   }
 
-  // Biriken yakınlaştırma çarpanı (tekerlekle güncellenir). resetView sıfırlar.
-  private var zoomf = 1.0
   // Tuvali başlangıç görünümüne döndür: dünya-(0,0) merkezde, yakınlaştırma 1.
   // (Fareyle kaydırma da stage.position'ı değiştirir; zoomXY onu geri kurar.)
-  def resetView(): Unit = {
-    zoomf = 1.0
-    zoomXY(1, 1, 0, 0)
-  }
+  def resetView(): Unit = zoomXY(1, 1, 0, 0)
+
+  // Şu anda ekran merkezinde duran dünya noktası -- pan/zoom'u o noktadan yapmak
+  // için. (screen = pos + scale*world, scale=(s,-s) olduğundan ters çözüm.)
+  private def merkezDünyaX = (screenWidth / 2 - stage.position.x) / stage.scale.x
+  private def merkezDünyaY = (stage.position.y - screenHeight / 2) / stage.scale.x
 
   val pressedKeys = new collection.mutable.HashSet[Int]
 
@@ -784,21 +789,12 @@ class KojoWorldImpl extends KojoWorld {
 
     def mouseWheel(e: WheelEvent): Unit = {
       if (zoomEnabled) {
-        val direction = e.deltaY
-        if (direction > 0) {
-          zoomf = zoomf * 0.9
-        }
-        else {
-          zoomf = zoomf * 1.1
-        }
-        // Şu anda ekran MERKEZİNDE duran dünya noktasını bul ve onu merkez alarak
-        // yakınlaştır -- yoksa zoomXY stage.position'ı sıfırlayıp daima dünya-(0,0)
-        // üzerinden yakınlaşır ve fareyle kaydırma (pan) iptal olurdu.
-        // (screen = pos + scale*world, scale=(s,-s) olduğundan ters çözüm:)
-        val sOld = stage.scale.x
-        val merkezX = (screenWidth / 2 - stage.position.x) / sOld
-        val merkezY = (stage.position.y - screenHeight / 2) / sOld
-        zoomXY(zoomf, zoomf, merkezX, merkezY)
+        // Ölçeği biriken bir sayaçtan değil, GERÇEK stage.scale'den türetiriz;
+        // yoksa yaklaşXY (koddan zoomXY) sonrası ilk tekerlek tıkında zıplardı.
+        // Ekran merkezindeki dünya noktasını koruyarak yakınlaşırız (yoksa zoomXY
+        // dünya-(0,0)'ı merkeze koyup fareyle kaydırmayı iptal ederdi).
+        val newScale = if (e.deltaY > 0) stage.scale.x * 0.9 else stage.scale.x * 1.1
+        zoomXY(newScale, newScale, merkezDünyaX, merkezDünyaY)
       }
     }
     window.addEventListener("keydown", keyDown(_), false)
@@ -806,8 +802,10 @@ class KojoWorldImpl extends KojoWorld {
     window.addEventListener("wheel", mouseWheel(_), false)
 
     // Tuvali fareyle tutup çekerek kaydırma (pan).
-    // Boş tuvale basınca çalışır; etkileşimli bir resme (tıklama, sürükleme,
-    // joystick) basınca o resim olayı yuttuğu (stopPropagation) için pan başlamaz.
+    // Yalnız BOŞ tuvale (hitArea üzerinden hedef = stage) basınca başlar; bir
+    // resme basınca (o resim etkileşimliyse hedef odur) pan başlamaz -- böylece
+    // stopPropagation'a bağlı kalmadan onMouseClick/onMouseMove-only resimlerde
+    // de pan tetiklenmez.
     stage.hitArea = new Rectangle(-1e6, -1e6, 2e6, 2e6)
     var panning = false
     var panStartGX = 0.0
@@ -815,7 +813,7 @@ class KojoWorldImpl extends KojoWorld {
     var panStartPX = 0.0
     var panStartPY = 0.0
     def panDown(e: InteractionEvent): Unit = {
-      if (zoomEnabled) {
+      if (zoomEnabled && (e.target.asInstanceOf[AnyRef] eq stage)) {
         panning = true
         panStartGX = e.data.global.x
         panStartGY = e.data.global.y
@@ -833,7 +831,16 @@ class KojoWorldImpl extends KojoWorld {
       }
     }
     def panUp(e: InteractionEvent): Unit = {
-      panning = false
+      if (panning) {
+        panning = false
+        // Kaydırma bitti: canvasOrigin/canvasBounds'u güncelle ve pişmiş dokuyu
+        // geçersiz kıl. zoomXY mevcut ölçek + ekran-merkezi dünya noktasıyla aynı
+        // stage.position'ı yeniden kurar (görsel sıçrama yok) ama bu defter
+        // tutmayı ve resetBake'i yapar -- yoksa pan'la açılan bölgeye çizilen
+        // durağan resimler pişirilince kaybolur, canvasBounds eskir.
+        val s = stage.scale.x
+        zoomXY(s, s, merkezDünyaX, merkezDünyaY)
+      }
     }
     stage.on("pointerdown", panDown(_))
     stage.on("pointermove", panMove(_))
