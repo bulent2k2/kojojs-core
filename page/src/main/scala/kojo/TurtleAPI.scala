@@ -53,6 +53,7 @@ trait TurtleAPI extends VertexShapeSupport {
   def beamsOn(): Unit = {} // no-op for now
   def beamsOff(): Unit = {} // no-op for now
 
+  // Varsayılan boş; gerçek çizim Turtle'da (bkz. Turtle.realDot).
   def dot(diameter: Int): Unit = {
 //    saveStyle()
 //    savePosHe()

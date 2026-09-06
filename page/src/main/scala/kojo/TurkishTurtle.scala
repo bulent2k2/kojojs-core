@@ -235,10 +235,12 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def daire(yarıçap: Kesir = 25): Birim = englishTurtle.circle(yarıçap)
   def üçgen(en: Kesir = 25): Birim = yinele(3) { ileri(en); sağ(120) }
   def kare(en: Kesir = 25): Birim = yinele(4) { ileri(en); sağ(90) }
-  // nokta/ışınlar KojoJS'te henüz UYGULANMADI (gövdeleri boş).
-  // Dosyanın geleneği gereği sessizce çalışmış gibi görünmesinler:
-  // def nokta(çap: Sayı) = englishTurtle.dot(çap)      // TurtleAPI.dot gövdesi yorumda
-  // def ışınlarıAç() = englishTurtle.beamsOn()          // beamsOn/Off = {}
+  // Devre 6: nokta artık gerçek (Turtle.realDot, dolu daire).
+  def nokta(çap: Sayı): Birim = englishTurtle.dot(çap)
+  def nokta(): Birim = englishTurtle.dot(25)
+  // ışınlar KojoJS'te henüz UYGULANMADI (beamsOn/Off = {}); dosyanın geleneği
+  // gereği sessizce çalışmış gibi görünmesinler:
+  // def ışınlarıAç() = englishTurtle.beamsOn()
   // def ışınlarıKapat() = englishTurtle.beamsOff()
   // (çıktıyıSil: masaüstü çıktı paneline özgü; Devre 1 yer tutucuları arasında)
 
@@ -492,6 +494,12 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def canlandırmaBaşlayınca(işlev: => Birim): Birim = işlev
   // masaüstünde ayrı iş parçacığı; tarayıcıda tek iş parçacığı var, hemen çalışır
   def artalandaOynat(kod: => Birim): Birim = kod
+
+  // Kaplumbağanın konumunu/yönünü SENKRON okuyan `konum` ve `doğrultu`
+  // (masaüstü trInit.scala) BİLEREK eklenmedi: ikojo'da kaplumbağa komutları
+  // kuyruğa giriyor, o yüzden senkron bir okuma kuyruktaki komutlardan ÖNCEKİ
+  // konumu verirdi -- sessizce yanlış çizim. Kuyruk sırasını koruyan geri
+  // çağrımlı biçimleri kullanın: konumuOku(k => ...), yönüOku(y => ...).
 
   // ---- Devre 4: durakla ----
   // Masaüstünde iş parçacığını uyutur (Thread.sleep); tarayıcıda bloklamak yok.
