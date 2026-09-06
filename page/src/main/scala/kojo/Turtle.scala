@@ -125,6 +125,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
     commandQ.enqueue(SetPenFontFamily(name))
   }
 
+  override def dot(diameter: Int): Unit = {
+    commandQ.enqueue(Dot(diameter))
+  }
+
   def setFillColor(color: Color): Unit = {
     commandQ.enqueue(SetFillColor(color))
   }
@@ -216,6 +220,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
         case Write(text)        => realWriteText(text)
         case SetPenFontSize(n)  => realSetPenFontSize(n)
         case SetPenFontFamily(f) => realSetPenFontFamily(f)
+        case Dot(çap)           => realDot(çap)
         case Towards(x, y)      => realTowards(x, y)
         case SavePosHe          => realSavePosHe()
         case RestorePosHe       => realRestorePosHe()
@@ -253,6 +258,26 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
 
   private def realSetPenFontFamily(f: String): Unit = {
     penFontFamily = f
+    kojoWorld.scheduleLater(queueHandler)
+  }
+
+  // Masaüstü Kojo noktayı "kalem kalınlığı kadar minik bir ileri adım" ile
+  // çiziyor; PIXI'de çizgi ucu varsayılan olarak düz olduğu için o yöntem köşeli
+  // bir leke bırakırdı. Bunun yerine kalem rengiyle dolu bir daire çiziyoruz.
+  private def realDot(çap: Double): Unit = {
+    if (!penIsUp) {
+      val x = turtleImage.position.x
+      val y = turtleImage.position.y
+      turtlePath.lineStyle(0, 0, 0) // dairenin kenarlığı olmasın
+      turtlePath.beginFill(penColor.toRGBDouble, penColor.alpha.get)
+      turtlePath.drawCircle(x, y, çap / 2)
+      turtlePath.endFill()
+      // kalemin ve varsa kullanıcının açık boyamasının durumunu geri koy
+      turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
+      if (fillColor != null) turtlePath.beginFill(fillColor.toRGBDouble, fillColor.alpha.get)
+      turtlePathMoveTo(x, y)
+      kojoWorld.render()
+    }
     kojoWorld.scheduleLater(queueHandler)
   }
 

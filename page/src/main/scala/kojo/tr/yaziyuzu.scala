@@ -16,6 +16,15 @@ trait YazıyüzüYöntemleri extends TemelTürler {
     val KALIN = 1
     val EĞİK = 2
   }
+  /**
+   * Masaüstünde `Yazıyüzü = java.awt.Font` olduğu için betikler `Font(ad, boy)`
+   * de yazabiliyor. Yalnız iki bağımsız değişkenli biçim var: AWT'nin üç
+   * bağımsız değişkenlisi (ad, BİÇEM, boy) sırayı değiştiriyor, sessizce yanlış
+   * yorumlanmasın diye bilerek sunulmadı -- üç değişkenli için yazıyüzü(...).
+   */
+  object Font {
+    def apply(ad: Yazı, boy: Sayı): Yazıyüzü = Yazıyüzü(ad, boy)
+  }
   def yazıyüzü(adı: Yazı, boyu: Sayı): Yazıyüzü = Yazıyüzü(adı, boyu)
   def yazıyüzü(adı: Yazı, boyu: Sayı, biçem: Sayı): Yazıyüzü = Yazıyüzü(adı, boyu, biçem)
   /** Her tarayıcıda bulunan genel aileler; masaüstünde sistem yazıyüzleri listelenir. */
