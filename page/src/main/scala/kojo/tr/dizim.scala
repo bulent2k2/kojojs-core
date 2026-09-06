@@ -49,7 +49,12 @@ trait DizimYöntemleri extends TemelTürler {
 
   object Dizim {
     def apply[T: ClassTag](ögeler: T*) = new Dizim(ögeler.toArray)
-    def boş[T: ClassTag] = new Dizim(Array.empty[T])
+    // parantezli: parantezsiz olsaydı Dizim.boş[Nokta](a, b) çağrısı (a, b)'yi örtük
+    // liste sanırdı (Scala 2 tuzağı; genart-tri-mesh)
+    def boş[T: ClassTag]() = new Dizim(Array.empty[T])
+    def boş[T: ClassTag](b1: Sayı) = new Dizim(Array.ofDim[T](b1))
+    def boş[T: ClassTag](b1: Sayı, b2: Sayı): Dizim[Dizim[T]] =
+      new Dizim(Array.tabulate(b1)(_ => new Dizim(Array.ofDim[T](b2))))
     def boşBoyutlu[T: ClassTag](b1: Sayı) = new Dizim(Array.ofDim[T](b1))
     def doldur[T: ClassTag](b1: Sayı)(e: => T) = new Dizim(Array.fill[T](b1)(e))
   }

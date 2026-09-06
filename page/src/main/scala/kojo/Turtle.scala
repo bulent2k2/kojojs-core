@@ -38,6 +38,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
   private var penColor = Color.red
   private var fillColor: Color = _
   private var penFontSize = 15
+  private var penFontFamily: String = null
   private var penIsUp = false
   private var animationDelay = 1000l
   private val savedPosHe = new mutable.Stack[(PIXI.Point, Double)]
@@ -118,6 +119,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
 
   def setPenFontSize(n: Int): Unit = {
     commandQ.enqueue(SetPenFontSize(n))
+  }
+
+  override def setPenFontFamily(name: String): Unit = {
+    commandQ.enqueue(SetPenFontFamily(name))
   }
 
   def setFillColor(color: Color): Unit = {
@@ -210,6 +215,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
         case PopQ               => realPopQ()
         case Write(text)        => realWriteText(text)
         case SetPenFontSize(n)  => realSetPenFontSize(n)
+        case SetPenFontFamily(f) => realSetPenFontFamily(f)
         case Towards(x, y)      => realTowards(x, y)
         case SavePosHe          => realSavePosHe()
         case RestorePosHe       => realRestorePosHe()
@@ -242,6 +248,11 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
 
   private def realSetPenFontSize(n: Int): Unit = {
     penFontSize = n
+    kojoWorld.scheduleLater(queueHandler)
+  }
+
+  private def realSetPenFontFamily(f: String): Unit = {
+    penFontFamily = f
     kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -420,6 +431,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
       pixiText.position = position
       pixiText.rotation = (heading - 90).toRadians
       pixiText.style.fontSize = penFontSize
+      if (penFontFamily != null) pixiText.style.asInstanceOf[scala.scalajs.js.Dynamic].fontFamily = penFontFamily
       pixiText.style.fill = penColor.toCanvas
       turtleLayer.addChild(pixiText)
       kojoWorld.render()
