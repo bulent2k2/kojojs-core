@@ -12,7 +12,8 @@ package kojo.tr
  * `builtins`e ihtiyaç var (Picture fabrikası onun içinde bir iç nesne), o yüzden
  * soyut `kb` üyesi TurkishTurtle tarafından sağlanıyor.
  */
-trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri with Yöney2BYöntemleri {
+trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri with Yöney2BYöntemleri
+    with YazıyüzüYöntemleri {
   protected def kb: kojo.syntax.Builtins
   // Picture.image / draw gibi metotlar örtük KojoWorld istiyor; Builtins'in
   // kendi kojoWorld'ü dışarıdan erişilebilir değil, o yüzden ayrıca alıyoruz.
@@ -49,6 +50,13 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def yatayBoşluk(boşluk: Kesir): Resim = kb.Picture.hgap(boşluk)
     def dikeyBoşluk(boşluk: Kesir): Resim = kb.Picture.vgap(boşluk)
     def yoldan(işlev: pixiscalajs.PIXI.Graphics => Birim): Resim = kb.Picture.fromPath(işlev)
+    // masaüstü: Resim.noktadan { gn => gn.başla(); gn.nokta(x, y); ...; gn.bitir() } (VertexShape)
+    def noktadan(işlev: GeoNokta => Birim): Resim = kb.Picture.fromPath(g => işlev(new GeoNokta(g)))
+    // masaüstü: Resim.yazı(içerik, yazıyüzü[, renk]) -- Yazıyüzü ailesi PIXI metin stiline
+    def yazı(içerik: Her, yy: Yazıyüzü): Resim = new kojo.TextPic(içerik, yy.boy, Renkler.siyah, yy.ad)
+    // masaüstü Picture.arc: kaplumbağa yayı (başlangıç merkezde, kuzeye bakar)
+    def yay(yarıçap: Kesir, açı: Kesir): Resim = kb.PictureT(t => t.arc(yarıçap, açı))
+    def yazı(içerik: Her, yy: Yazıyüzü, renk: Renk): Resim = new kojo.TextPic(içerik, yy.boy, renk, yy.ad)
 
     def çiz(r: Resim): Birim = r.draw()
     def önyükle(adres: Yazı): Birim = kb.preloadImage(adres)
@@ -56,6 +64,36 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def diziDikey(resimler: Resim*): Resim = kb.picCol(resimler: _*)
     def diziYatay(resimler: Resim*): Resim = kb.picRow(resimler: _*)
     def dizi(resimler: Resim*): Resim = kb.picStack(resimler: _*)
+    // masaüstü takma adları (Devre 1) -- sağda ikojo/İngilizce karşılığı
+    def düz(en: Kesir, boy: Kesir): Resim = kb.Picture.line(en, boy)
+    def köşegen(en: Kesir, boy: Kesir): Resim = kb.Picture.line(en, boy)
+    def yatay(boy: Kesir): Resim = kb.Picture.hline(boy)
+    def dikey(boy: Kesir): Resim = kb.Picture.vline(boy)
+    def yazıRenkli(içerik: Her, yazıBoyu: Sayı, renk: Renk): Resim = kb.Picture.textu(içerik, yazıBoyu, renk)
+    def satır(r: => Resim, kaçTane: Sayı): Resim = kb.picRow(Seq.fill(kaçTane)(r): _*) // picture.row
+    def sütun(r: => Resim, kaçTane: Sayı): Resim = kb.picCol(Seq.fill(kaçTane)(r): _*) // picture.col
+    def küme(rd: Resim*): Resim = kb.picBatch(rd: _*) // picBatch
+    def küme(rd: collection.Seq[Resim]): Resim = kb.picBatch(rd.toSeq: _*)
+    def dizi(rd: collection.Seq[Resim]): Resim = kb.picStack(rd.toSeq: _*)
+    def diziDikey(rd: collection.Seq[Resim]): Resim = kb.picCol(rd.toSeq: _*)
+    def diziYatay(rd: collection.Seq[Resim]): Resim = kb.picRow(rd.toSeq: _*)
+    def diziDüzenli(rd: collection.Seq[Resim]): Resim = kb.picStackCentered(rd.toSeq: _*)
+    def diziDikeyDüzenli(rd: collection.Seq[Resim]): Resim = kb.picColCentered(rd.toSeq: _*)
+    def diziYatayDüzenli(rd: collection.Seq[Resim]): Resim = kb.picRowCentered(rd.toSeq: _*)
+    def sil(): Birim = kb.erasePictures()
+    // sahne kenarları: çizSahne(...) çağrılmadan null (bkz. TurkishTurtle.sahneKurulduMu)
+    def tuvalSınırları: Resim = sahne("Resim.tuvalSınırları", kb.stageBorder)
+    def tuvalinSınırları: Resim = tuvalSınırları
+    def tuval: Resim = tuvalSınırları
+    def tuvalinSolu: Resim = sahne("Resim.tuvalinSolu", kb.stageLeft)
+    def tuvalinSağı: Resim = sahne("Resim.tuvalinSağı", kb.stageRight)
+    def tuvalinTavanı: Resim = sahne("Resim.tuvalinTavanı", kb.stageTop)
+    def tuvalinTabanı: Resim = sahne("Resim.tuvalinTabanı", kb.stageBot)
+    def tuvalBölgesi: Resim = sahne("Resim.tuvalBölgesi", kb.stageArea)
+    private def sahne(ad: Yazı, r: Resim): Resim =
+      if (r == null)
+        throw new ÇalışmaSırasıKuralDışı(s"$ad için önce sahneyi çizmelisin: çizSahne(siyah).")
+      else r
     def diziDikeyDüzenli(resimler: Resim*): Resim = kb.picColCentered(resimler: _*)
     def diziYatayDüzenli(resimler: Resim*): Resim = kb.picRowCentered(resimler: _*)
     def diziDüzenli(resimler: Resim*): Resim = kb.picStackCentered(resimler: _*)
@@ -63,6 +101,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
 
   // ---- çizim yardımcıları ----
   def çiz(resimler: Resim*): Birim = kb.draw(resimler: _*)
+  def çiz(resimler: collection.Seq[Resim]): Birim = kb.draw(resimler) // masaüstü çiz(Diz[Resim]); çiz(yöney.işle(f))
   def çizMerkezde(r: Resim): Birim = kb.drawCentered(r)
   def çizSahne(boya: Renk): Birim = kb.drawStage(boya)
   // zoomXY: tuvali x ve y'de ölçekle ve (mx,my) merkeze kaydır. Birim çember
@@ -79,6 +118,40 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def kalemRengi(renk: Renk): Dönüştürücü = kb.penColor(renk)
   def boyaRengi(renk: Renk): Dönüştürücü = kb.fillColor(renk)
   def kalemKalınlığı(k: Kesir): Dönüştürücü = kb.penThickness(k)
+  def kalemBoyu(k: Kesir): Dönüştürücü = kb.penThickness(k) // masaüstü adı (resim.scala KalemBoyuBD)
+  // masaüstünün bağımsız dönüştürücü adları (trInit: döndür/büyüt/götür = *BD)
+  def döndür(açı: Kesir): Dönüştürücü = kb.rot(açı)
+  def büyüt(oran: Kesir): Dönüştürücü = kb.scale(oran)
+  def büyüt(xOranı: Kesir, yOranı: Kesir): Dönüştürücü = kb.scaleXY_experimental(xOranı, yOranı)
+  def götür(n: Nokta): Dönüştürücü = kb.trans(n.x, n.y)
+  def götür(yy: Yöney2B): Dönüştürücü = kb.trans(yy.x, yy.y)
+  // masaüstünde saydamlığı ÇARPAR (opacMod); burada kurar -- tek katman için aynı sonuç
+  def saydamlık(oran: Kesir): Dönüştürücü = kb.postDrawTransform(_.setOpacity(oran))
+
+  /**
+   * Masaüstü `GeoYol` = java.awt.geom.GeneralPath; burada PIXI.Graphics. Türkçe yol
+   * komutları örtük sınıfla geliyor (masaüstündeki GeoYolYöntemleri gibi), böylece
+   * `Resim.yoldan { yol => yol.kondur(0, 0); yol.doğruÇiz(50, 50) }` aynen çalışır.
+   */
+  type GeoYol = pixiscalajs.PIXI.Graphics
+  implicit class GeoYolYöntemleri(yol: GeoYol) {
+    def kondur(x: Kesir, y: Kesir): Birim = yol.moveTo(x, y)
+    def doğruÇiz(x: Kesir, y: Kesir): Birim = yol.lineTo(x, y)
+    def eğriÇiz(x: Kesir, y: Kesir, araX: Kesir, araY: Kesir): Birim = yol.quadraticCurveTo(araX, araY, x, y)
+    def başaDön(): Birim = yol.asInstanceOf[scala.scalajs.js.Dynamic].closePath() // facade'de yok, PIXI'de var
+  }
+
+  /** Masaüstü `GeoNokta` = net.kogics.kojo.core.VertexShape (başla / nokta / bitir). */
+  class GeoNokta(g: pixiscalajs.PIXI.Graphics) {
+    private var ilk = true
+    def başla(): Birim = { ilk = true }
+    def nokta(x: Kesir, y: Kesir): Birim = {
+      if (ilk) { g.moveTo(x, y); ilk = false } else g.lineTo(x, y)
+    }
+    def açısalNokta(boyu: Kesir, açısı: Kesir): Birim =
+      nokta(boyu * math.cos(açısı.toRadians), boyu * math.sin(açısı.toRadians))
+    def bitir(): Birim = {}
+  }
   // Sözlük alias'ları (aynı işlevler): götür=öteleme(trans), yaklaşXY=tuvaliYakınlaştır(zoomXY)
   def götür(x: Kesir, y: Kesir): Dönüştürücü = kb.trans(x, y)
   def yaklaşXY(xÇarpan: Kesir, yÇarpan: Kesir, mx: Kesir, my: Kesir): Birim = kb.zoomXY(xÇarpan, yÇarpan, mx, my)
@@ -123,6 +196,13 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def konum: Nokta = r.position
     def doğrultu: Kesir = r.heading
     def konumuKur(x: Kesir, y: Kesir): Birim = r.setPosition(x, y)
+    // masaüstü Resim yöntemleri (sınıf içi): götür = translate, kondur = setPosition
+    def konumuKur(n: Nokta): Birim = r.setPosition(n.x, n.y)
+    def kondur(x: Kesir, y: Kesir): Birim = r.setPosition(x, y)
+    def kondur(n: Nokta): Birim = r.setPosition(n.x, n.y)
+    def götür(x: Kesir, y: Kesir): Birim = r.translate(x, y)
+    def götür(n: Nokta): Birim = r.translate(n.x, n.y)
+    def götür(yy: Yöney2B): Birim = r.translate(yy.x, yy.y)
     def açıyaDön(açı: Kesir): Birim = r.setHeading(açı)
     def döndür(açı: Kesir): Birim = r.rotate(açı)
     def döndürMerkezli(açı: Kesir, x: Kesir, y: Kesir): Birim = r.rotateAboutPoint(açı, x, y)
@@ -190,5 +270,34 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def fareyleSürükleyince(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseDrag((x, y) => işlev(x, y)) // onMouseDrag
     def fareyiSürükleyince(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseDrag((x, y) => işlev(x, y)) // sözlük adı (fareyle ile aynı)
     def fareBasılınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMousePress((x, y) => işlev(x, y)) // onMousePress
+    // masaüstü takma adları (Devre 1; kojo lite/i18n/tr/resim.scala)
+    def fareyeBasınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMousePress((x, y) => işlev(x, y))
+    def fareyiBırakınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseRelease((x, y) => işlev(x, y))
+    def fareGirince(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseEnter((x, y) => işlev(x, y))
+    def fareÇıkınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseExit((x, y) => işlev(x, y))
+    def fareyeTıklıyınca(işlev: (Kesir, Kesir) => Birim): Birim = r.onMouseClick((x, y) => işlev(x, y)) // masaüstündeki yazım
+    def saydamlığıKur(oran: Kesir): Birim = r.setOpacity(oran)
+    def saydamlık: Kesir = r.tnode.alpha
+    def ardaAl(): Birim = r.moveToBack()
+    def girdiyiAktar(öbürü: Resim): Birim = r.forwardInputTo(öbürü)
+    def sonrakiniGöster(ara: Uzun = 100): Birim = r.showNext(ara)
+    def çarpıştı(öbürü: Resim): İkil = r.collidesWith(öbürü)
+    def çarptıMı(öbürü: Resim): İkil = r.collidesWith(öbürü)
+    def çarpışma(başkaları: Dizi[Resim]): Option[Resim] = r.collision(başkaları) // Belki[Resim]
+    def çarpışmalar(başkaları: Set[Resim]): Set[Resim] = r.collisions(başkaları) // Küme[Resim]
+    def uzaklık(öbürü: Resim): Kesir = r.distanceTo(öbürü)
+    def çizili: İkil = r.made // isDrawn
+    def büyütmeOranı: (Kesir, Kesir) = (r.tnode.scale.x, r.tnode.scale.y) // scaleFactor
+    // masaüstünde bu dört ad resmi yerinde değiştirir; burada dönüşümlü kopya döner
+    // (aynı zincirleme kullanım: `resim.veBoya(kırmızı).veKondur(10, 10)`)
+    def veBoya(renk: Renk): Resim = r.withFillColor(renk)
+    def veKalemRengiyle(renk: Renk): Resim = r.withPenColor(renk)
+    def veKalemKalınlığıyla(boy: Kesir): Resim = r.withPenThickness(boy)
+    def veKondur(x: Kesir, y: Kesir): Resim = r.withPosition(x, y)
+    def veÇiz(): Birim = r.draw()
+    // Devre 2: küçük özellikler
+    def hızınıDönüştür(yy: Yöney2B): Yöney2B = yy.rotate(r.heading) // transv: yöneyi resmin yönüne çevir
+    def tepkiVer(işlev: Resim => Birim): Birim = kb.animate(işlev(r)) // react: her karede
+    def canlan(işlev: Resim => Birim): Birim = tepkiVer(işlev)
   }
 }

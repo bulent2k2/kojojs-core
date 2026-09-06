@@ -5,12 +5,14 @@ import com.vividsolutions.jts.geom.Geometry
 import kojo.doodle.Color
 import pixiscalajs.PIXI
 
-class TextPic(text: Any, fontSize: Int, color: Color)(implicit val kojoWorld: KojoWorld)
+class TextPic(text: Any, fontSize: Int, color: Color, fontFamily: String = null)(implicit val kojoWorld: KojoWorld)
   extends Picture with ReadyPromise {
   val textNode = {
     val pixiText = new PIXI.Text(text.toString)
     pixiText.setTransform(0, 0, 1, -1, 0, 0, 0, 0, 0)
     pixiText.style.fontSize = fontSize
+    // facade'de fontFamily yok (v3 çağı); PIXI 4.8'de var
+    if (fontFamily != null) pixiText.style.asInstanceOf[scala.scalajs.js.Dynamic].fontFamily = fontFamily
     pixiText.style.fill = color.toCanvas
     pixiText
   }

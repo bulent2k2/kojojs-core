@@ -17,6 +17,7 @@ case class MoveTo(x: Double, y: Double) extends Command
 case class Arc2(r: Double, a: Double) extends Command
 case class Write(text: String) extends Command
 case class SetPenFontSize(n: Int) extends Command
+case class SetPenFontFamily(name: String) extends Command // yazıyüzü ailesi (Koco Yazıyüzü)
 case class Towards(x: Double, y: Double) extends Command
 case object SavePosHe extends Command
 case object RestorePosHe extends Command

@@ -82,6 +82,8 @@ trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri with HarfYönt
     def küçükHarfe: Yazı = y.map(trKüçült)
     def ilkHarfiBüyült: Yazı = if (y.isEmpty) y else trBüyüt(y.head) + y.tail
     def kıyasla(öbürü: Yazı): Sayı = y.compareTo(öbürü)
+    def kıyaslaKüçükHarfBüyükHarfAyrımıYapmadan(öbürü: Yazı): Sayı = y.compareToIgnoreCase(öbürü)
+    def eşitMiKüçükHarfBüyükHarfAyrımıYapmadan(öbürü: Yazı): İkil = y.equalsIgnoreCase(öbürü)
     def harf(sıra: Sayı): Harf = y.charAt(sıra)
     def parçası(nereden: Sayı): Yazı = y.substring(nereden)
     def parçası(nereden: Sayı, nereye: Sayı): Yazı = y.substring(nereden, nereye)

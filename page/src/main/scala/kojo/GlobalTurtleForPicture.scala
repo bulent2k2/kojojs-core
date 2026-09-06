@@ -12,6 +12,7 @@ class GlobalTurtleForPicture extends TurtleAPI {
   def setPenThickness(t: Double): Unit = globalTurtle.setPenThickness(t)
   def setPenColor(color: Color): Unit = globalTurtle.setPenColor(color)
   def setPenFontSize(n: Int): Unit = globalTurtle.setPenFontSize(n)
+  override def setPenFontFamily(name: String): Unit = globalTurtle.setPenFontFamily(name)
   def setFillColor(color: Color): Unit = globalTurtle.setFillColor(color)
   def setPosition(x: Double, y: Double): Unit = globalTurtle.setPosition(x, y)
   def setHeading(theta: Double): Unit = globalTurtle.setHeading(theta)
