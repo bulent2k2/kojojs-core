@@ -4,7 +4,8 @@ package kojo.tr
  * Masaüstü Koco'nun giysi/artalan görüntü adları (kojo: lite/i18n/tr/cizim.scala).
  * Değerler masaüstüyle aynı `/media/...` yolları; dosyalar kojojs-dev/medya altında,
  * koco-deploy nginx'i `/media/`yi oraya bağlar. Kullanım: `Resim.imge(Görünüş.araba)`.
- * Kaplumbağa giysileri (giysiKur) ikojo'da henüz yok. `/images/...` ile başlayanlar
+ * Giysiler `yeniKaplumbağa(x, y, Görünüş.araba)` ile kullanılabilir; kaplumbağayı
+ * sonradan giydiren komutlar (giysiKur, giysileriKur...) henüz yok. `/images/...` ile başlayanlar
  * masaüstü kavanozunun içindeki simgeler; burada sunulmaz (404).
  */
 trait GörünüşYöntemleri extends TemelTürler {

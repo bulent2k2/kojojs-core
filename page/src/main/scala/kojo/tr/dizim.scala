@@ -53,9 +53,15 @@ trait DizimYöntemleri extends TemelTürler {
     // liste sanırdı (Scala 2 tuzağı; genart-tri-mesh)
     def boş[T: ClassTag]() = new Dizim(Array.empty[T])
     def boş[T: ClassTag](b1: Sayı) = new Dizim(Array.ofDim[T](b1))
-    def boş[T: ClassTag](b1: Sayı, b2: Sayı): Dizim[Dizim[T]] =
-      new Dizim(Array.tabulate(b1)(_ => new Dizim(Array.ofDim[T](b2))))
+    // Çok boyutlularda iç katman Array (masaüstündeki gibi), Dizim DEĞİL: betikler
+    // `tahta(x)(y) = değer` yazıyor, bu da `tahta(x).update(y, değer)`e açılıyor --
+    // Dizim'de `update` yok (`güncelle` var), Array'de var. İç katmanı Dizim yapmak
+    // tic-tac-toe ve genart-tri-mesh'i "value update is not a member" ile kırıyordu.
+    def boş[T: ClassTag](b1: Sayı, b2: Sayı) = new Dizim(Array.ofDim[T](b1, b2))
+    def boş[T: ClassTag](b1: Sayı, b2: Sayı, b3: Sayı) = new Dizim(Array.ofDim[T](b1, b2, b3))
     def boşBoyutlu[T: ClassTag](b1: Sayı) = new Dizim(Array.ofDim[T](b1))
     def doldur[T: ClassTag](b1: Sayı)(e: => T) = new Dizim(Array.fill[T](b1)(e))
+    def doldur[T: ClassTag](b1: Sayı, b2: Sayı)(e: => T) = new Dizim(Array.fill[T](b1, b2)(e))
+    def doldur[T: ClassTag](b1: Sayı, b2: Sayı, b3: Sayı)(e: => T) = new Dizim(Array.fill[T](b1, b2, b3)(e))
   }
 }
