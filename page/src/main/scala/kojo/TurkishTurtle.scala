@@ -252,8 +252,9 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   lazy val hızlı = Speed.fast
   lazy val çokHızlı = Speed.superFast
 
-  // giysi (costume) komutları KojoJS'te henüz yok:
-  // giysiKur, giysileriKur, birsonrakiGiysi, giysiyiBüyült
+  // Giysi (costume): kaplumbağa KURULURKEN verilebiliyor -- yeniKaplumbağa(x, y, giysi).
+  // Sonradan değiştiren komutlar hâlâ yok: giysiKur, giysileriKur, birsonrakiGiysi,
+  // giysiyiBüyült (Turtle'ın simgesi tek seferde yükleniyor).
 
   // ---- döngüler ----
   def yinele(n: Sayı)(diziKomut: => Birim): Birim =
@@ -441,6 +442,9 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   type Kaplumbağa = TurkishTurtle
   def kaplumbağa: Kaplumbağa = this
   def yeniKaplumbağa(x: Kesir, y: Kesir): Kaplumbağa = new TurkishTurtle(new Turtle(x, y)(kojoWorld), builtins)(kojoWorld)
+  /** Giysili kaplumbağa: `yeniKaplumbağa(0, 0, Görünüş.araba)` (masaüstü trInit.scala:328). */
+  def yeniKaplumbağa(x: Kesir, y: Kesir, giysiDosyası: Yazı): Kaplumbağa =
+    new TurkishTurtle(new Turtle(x, y, false, giysiDosyası)(kojoWorld), builtins)(kojoWorld)
 
   // sayılar / yardımcılar
   def rastgeleNormalKesir: Kesir = rastgeleDoğalKesir

@@ -8,7 +8,7 @@ import pixiscalajs.PIXI.Point
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: KojoWorld)
+class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = null)(implicit kojoWorld: KojoWorld)
   extends TurtleAPI
   with RichTurtleCommands {
   private[kojo] val turtleLayer = new PIXI.Container()
@@ -46,7 +46,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
 
   var commandQs = mutable.Queue.empty[Command] :: Nil
 
-  AssetLoader.addAndLoad("turtle32", "assets/images/turtle32.png", init)
+  // giysi (costume) verilmişse kaplumbağa simgesi yerine o imge yüklenir;
+  // yükleyici anahtarı ImagePic'teki gibi url'nin kendisi
+  private val costumeKey = if (costume == null) "turtle32" else costume
+  AssetLoader.addAndLoad(costumeKey, if (costume == null) "assets/images/turtle32.png" else costume, init)
 
   private def init(loader: PIXI.loaders.Loader, any: Any) {
     turtleLayer.name = "Turtle Layer"
@@ -83,9 +86,18 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false)(implicit kojoWorld: 
 
   private def loadTurtle(x: Double, y: Double, loader: PIXI.loaders.Loader): PIXI.Container = {
     val turtle = {
-      val rasterTurtle = new PIXI.Sprite(loader.resources("turtle32").texture)
-      rasterTurtle.position.set(-16, -16)
-      rasterTurtle.alpha = 0.7
+      val rasterTurtle = new PIXI.Sprite(loader.resources(costumeKey).texture)
+      if (costume == null) {
+        rasterTurtle.position.set(-16, -16) // 32x32 kaplumbağa simgesini ortala
+        rasterTurtle.alpha = 0.7
+      }
+      else {
+        // Giysi imgesi: ImagePic'teki gibi y ekseninde çevriliyor (dünya ters,
+        // çevrilmezse imge baş aşağı görünür), ayrıca konteynerin merkezine
+        // oturtuluyor -- dönme/konum hep bu merkeze göre işliyor.
+        rasterTurtle.setTransform(
+          -rasterTurtle.width / 2, rasterTurtle.height / 2, 1, -1, 0, 0, 0, 0, 0)
+      }
       rasterTurtle
     }
     val turtleHolder = new PIXI.Container()

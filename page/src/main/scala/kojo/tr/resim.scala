@@ -158,6 +158,13 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
 
   // ---- oyun / tuval (sözlük adları) ----
   def rastgeleDiziden[T](dizi: collection.Seq[T]): T = kb.randomFrom(dizi)   // randomFrom
+  /**
+   * Ağırlıklı seçim: `ağırlıklar` dizinin her ögesinin seçilme payı
+   * (toplamları 1 olmak zorunda değil; değilse oranlanır).
+   * Masaüstü Koco'daki `rastgeleDiziden(dizi, ağırlıklar)` ile aynı imza.
+   */
+  def rastgeleDiziden[T](dizi: collection.Seq[T], ağırlıklar: collection.Seq[Kesir]): T =
+    kb.randomFrom(dizi, ağırlıklar)
   def sırayaSok(saniye: Kesir)(kod: => Birim): Birim = kb.schedule(saniye)(kod) // schedule
   def yaklaşmayaİzinVerme(): Birim = kb.disablePanAndZoom()                  // disablePanAndZoom
   def görünümüSıfırla(): Birim = kb.resetView()                              // resetView (merkez + zoom 1)
