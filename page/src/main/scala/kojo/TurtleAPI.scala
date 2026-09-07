@@ -53,6 +53,17 @@ trait TurtleAPI extends VertexShapeSupport {
   def beamsOn(): Unit = {} // no-op for now
   def beamsOff(): Unit = {} // no-op for now
 
+  // Masaüstündeki kalemİnikMi / canlandırmaHızı / konumuDeğiştir'in dayandığı
+  // üç üye. GlobalTurtleForPicture gibi vekiller de bunları taşımak zorunda,
+  // o yüzden burada (arayüzde) tanımlılar.
+  def penIsDown: Boolean
+  def animationDelayMs: Long
+  def changePosition(x: Double, y: Double): Unit
+  def setCostume(url: String): Unit
+  def setCostumes(urls: String*): Unit
+  def nextCostume(): Unit
+  def scaleCostume(factor: Double): Unit
+
   // Varsayılan boş; gerçek çizim Turtle'da (bkz. Turtle.realDot).
   def dot(diameter: Int): Unit = {
 //    saveStyle()

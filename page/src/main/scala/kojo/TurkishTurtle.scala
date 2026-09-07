@@ -42,6 +42,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
     with kojo.tr.KumandaYöntemleri
     with kojo.tr.GelecekYöntemleri
     with kojo.tr.DizikYöntemleri
+    with kojo.tr.BuAnYöntemleri
     with kojo.tr.SesYöntemleri
     with kojo.tr.GörünüşYöntemleri {
   import kojo.doodle.Color
@@ -95,6 +96,18 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // ---- yön ----
   def açıyaDön(açı: Kesir): Birim = englishTurtle.setHeading(açı)
   def noktayaDön(x: Kesir, y: Kesir): Birim = englishTurtle.towards(x, y)
+  /** Nokta alan hâli (masaüstünde de var): `noktayaDön(fareKonumu)`. */
+  def noktayaDön(n: Nokta): Birim = noktayaDön(n.x, n.y)
+  /**
+   * Başka bir kaplumbağaya döner (masaüstü çevir). Hedefin konumu komut
+   * çalışırken okunuyor; iki kaplumbağanın kuyrukları ayrı olduğu için
+   * kuyruğa konurken okumak eski konuma döndürürdü.
+   */
+  def çevir(öbürü: Kaplumbağa): Birim = (englishTurtle, öbürü.englishTurtle) match {
+    case (bu: Turtle, o: Turtle) => bu.towards(o)
+    case _ =>
+      throw new ÇalışmaSırasıKuralDışı("çevir yalnız yeniKaplumbağa ile yapılan kaplumbağalarda çalışır")
+  }
   def doğu(): Birim = englishTurtle.setHeading(0)
   def batı(): Birim = englishTurtle.setHeading(180)
   def kuzey(): Birim = englishTurtle.setHeading(90)
@@ -217,7 +230,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def kalemRenginiKur(renk: Renk): Birim = englishTurtle.setPenColor(renk)
   def boyamaRenginiKur(renk: Renk): Birim = englishTurtle.setFillColor(renk)
   def kalemKalınlığınıKur(n: Kesir): Birim = englishTurtle.setPenThickness(n)
-  // def kalemİnikMi: İkil = englishTurtle.style.down  // KojoJS'te `style` yok
+  def kalemİnikMi: İkil = englishTurtle.penIsDown
 
   // ---- biçim ve konum belleği ----
   def biçimleriBelleğeYaz(): Birim = englishTurtle.saveStyle()
@@ -240,21 +253,35 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def nokta(): Birim = englishTurtle.dot(25)
   // ışınlar KojoJS'te henüz UYGULANMADI (beamsOn/Off = {}); dosyanın geleneği
   // gereği sessizce çalışmış gibi görünmesinler:
-  // def ışınlarıAç() = englishTurtle.beamsOn()
-  // def ışınlarıKapat() = englishTurtle.beamsOff()
+  // Işınlar (dört yönü gösteren farlar): İngilizce yüzeyde beamsOn/beamsOff
+  // var ama gövdeleri boş (TurtleAPI.scala) -- yani ad tanınır ve betik derlenir,
+  // ama şimdilik bir şey çizilmez. Görsel karşılığı ayrı bir iş.
+  def ışınlarıAç(): Birim = englishTurtle.beamsOn()
+  def ışınlarıKapat(): Birim = englishTurtle.beamsOff()
   // (çıktıyıSil: masaüstü çıktı paneline özgü; Devre 1 yer tutucuları arasında)
 
   // ---- hız ----
   def hızıKur(hız: Hız): Birim = englishTurtle.setSpeed(hız)
   def canlandırmaHızınıKur(n: Uzun): Birim = englishTurtle.setAnimationDelay(n)
+  /** 100 adımın kaç milisaniyede atıldığı (masaüstü canlandırmaHızı). */
+  def canlandırmaHızı: Uzun = englishTurtle.animationDelayMs
+  /** Göreli sıçrama: kaplumbağayı çizmeden (x, y) kadar öteler. */
+  def konumuDeğiştir(x: Kesir, y: Kesir): Birim = englishTurtle.changePosition(x, y)
   lazy val yavaş = Speed.slow
   lazy val orta = Speed.medium
   lazy val hızlı = Speed.fast
   lazy val çokHızlı = Speed.superFast
 
-  // Giysi (costume): kaplumbağa KURULURKEN verilebiliyor -- yeniKaplumbağa(x, y, giysi).
-  // Sonradan değiştiren komutlar hâlâ yok: giysiKur, giysileriKur, birsonrakiGiysi,
-  // giysiyiBüyült (Turtle'ın simgesi tek seferde yükleniyor).
+  // ---- giysi (costume) ----
+  // Kurulurken de verilebiliyor: yeniKaplumbağa(x, y, giysi).
+  /** Kaplumbağanın simgesini verilen imgeyle değiştirir: `giysiKur(Görünüş.araba)`. */
+  def giysiKur(dosyaAdı: Yazı): Birim = englishTurtle.setCostume(dosyaAdı)
+  /** Birden çok giysi yükler; ilki giyilir, `birsonrakiGiysi()` sırayla geçer. */
+  def giysileriKur(dosyaAdları: Yazı*): Birim = englishTurtle.setCostumes(dosyaAdları: _*)
+  /** Sıradaki giysiye geçer (sona gelince başa döner). */
+  def birsonrakiGiysi(): Birim = englishTurtle.nextCostume()
+  /** Giysiyi verilen oranda büyütür/küçültür (birikimli). */
+  def giysiyiBüyült(oran: Kesir): Birim = englishTurtle.scaleCostume(oran)
 
   // ---- döngüler ----
   def yinele(n: Sayı)(diziKomut: => Birim): Birim =
@@ -401,8 +428,11 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def yaklaş(oran: Kesir): Birim = builtins.zoom(oran)
   def yaklaş(oran: Kesir, xMerkez: Kesir, yMerkez: Kesir): Birim = builtins.zoom(oran, xMerkez, yMerkez)
   def eksenleriGöster(): Birim = builtins.showAxes()
-  def gridiGöster(): Birim = builtins.showGrid() // ikojo'da henüz çizmiyor (boş)
+  def eksenleriGizle(): Birim = builtins.hideAxes()
+  def gridiGöster(): Birim = builtins.showGrid()
+  def gridiGizle(): Birim = builtins.hideGrid()
   def ızgarayıGöster(): Birim = gridiGöster()
+  def ızgarayıGizle(): Birim = gridiGizle()
   def tümEkranTuval(): Birim = builtins.toggleFullScreenCanvas()
   def başlangıçNoktasıAltSolKöşeOlsun(): Birim = builtins.originBottomLeft()
   def ikiÇizimArasıSüre: Kesir = kareSüresi // frameDeltaTime
@@ -449,6 +479,8 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // sayılar / yardımcılar
   def rastgeleNormalKesir: Kesir = rastgeleDoğalKesir
   def rastgeleİkil: İkil = rastgeleSeçim
+  /** Çan eğrisinden (normal dağılım) rastgele kesir; masaüstü adı. */
+  def rastgeleÇanEğrisinden: Kesir = builtins.randomNormalDouble
   // masaüstü gibi aynı koleksiyon türünü döndürür (Yöney -> Yöney, Dizin -> Dizin)
   def rastgeleKarıştır[T, C](xLer: IterableOnce[T])(implicit bf: scala.collection.BuildFrom[xLer.type, T, C]): C =
     new scala.util.Random(builtins.Random).shuffle(xLer)

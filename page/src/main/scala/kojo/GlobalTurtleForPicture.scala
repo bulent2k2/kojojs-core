@@ -16,6 +16,13 @@ class GlobalTurtleForPicture extends TurtleAPI {
   override def dot(diameter: Int): Unit = globalTurtle.dot(diameter)
   def setFillColor(color: Color): Unit = globalTurtle.setFillColor(color)
   def setPosition(x: Double, y: Double): Unit = globalTurtle.setPosition(x, y)
+  def changePosition(x: Double, y: Double): Unit = globalTurtle.changePosition(x, y)
+  def penIsDown: Boolean = globalTurtle.penIsDown
+  def animationDelayMs: Long = globalTurtle.animationDelayMs
+  def setCostume(url: String): Unit = globalTurtle.setCostume(url)
+  def setCostumes(urls: String*): Unit = globalTurtle.setCostumes(urls: _*)
+  def nextCostume(): Unit = globalTurtle.nextCostume()
+  def scaleCostume(factor: Double): Unit = globalTurtle.scaleCostume(factor)
   def setHeading(theta: Double): Unit = globalTurtle.setHeading(theta)
   def moveTo(x: Double, y: Double): Unit = globalTurtle.moveTo(x, y)
   def arc2(r: Double, a: Double): Unit = globalTurtle.arc2(r, a)

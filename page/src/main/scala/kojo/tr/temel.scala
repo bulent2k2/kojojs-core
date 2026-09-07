@@ -63,4 +63,13 @@ trait TemelTürler {
 
   type KuralDışı = Exception
   type ÇalışmaSırasıKuralDışı = RuntimeException
+  // Masaüstündeki hata türlerinin Türkçe adları (kojo: lite/i18n/tr/*.scala).
+  // Hepsi Scala.js'in java kütüphanesinde var; İşParçacığıÖlümü (ThreadDeath)
+  // YOK -- tarayıcıda iş parçacığı olmadığı için karşılığı da yok.
+  type MatematikselHata = java.lang.ArithmeticException
+  type BelirtimHatası = java.lang.AssertionError
+  type KuraldışıGirdiHatası = java.lang.IllegalArgumentException
+  type EksikTanımHatası = scala.NotImplementedError
+  type SınırDışınaTaşmaHatası = java.lang.IndexOutOfBoundsException
+  type BoşGöstergeHatası = java.lang.NullPointerException
 }

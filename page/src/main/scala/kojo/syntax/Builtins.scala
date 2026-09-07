@@ -121,6 +121,9 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     kojoWorld.resetView()
   }
 
+  def scroll(x: Double, y: Double): Unit = kojoWorld.scroll(x, y)
+  def viewRotate(angle: Double): Unit = kojoWorld.viewRotate(angle)
+
   def frameDeltaTime = kojoWorld.frameDeltaTime
 
   def animate(fn: => Unit): Unit = {
@@ -257,54 +260,13 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     }
   }
   def switchToDefault2Perspective(): Unit = {}
-  def showAxes(): Unit = {
-    import turtle._
-    def drawTick() {
-      savePosHe()
-      right(90)
-      forward(3)
-      hop(-3)
-      forward(-3)
-      restorePosHe()
-    }
-
-    def drawAxis(range: Double, delta: Double) {
-      savePosHe()
-      drawTick()
-      var moved = 0.0
-      while (moved <= range / 2) {
-        forward(delta)
-        drawTick()
-        moved += delta
-      }
-      restorePosHe()
-      savePosHe()
-      moved = 0.0
-      while (moved >= -range / 2) {
-        forward(-delta)
-        drawTick()
-        moved -= delta
-      }
-      restorePosHe()
-    }
-
-    savePosHe()
-    setSpeed(superFast)
-    setPenColor(cm.darkGray)
-    setPenThickness(1)
-    val cb = canvasBounds
-    setPosition(0, 0)
-    setHeading(90)
-    drawAxis(cb.height, 50)
-    right(90)
-    drawAxis(cb.width, 50)
-    setSpeed(slow)
-    setPenColor(cm.red)
-    setPenThickness(2)
-    restorePosHe()
-  }
-
-  def showGrid(): Unit = {}
+  // Eksen ve ızgara artık kendi PIXI katmanlarında (KojoWorld). Eskiden eksenler
+  // kaplumbağayla çiziliyordu; o yüzden gizlenemiyor ve `sil()` ile birlikte
+  // siliniyorlardı. Masaüstünde de bunlar tuvalin süsü (tCanvas.axesOn/axesOff).
+  def showAxes(): Unit = kojoWorld.showAxes()
+  def hideAxes(): Unit = kojoWorld.hideAxes()
+  def showGrid(): Unit = kojoWorld.showGrid()
+  def hideGrid(): Unit = kojoWorld.hideGrid()
 
   def toggleFullScreenCanvas(): Unit = {
     kojoWorld.toggleFullScreenCanvas()
