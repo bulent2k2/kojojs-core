@@ -131,5 +131,12 @@ trait RenkYöntemleri extends TemelTürler {
     // yerlerde kullanılıyor (birim çember örneği: yeşil.soluk(0.8)).
     def soluk(oran: Kesir): Renk = r.fadeOut(oran)
     def belirgin(oran: Kesir): Renk = r.fadeIn(oran)
+    // Renk çemberinde döndürme ve açıklık ayarı (masaüstü tr/renk.scala:98-102).
+    // spinBy masaüstünde var, doodle'ın bu kopyasında yok; oransal döndürmeyi
+    // spin ile veriyoruz (oran 0-1 -> 0-360 derece), sonuç aynı.
+    def çevir(açı: Kesir): Renk = r.spin(açı)
+    def çevirOranla(oran: Kesir): Renk = r.spin(oran * 360)
+    def dahaAçıkYap(açıklık: Kesir): Renk = r.lighten(açıklık)
+    def dahaKoyuYap(koyuluk: Kesir): Renk = r.darken(koyuluk)
   }
 }

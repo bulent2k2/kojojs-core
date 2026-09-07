@@ -155,6 +155,12 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   // Sözlük alias'ları (aynı işlevler): götür=öteleme(trans), yaklaşXY=tuvaliYakınlaştır(zoomXY)
   def götür(x: Kesir, y: Kesir): Dönüştürücü = kb.trans(x, y)
   def yaklaşXY(xÇarpan: Kesir, yÇarpan: Kesir, mx: Kesir, my: Kesir): Birim = kb.zoomXY(xÇarpan, yÇarpan, mx, my)
+  /** Yakınlaştırma ve kaydırmayı başlangıç durumuna döndürür. */
+  def yaklaşmayıSil(): Birim = kb.resetView()
+  /** Tuvali dünya birimiyle kaydırır (masaüstü tuvaliKaydır). */
+  def tuvaliKaydır(x: Kesir, y: Kesir): Birim = kb.scroll(x, y)
+  /** Tuvali verilen açı kadar döndürür (masaüstü tuvaliDöndür). */
+  def tuvaliDöndür(açı: Kesir): Birim = kb.viewRotate(açı)
 
   // ---- oyun / tuval (sözlük adları) ----
   def rastgeleDiziden[T](dizi: collection.Seq[T]): T = kb.randomFrom(dizi)   // randomFrom
@@ -301,6 +307,8 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def veKalemRengiyle(renk: Renk): Resim = r.withPenColor(renk)
     def veKalemKalınlığıyla(boy: Kesir): Resim = r.withPenThickness(boy)
     def veKondur(x: Kesir, y: Kesir): Resim = r.withPosition(x, y)
+    def veBüyüt(oran: Kesir): Resim = r.withScaling(oran)
+    def veGötür(x: Kesir, y: Kesir): Resim = r.withTranslation(x, y)
     def veÇiz(): Birim = r.draw()
     // Devre 6: küçük kapanışlar
     def görünür: İkil = r.isVisible // masaüstü adı (görünürMü ile aynı)

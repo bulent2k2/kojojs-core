@@ -12,6 +12,15 @@ case class SetPenColor(color: Color) extends Command
 case class SetFillColor(color: Color) extends Command
 case class Hop(n: Double) extends Command
 case class SetPosition(x: Double, y: Double) extends Command
+// Göreli sıçrama (masaüstü changePosition). Kuyrukta durması şart: geçerli
+// konum ancak komut ÇALIŞIRKEN bilinir, kuyruğa konurken değil.
+case class ChangePosition(x: Double, y: Double) extends Command
+// Giysi (costume) komutları. Kuyrukta durmaları şart: giysi değişimi imge
+// yüklemesi gerektiriyor (eşzamansız), kuyruk yükleme bitince sürüyor.
+case class SetCostume(url: String) extends Command
+case class SetCostumes(urls: Vector[String]) extends Command
+case object NextCostume extends Command
+case class ScaleCostume(factor: Double) extends Command
 case class SetHeading(theta: Double) extends Command
 case class MoveTo(x: Double, y: Double) extends Command
 case class Arc2(r: Double, a: Double) extends Command
@@ -20,6 +29,10 @@ case class SetPenFontSize(n: Int) extends Command
 case class SetPenFontFamily(name: String) extends Command // yazıyüzü ailesi (Koco Yazıyüzü)
 case class Dot(diameter: Double) extends Command // nokta: kalemin bulunduğu yere dolu daire
 case class Towards(x: Double, y: Double) extends Command
+// Başka bir kaplumbağaya dönme. Hedefin konumu KOMUT ÇALIŞIRKEN okunur:
+// öbür kaplumbağanın kendi kuyruğu var, kuyruğa konurken okunsa eski konuma
+// dönülürdü (masaüstünde de anlık konum okunuyor).
+case class TowardsTurtle(other: Turtle) extends Command
 case object SavePosHe extends Command
 case object RestorePosHe extends Command
 case object SaveStyle extends Command
