@@ -17,8 +17,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private[kojo] val turtlePath = new PIXI.Graphics()
   private[kojo] val turtlePathPoints = ArrayBuffer[(Double, Double)]()
   var prevMoveTo: Option[Point] = None
+  // PIXI 5'te yol, çizimler arasında boşaltılabildiğinden (bkz.
+  // PixiUyum.yoluSürdür) kalemin son noktasını kendimiz tutuyoruz.
+  private var sonYolX = x
+  private var sonYolY = y
+
   private def turtlePathMoveTo(x: Double, y: Double): Unit = {
     turtlePath.moveTo(x, y)
+    sonYolX = x; sonYolY = y
     prevMoveTo = Some(Point(x, y))
     //    turtlePathPoints += ((x, y))
   }
@@ -29,7 +35,9 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       prevMoveTo = None
     }
 
+    PixiUyum.yoluSürdür(turtlePath, sonYolX, sonYolY)
     turtlePath.lineTo(x, y)
+    sonYolX = x; sonYolY = y
     turtlePathPoints += ((x, y))
   }
 
@@ -421,7 +429,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     else {
       turtlePathLineTo(pfx, pfy)
     }
-    turtlePath.clearDirty += 1
+    PixiUyum.tazele(turtlePath)
     turtleImage.position.x = pfx
     turtleImage.position.y = pfy
     kojoWorld.render()
@@ -456,7 +464,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
           turtleLayer.removeChild(tempForwardPath)
           turtlePathLineTo(pfx, pfy)
         }
-        turtlePath.clearDirty += 1
+        PixiUyum.tazele(turtlePath)
         turtleImage.position.x = pfx
         turtleImage.position.y = pfy
         kojoWorld.render()
