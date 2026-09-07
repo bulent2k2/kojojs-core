@@ -49,6 +49,13 @@ abstract class BasePicSequence(val pics: Seq[Picture]) extends Picture with Read
     }
   }
 
+  // Boyayı da ilet -- bkz. PicTransformer.setFillPaint'teki açıklama.
+  override def setFillPaint(b: Boya): Unit = {
+    pics.foreach { p =>
+      p.setFillPaint(b)
+    }
+  }
+
   def setPenColor(c: Color): Unit = {
     pics.foreach { p =>
       p.setPenColor(c)

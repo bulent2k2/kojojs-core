@@ -117,6 +117,8 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def büyütme(k: Kesir): Dönüştürücü = kb.scale(k)
   def kalemRengi(renk: Renk): Dönüştürücü = kb.penColor(renk)
   def boyaRengi(renk: Renk): Dönüştürücü = kb.fillColor(renk)
+  /** Gradyan ya da dokuma boyasıyla doldurur (Renk.doğrusalDeğişim, DokumaBoya, ...). */
+  def boyaRengi(boya: Boya): Dönüştürücü = kb.fillPaint(boya)
   def kalemKalınlığı(k: Kesir): Dönüştürücü = kb.penThickness(k)
   def kalemBoyu(k: Kesir): Dönüştürücü = kb.penThickness(k) // masaüstü adı (resim.scala KalemBoyuBD)
   // masaüstünün bağımsız dönüştürücü adları (trInit: döndür/büyüt/götür = *BD)

@@ -98,7 +98,11 @@ object PixiUyum {
 
   /** PIXI 5 (ya da üstü) mü? PIXI.VERSION'ın baş sayısına bakıyoruz. */
   lazy val beşVeÜstü: Boolean = {
-    val s = g.PIXI.VERSION.asInstanceOf[js.UndefOr[String]].getOrElse("4")
+    // PIXI hiç yüklenmemiş olabilir (Node altındaki birim testleri böyle koşuyor);
+    // o durumda v4 varsayıyoruz -- yani doku dolgusu yok, düz renge düşülür.
+    val s =
+      if (js.typeOf(js.Dynamic.global.PIXI) == "undefined") "4"
+      else g.PIXI.VERSION.asInstanceOf[js.UndefOr[String]].getOrElse("4")
     s.takeWhile(_.isDigit).toIntOption.exists(_ >= 5)
   }
 
@@ -154,6 +158,45 @@ object PixiUyum {
       }
     }
     tazele(gr)
+  }
+
+  /**
+   * Boyayı kurar: düz renk ya da doku (gradyan / dokuma).
+   *
+   * Doku dolgusu yalnız PIXI 5'te var -- fillStyle nesnesi v4'te yok. v4'te
+   * DokuBoya zaten kurulurken DüzBoya'ya düşüyor (bkz. Boya), yine de burada
+   * yedek renge düşerek ikinci bir güvence bırakıyoruz.
+   */
+  def boyayıKurBoya(gr: pixiscalajs.PIXI.Graphics, boya: Boya)(tazeleyici: () => Unit): Unit = boya match {
+    case DüzBoya(renk) =>
+      boyayıKur(gr, renk.toRGBDouble, renk.alpha.get)
+    case DokuBoya(doku, matris, yedek) =>
+      if (!beşVeÜstü) boyayıKur(gr, yedek.toRGBDouble, yedek.alpha.get)
+      else {
+        // DİKKAT: fillStyle.matrix, yerel koordinattan doku koordinatına giden
+        // eşlemeyi tutuyor, yani bizim tuttuğumuzun TERSİNİ. Graphics.beginTextureFill
+        // bu tersi kendisi alıyor; biz fillStyle'ı doğrudan değiştirdiğimiz için
+        // burada elle almamız gerek. Alınmazsa gradyan yanlış ölçekte ve yanlış
+        // yerde çıkıyor (ölçüldü: 160 birimlik rampa 410 birime yayılıyordu).
+        // Doku henüz yüklenmemişse (DokumaBoya bir dosyadan geliyor) PIXI 5'in
+        // validateBatching'i HİÇBİR batch kurmuyor: Graphics o kareyi bomboş
+        // çiziyor -- düz renkli parçalar ve kalem dahil. Yüklendiğinde kendi
+        // başına bir çizim tetiklenmediği için, durağan bir sahnede şekil
+        // hiç görünmüyordu. Yüklemeyi dinleyip bir çizim istiyoruz.
+        // (geometry.dirty != cacheDirty kaldığından tazele() gerekmiyor.)
+        val bt = dyn(doku).baseTexture
+        if (!bt.valid.asInstanceOf[Boolean]) bt.once("loaded", () => tazeleyici())
+        val ters = dyn(matris).clone().invert()
+        parçalar(gr).foreach { gd =>
+          gd.fillStyle.texture = doku.asInstanceOf[js.Any]
+          gd.fillStyle.matrix = ters.asInstanceOf[js.Any]
+          // Doku rengi bozulmasın diye çarpan beyaz ve tam donuk olmalı.
+          gd.fillStyle.color = 0xffffff
+          gd.fillStyle.alpha = 1.0
+          gd.fillStyle.visible = true
+        }
+        tazele(gr)
+      }
   }
 
   /** Kalem rengi -- boyayıKur'un kalem karşılığı. */

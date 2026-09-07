@@ -42,7 +42,53 @@ trait RenkYöntemleri extends TemelTürler {
     def rgba(r: Sayı, g: Sayı, b: Sayı, a: Sayı): Renk = DRenk.rgba(r, g, b, a)
     def hsl(h: Kesir, s: Kesir, l: Kesir): Renk = DRenk.hsl(h, s, l)
     def hsla(h: Kesir, s: Kesir, l: Kesir, a: Kesir): Renk = DRenk.hsla(h, s, l, a)
+
+    // ---- gradyanlar (masaüstü tr/renk.scala ile aynı imzalar) ----
+    // Bunlar düz Renk değil Boya döndürüyor; boyaRengi(...) ikisini de alıyor.
+    // Koordinatlar resmin YEREL koordinatları -- masaüstündeki gibi.
+
+    /** (x1,y1)'den (x2,y2)'ye giden iki renkli doğrusal geçiş. */
+    def doğrusalDeğişim(
+      x1: Kesir, y1: Kesir, renk1: Renk,
+      x2: Kesir, y2: Kesir, renk2: Renk,
+      dalgalıDevam: İkil = yanlış
+    ): Boya = kojo.Boya.doğrusal(x1, y1, renk1, x2, y2, renk2, dalgalıDevam)
+
+    /** Çok duraklı doğrusal geçiş: `dağılım` 0..1 arası konumlar. */
+    def doğrusalÇokluDeğişim(
+      x1: Kesir, y1: Kesir, x2: Kesir, y2: Kesir,
+      dağılım: Dizi[Kesir], renkler: Dizi[Renk],
+      dalgalıDevam: İkil = yanlış
+    ): Boya = kojo.Boya.doğrusalÇoklu(x1, y1, x2, y2, dağılım, renkler, dalgalıDevam)
+
+    /** Merkezden dışarı doğru iki renkli geçiş. */
+    def merkezdenDışarıDoğruDeğişim(
+      merkezX: Kesir, merkezY: Kesir, renk1: Renk,
+      yarıçap: Kesir, renk2: Renk,
+      dalgalıDevam: İkil = yanlış
+    ): Boya = kojo.Boya.merkezden(merkezX, merkezY, renk1, yarıçap, renk2, dalgalıDevam)
+
+    /** Merkezden dışarı doğru çok duraklı geçiş. */
+    def merkezdenDışarıDoğruÇokluDeğişim(
+      merkezX: Kesir, merkezY: Kesir, yarıçap: Kesir,
+      dağılım: Dizi[Kesir], renkler: Dizi[Renk],
+      dalgalıDevam: İkil = yanlış
+    ): Boya = kojo.Boya.merkezdenÇoklu(merkezX, merkezY, yarıçap, dağılım, renkler, dalgalıDevam)
   }
+
+  /** Masaüstündeki kısa takma ad: RenkDD / RenkDoğrusalDeğişim. */
+  def RenkDD(x1: Kesir, y1: Kesir, renk1: Renk, x2: Kesir, y2: Kesir, renk2: Renk,
+    dalgalıDevam: İkil = yanlış): Boya =
+    Renk.doğrusalDeğişim(x1, y1, renk1, x2, y2, renk2, dalgalıDevam)
+  def RenkDoğrusalDeğişim(x1: Kesir, y1: Kesir, renk1: Renk, x2: Kesir, y2: Kesir, renk2: Renk,
+    dalgalıDevam: İkil = yanlış): Boya =
+    Renk.doğrusalDeğişim(x1, y1, renk1, x2, y2, renk2, dalgalıDevam)
+
+  /**
+   * Bir imge dosyasını döşeme boyası olarak kullanır (masaüstü DokumaBoya).
+   * (x, y) döşemenin başladığı köşe.
+   */
+  def DokumaBoya(dosya: Yazı, x: Kesir, y: Kesir): Boya = kojo.Boya.dokuma(dosya, x, y)
   val renkler = DRenk
 
   object Renkler {
