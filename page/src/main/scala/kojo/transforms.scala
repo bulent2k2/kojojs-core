@@ -21,6 +21,12 @@ trait PicTransformer extends Picture {
 
   def setFillColor(c: Color) = tpic.setFillColor(c)
 
+  // Boyayı da ilet. İletilmezse Picture'daki varsayılan gövde devreye girip
+  // DokuBoya'yı yedek düz renge indiriyordu: boyaRengi(gradyan) zincirde en
+  // içteki dönüştürücü değilse (ör. `boyaRengi(b) * kalemRengi(c) -> şekil`)
+  // gradyan sessizce kayboluyordu.
+  override def setFillPaint(b: Boya) = tpic.setFillPaint(b)
+
   def setPenColor(c: Color) = tpic.setPenColor(c)
 
   def setPenThickness(t: Double) = tpic.setPenThickness(t)

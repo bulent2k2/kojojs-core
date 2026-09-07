@@ -24,6 +24,8 @@ trait TemelTürler {
   type Hiç = Nothing
 
   type İkil = Boolean
+  /** Bir şeklin içini dolduran şey: düz renk ya da gradyan/dokuma. */
+  type Boya = kojo.Boya
   type Seçim = Boolean
   // İki derleyicide iki farklı okunuş (Faz 2'de doğrulandı):
   //  - STOK derleyici: sıradan iki üye tanımı.

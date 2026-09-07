@@ -177,6 +177,16 @@ trait Picture {
 
   def setFillColor(c: Color): Unit
   def setPenColor(c: Color): Unit
+
+  /**
+   * Boyayı (düz renk ya da gradyan/dokuma) kurar. Varsayılan gerçekleme düz
+   * renge düşüyor: doku dolgusunu ancak vektör tabanlı resimler destekliyor,
+   * ötekiler (imge, yazı) eskisi gibi davranıyor.
+   */
+  def setFillPaint(b: Boya): Unit = b match {
+    case DüzBoya(renk)          => setFillColor(renk)
+    case DokuBoya(_, _, yedek)  => setFillColor(yedek)
+  }
   def setPenThickness(t: Double): Unit
 
   def thatsRotated(angle: Double): Picture = PreDrawTransform { pic => pic.rotate(angle) }(this)
