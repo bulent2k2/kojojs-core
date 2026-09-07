@@ -678,6 +678,18 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     TurtleHelper.distance(position.x, position.y, x, y)
   }
 
+  /**
+   * Masaüstü Turtle.distanceTo(other): iki kaplumbağa arasındaki uzaklık.
+   *
+   * DİKKAT -- bu ANLIK bir okuma, kuyruğa girmiyor: değer döndürdüğü için
+   * `çevir`/`noktayaDön` gibi komut kuyruğuna konamıyor. Yani daha işlenmemiş
+   * komutlar varsa (ör. az önce `ileri(100)` dediysen) uzaklık o komutlardan
+   * ÖNCEKİ konumlara göre hesaplanır. Kesin sonuç gerekiyorsa konumları
+   * TurkishTurtle.konumuOku ile kuyruğun doğru noktasında okuyun.
+   */
+  def distanceTo(other: Turtle): Double =
+    distanceTo(other.position.x, other.position.y)
+
   private def towardsHelper(x: Double, y: Double): Double = {
     TurtleHelper.thetaTowards(position.x, position.y, x, y, headingRadians)
   }

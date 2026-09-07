@@ -558,10 +558,57 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // yazıyüzü adı PIXI ölçümünde yok sayılır; boy belirleyici
   def yazıÇerçevesi(yazı: Yazı, yazıBoyu: Sayı, yazıyüzüAdı: Yazı = null): Dikdörtgen =
     builtins.textExtent(yazı, yazıBoyu)
-  // react: kaplumbağa her karede işlevi çalıştırır
-  def davran(işlev: Kaplumbağa => Birim): Birim = builtins.animate(işlev(this))
-  def tepkiVer(işlev: Kaplumbağa => Birim): Birim = davran(işlev)
-  def canlan(işlev: Kaplumbağa => Birim): Birim = davran(işlev)
+  /**
+   * Masaüstü `davran` (core.Turtle.act): gövde BİR KEZ çalışır.
+   *
+   * Masaüstünde ayrı bir iş parçacığında koşuyor ("işlemci tarafından paralel
+   * çalıştırılır"); burada kaplumbağa komutları zaten kuyruğa girip eşzamansız
+   * işlendiğinden doğrudan çağırmak aynı sonucu veriyor -- birden çok
+   * kaplumbağanın kuyrukları kendiliğinden iç içe geçiyor.
+   *
+   * AMA bir fark var: gövde ANA iş parçacığında koşuyor. Kaplumbağa
+   * komutlarından (ileri, sağ, ...) oluşan bir gövdede sorun yok, çünkü onlar
+   * kuyruğa girip hemen dönüyor. Bekleyen bir döngü YAZMAYIN --
+   * `yineleDoğruysa(doğru) { ... }` gibi bir şey masaüstünde yalnız kendi iş
+   * parçacığını meşgul ederdi, burada sekmeyi dondurur. Her karede bir şey
+   * yapmak istiyorsanız yeri `tepkiVer`.
+   *
+   * {{{
+   * dez k1 = yeniKaplumbağa(-200, 0)
+   * dez k2 = yeniKaplumbağa(0, 0)
+   * k1.davran { k => kare(k, 100, 100) }   // ikisi yan yana çizilir
+   * k2.davran { k => kare(k, 50, 200) }
+   * }}}
+   */
+  def davran(işlev: Kaplumbağa => Birim): Birim = işlev(this)
+
+  /**
+   * Masaüstü `tepkiVer` (Turtle.react): gövde HER KAREDE çalışır -- oyun
+   * döngüsü. `davran`la karıştırmayın: `davran` bir kez koşar.
+   *
+   * {{{
+   * kaçan.tepkiVer { k =>
+   *   eğer (tuşaBasılıMı(tuşlar.sağ)) { k.götür(5, 0) }
+   * }
+   * }}}
+   */
+  def tepkiVer(işlev: Kaplumbağa => Birim): Birim = builtins.animate(işlev(this))
+
+  /** `tepkiVer`in öbür adı (masaüstünde de öyle: canlan = tepkiVer). */
+  def canlan(işlev: Kaplumbağa => Birim): Birim = tepkiVer(işlev)
+
+  /**
+   * Başka bir kaplumbağaya uzaklık (masaüstü uzaklık / distanceTo).
+   *
+   * DİKKAT: değer döndürdüğü için kuyruğa konamıyor, ANLIK okuma yapıyor --
+   * bekleyen komutlar varsa onlardan önceki konumlara göre hesaplar. Kesinlik
+   * gerekiyorsa konumları `konumuOku` ile okuyun.
+   */
+  def uzaklık(öbürü: Kaplumbağa): Kesir = (englishTurtle, öbürü.englishTurtle) match {
+    case (bu: Turtle, o: Turtle) => bu.distanceTo(o)
+    case _ =>
+      throw new ÇalışmaSırasıKuralDışı("uzaklık yalnız yeniKaplumbağa ile yapılan kaplumbağalarda çalışır")
+  }
   /** Masaüstü showGameTimeCountdown: sol üstte geri sayan sayaç; sıfırda ileti + durdur. */
   def oyunSüresiniGeriyeSayarakGöster(
       süreSaniyeOlarak: Sayı,
