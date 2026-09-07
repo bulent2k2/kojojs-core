@@ -22,36 +22,19 @@ trait VectorGraphicsPic extends Picture with ReadyPromise {
   }
 
   override def setFillColor(c: Color): Unit = {
-    val gds = path.graphicsData
-    gds.foreach { gd =>
-      gd.fillColor = c.toRGBDouble
-      gd.fillAlpha = c.alpha.get
-    }
-    path.dirty += 1
-    path.clearDirty += 1
+    PixiUyum.boyayıKur(path, c.toRGBDouble, c.alpha.get)
     kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
   override def setPenColor(c: Color): Unit = {
-    val gds = path.graphicsData
-    gds.foreach { gd =>
-      gd.lineColor = c.toRGBDouble
-      gd.lineAlpha = c.alpha.get
-    }
-    path.dirty += 1
-    path.clearDirty += 1
+    PixiUyum.kalemiKur(path, c.toRGBDouble, c.alpha.get)
     kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }
 
   override def setPenThickness(t: Double): Unit = {
-    val gds = path.graphicsData
-    gds.foreach { gd =>
-      gd.lineWidth = t
-    }
-    path.dirty += 1
-    path.clearDirty += 1
+    PixiUyum.kalemKalınlığınıKur(path, t)
     kojoWorld.noteMutation(tnode)
     kojoWorld.render()
   }

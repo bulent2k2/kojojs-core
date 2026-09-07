@@ -23,7 +23,7 @@ class ImagePicRaw(subImg: SubImage, envelope: Option[Picture])(implicit val kojo
       val texture = Texture.from(image)
       subImg.section.foreach { sec =>
         texture.frame = new PIXI.Rectangle(sec.x, sec.y, sec.w, sec.h)
-        texture._updateUvs()
+        PixiUyum.uvTazele(texture)
       }
       sprite = new PIXI.Sprite(texture)
       sprite.setTransform(0, sprite.height, 1, -1, 0, 0, 0, 0, 0)

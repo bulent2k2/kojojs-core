@@ -2194,12 +2194,9 @@ object Pixi extends js.Object {
   var FILTER_RESOLUTION: Double = js.native
   var SPRITE_BATCH_SIZE: Double = js.native
 
-  def autoDetectRenderer(
-    width:   Double,
-    height:  Double,
-    options: RendererOptions = null,
-    noWebGL: Boolean         = false
-  ): SystemRenderer = js.native
+  // Tek seçenek nesnesi biçimi (genişlik/yükseklik de içinde): PIXI 5'in tek
+  // biçimi, PIXI 4 de kabul ediyor. Böylece aynı derleme iki sürümde de koşuyor.
+  def autoDetectRenderer(options: js.Dynamic): SystemRenderer = js.native
 
   var loader: loaders.Loader = js.native
 

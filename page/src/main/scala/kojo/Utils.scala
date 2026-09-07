@@ -77,3 +77,138 @@ object Utils {
 
   def notSupported(name: String, reason: String) = throw new UnsupportedOperationException(s"$name - operation not available $reason:\n${toString}")
 }
+
+// PIXI 4 ile PIXI 5 arasındaki uyum katmanı.
+//
+// Facade `js.native` olduğu için sürüm farkları DERLEME zamanında görünmüyor;
+// hepsi çalışma anında patlıyor. Onun için farkları tek yerde topluyoruz ve
+// `PIXI.VERSION`'a bakarak seçiyoruz: aynı derleme hem v4 hem v5 ile çalışıyor.
+// Böylece kütüphane dosyasını sunan depo (kojojs-editor) ile kodu sunan depo
+// (kojojs-core) birbirini beklemek zorunda kalmıyor, geri dönüş de yalnız
+// kütüphane dosyasını geri koymaktan ibaret oluyor.
+//
+// Tarayıcıda ÖLÇÜLEREK saptandı (pixi 4.8.9 / 5.3.12); v5'te de aynı çalıştığı
+// için burada YER ALMAYAN şeyler: PIXI.loaders.Loader/Resource, PIXI.loader,
+// PIXI.interaction (v5 uyumluluk kabukları duruyor), autoDetectRenderer'ın
+// seçenek nesnesi biçimi, RenderTexture.create(w, h), renderer.render'ın
+// konumlu biçimi, SHAPES sabitleri, Texture.from, setTransform, getBounds.
+object PixiUyum {
+  import scala.scalajs.js
+  import scala.scalajs.js.Dynamic.{global => g}
+
+  /** PIXI 5 (ya da üstü) mü? PIXI.VERSION'ın baş sayısına bakıyoruz. */
+  lazy val beşVeÜstü: Boolean = {
+    val s = g.PIXI.VERSION.asInstanceOf[js.UndefOr[String]].getOrElse("4")
+    s.takeWhile(_.isDigit).toIntOption.exists(_ >= 5)
+  }
+
+  private def dyn(o: Any): js.Dynamic = o.asInstanceOf[js.Dynamic]
+
+  /**
+   * Çizim parçaları: v4'te Graphics'in kendisinde, v5'te geometry'sinde.
+   *
+   * v5'te ayrıca ÖNCE finishPoly() gerekiyor: moveTo/lineTo ile çizilen yol
+   * graphicsData'ya kendiliğinden geçmiyor, `currentPath`te bekliyor. Bunu
+   * yapmadan okursak dizi BOŞ gelir ve üstünde dönen boya/kalem/kalınlık
+   * döngüleri sessizce hiçbir şeye dokunmaz -- kaplumbağa resimleri v5'te tam
+   * bu yüzden boyasız ve varsayılan kalemle çiziliyordu.
+   *
+   * finishPoly() `currentPath`i null'a çekiyor; sonraki lineTo'yu yoluSürdür
+   * kaldığımız noktadan yeniden başlatıyor, yani ikisi birlikte çalışıyor.
+   */
+  def parçalar(gr: pixiscalajs.PIXI.Graphics): js.Array[js.Dynamic] = {
+    val d = dyn(gr)
+    val a = if (beşVeÜstü) { d.finishPoly(); d.geometry.graphicsData } else d.graphicsData
+    a.asInstanceOf[js.Array[js.Dynamic]]
+  }
+
+  /**
+   * Geometriyi yeniden kurdurur. v4 iki sayacı artırmakla yetiniyordu;
+   * v5'te bunlar Graphics'te değil geometry'de ve invalidate() ile işliyor.
+   */
+  def tazele(gr: pixiscalajs.PIXI.Graphics): Unit = {
+    val d = dyn(gr)
+    if (beşVeÜstü) d.geometry.invalidate()
+    else {
+      d.dirty = d.dirty.asInstanceOf[Double] + 1
+      d.clearDirty = d.clearDirty.asInstanceOf[Double] + 1
+    }
+  }
+
+  /**
+   * Boya rengi. v4'te parçanın düz alanları (fillColor/fillAlpha), v5'te bir
+   * fillStyle nesnesi -- ve v5'te ayrıca `visible` bayrağı var: şekil
+   * beginFill(renk, 0) ile çizilmişse stil görünmez damgalanıyor, yalnız rengi
+   * değiştirmek yetmiyor.
+   */
+  def boyayıKur(gr: pixiscalajs.PIXI.Graphics, renk: Double, saydamlık: Double): Unit = {
+    parçalar(gr).foreach { gd =>
+      if (beşVeÜstü) {
+        gd.fillStyle.color = renk
+        gd.fillStyle.alpha = saydamlık
+        gd.fillStyle.visible = saydamlık > 0
+      }
+      else {
+        gd.fillColor = renk
+        gd.fillAlpha = saydamlık
+      }
+    }
+    tazele(gr)
+  }
+
+  /** Kalem rengi -- boyayıKur'un kalem karşılığı. */
+  def kalemiKur(gr: pixiscalajs.PIXI.Graphics, renk: Double, saydamlık: Double): Unit = {
+    parçalar(gr).foreach { gd =>
+      if (beşVeÜstü) {
+        gd.lineStyle.color = renk
+        gd.lineStyle.alpha = saydamlık
+        gd.lineStyle.visible = true
+      }
+      else {
+        gd.lineColor = renk
+        gd.lineAlpha = saydamlık
+      }
+    }
+    tazele(gr)
+  }
+
+  /** Kalem kalınlığı. */
+  def kalemKalınlığınıKur(gr: pixiscalajs.PIXI.Graphics, kalınlık: Double): Unit = {
+    parçalar(gr).foreach { gd =>
+      if (beşVeÜstü) gd.lineStyle.width = kalınlık else gd.lineWidth = kalınlık
+    }
+    tazele(gr)
+  }
+
+  /** Doku uv'lerini tazeler (alt-imge kırpmasından sonra). */
+  def uvTazele(doku: pixiscalajs.PIXI.Texture): Unit = {
+    val d = dyn(doku)
+    if (beşVeÜstü) d.updateUvs() else d._updateUvs()
+  }
+
+  /**
+   * PIXI 4 -> 5'in en sinsi farkı; göç kılavuzunda geçmiyor ve derleme
+   * zamanında hiç görünmüyor:
+   *   v4 moveTo(x, y) poligonu HEMEN drawShape ile graphicsData'ya koyuyordu;
+   *     lineTo o yerleşmiş şeklin noktalarını yerinde büyütüyordu -- yani her
+   *     lineTo'dan sonraki çizim izi gösteriyordu.
+   *   v5 moveTo(x, y) poligonu `currentPath`te BEKLETİYOR; graphicsData'ya
+   *     ancak finishPoly() ile ve YALNIZ points.length > 2 iken geçiyor. Her
+   *     çizim finishPoly() çağırıyor ve tam 2 noktalı yolu SİLİYOR
+   *     (currentPath.points.length = 0).
+   * Kaplumbağa tam bu kalıpta çiziyor (moveTo, çiz, lineTo, çiz, ...), yani
+   * v5'te kalem izi hiç çıkmıyordu. Ölçüldü: aynı betikte v4 graphicsData=1,
+   * v5 graphicsData=0.
+   *
+   * Çare: lineTo'dan önce yolun boşaltılmış olup olmadığına bakıp, boşaltılmışsa
+   * kaldığımız noktadan yeniden başlatmak. Çizimler arasındaki kesimler yine
+   * tek poligonda toplanıyor -- kesim başına ayrı şekil üretmiyoruz.
+   */
+  def yoluSürdür(gr: pixiscalajs.PIXI.Graphics, sonX: Double, sonY: Double): Unit =
+    if (beşVeÜstü) {
+      val yol = dyn(gr).currentPath
+      val boş = js.isUndefined(yol) || yol == null ||
+        yol.points.asInstanceOf[js.Array[Double]].length < 2
+      if (boş) gr.moveTo(sonX, sonY)
+    }
+}
