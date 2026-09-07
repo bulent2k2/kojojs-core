@@ -11,7 +11,18 @@ package kojo.tr
 trait DiziYöntemleri extends TemelTürler {
 
   object Dizi {
-    def apply[B](ögeler: B*): Dizi[B] = ögeler.toSeq
+    // List.from; toSeq da Seq.from da DEĞİL. Scala.js'te varargs bir
+    // WrappedVarArgs olarak geliyor ve onun apply'ı sınır denetimi YAPMIYOR:
+    // Dizi(1)(5) hata fırlatmak yerine undefined veriyordu (masaüstünde
+    // SınırDışınaTaşmaHatası). Node'da ÖLÇÜLDÜ:
+    //   toSeq/Seq.from -> WrappedVarArgs (kopyalamıyor!), yazımı
+    //                     "WrappedVarArgs(1, 2, 3)", sınır dışı erişim
+    //                     UndefinedBehaviorError (fullOpt'ta sessiz undefined)
+    //   List.from      -> List, yazımı "List(1, 2, 3)", sınır dışı erişim
+    //                     IndexOutOfBoundsException
+    // Masaüstü (tr/dizi.scala) JVM'de Seq.from ile zaten List üretiyor; List.from
+    // hem o yazımı hem denetimi veriyor. Seq.from'a "sadeleştirmeyin".
+    def apply[B](ögeler: B*): Dizi[B] = List.from(ögeler)
     def unapplySeq[B](dizi: Dizi[B]) = Seq.unapplySeq(dizi)
     def boş[B]: Dizi[B] = Seq.empty[B]
     def doldur[B](n1: Sayı)(f: Sayı => B) = Seq.tabulate(n1)(f)
@@ -20,7 +31,9 @@ trait DiziYöntemleri extends TemelTürler {
   }
 
   object Diz {
-    def apply[B](ögeler: B*): Diz[B] = ögeler.toSeq
+    // Dizi.apply ile aynı gerekçe ve aynı ölçüm: sınır denetimi + masaüstüyle
+    // aynı yazdırma. (List bir collection.Seq'tir.)
+    def apply[B](ögeler: B*): Diz[B] = List.from(ögeler)
     def unapplySeq[B](dizi: Diz[B]) = collection.Seq.unapplySeq(dizi)
     def doldur[B](n1: Sayı)(f: Sayı => B) = Seq.tabulate(n1)(f)
   }
