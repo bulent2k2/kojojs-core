@@ -185,7 +185,7 @@ object PixiUyum {
         // hiç görünmüyordu. Yüklemeyi dinleyip bir çizim istiyoruz.
         // (geometry.dirty != cacheDirty kaldığından tazele() gerekmiyor.)
         val bt = dyn(doku).baseTexture
-        if (!bt.valid.asInstanceOf[Boolean]) bt.once("loaded", () => tazeleyici())
+        if (!bt.valid.asInstanceOf[Boolean]) yüklemeyiBekle(bt, gr, yedek, tazeleyici)
         val ters = dyn(matris).clone().invert()
         parçalar(gr).foreach { gd =>
           gd.fillStyle.texture = doku.asInstanceOf[js.Any]
@@ -197,6 +197,72 @@ object PixiUyum {
         }
         tazele(gr)
       }
+  }
+
+  /**
+   * Doku henüz yüklenmemişse yüklemenin sonucunu bekler.
+   *
+   * Neden gerekiyor: PIXI 5'in validateBatching'i geçersiz dokulu bir fillStyle
+   * görünce HİÇBİR batch kurmuyor; Graphics o kareyi bomboş çiziyor -- düz
+   * renkli parçalar ve kalem dahil. Yükleme bitince kendiliğinden bir çizim
+   * tetiklenmediği için durağan sahnede şekil hiç görünmüyordu.
+   *
+   * Neden OLAY değil SÖZ: `once("loaded"/"error")` yalnız dosyanın İLK
+   * kullanımında çalışıyor. Texture.from başarısız yüklemeyi de önbellekte
+   * tutuyor; aynı bozuk dosya ikinci kez kullanıldığında aynı BaseTexture
+   * dönüyor ve artık hiçbir olay gelmiyor (ölçüldü: 2. kullanımda "loaded" da
+   * "error" da gelmiyor, valid hâlâ false). Bu yalnız "betiği iki kez çalıştır"
+   * durumu değil: TurtlePicture.setFillPaint boyayı ready.foreach içinde,
+   * yani çizim bittikten sonra kuruyor; o sırada 404 çoktan gelmiş oluyor.
+   * resource.load() ise aynı sözü döndürüyor ve GEÇ abone olana da çalışıyor
+   * (ölçüldü: bozuk kaynağa sonradan load() hemen reddediyor). Söz yolu
+   * ayrıca dinleyici sızıntısı bırakmıyor: olay yolunda başarı durumunda
+   * "error" kapanışı (ya da tersi) önbellekteki BaseTexture üstünde sonsuza
+   * dek kalıp gr ile tazeleyici'yi tutuyordu.
+   */
+  private def yüklemeyiBekle(
+    bt: js.Dynamic,
+    gr: pixiscalajs.PIXI.Graphics,
+    yedek: kojo.doodle.Color,
+    tazeleyici: () => Unit
+  ): Unit = {
+    val kaynak = bt.resource
+    val dosya = {
+      val u = kaynak.url
+      if (js.isUndefined(u) || u == null) "(dosya adı bilinmiyor)" else u.toString
+    }
+    def oldu(x: js.Any): Unit = tazeleyici()
+    def olmadı(x: js.Any): Unit = {
+      println(s"Uyarı: dokuma boyası yüklenemedi: $dosya -- düz renge dönülüyor")
+      düzBoyayaDön(gr, yedek)
+      tazeleyici()
+    }
+    try {
+      kaynak.load().applyDynamic("then")(
+        ((oldu _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any],
+        ((olmadı _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any]
+      )
+    }
+    catch {
+      // resource.load() olmayan bir kaynak türü: eski olay yoluna düş.
+      case _: Throwable =>
+        bt.once("loaded", () => tazeleyici())
+        bt.once("error", () => olmadı(null))
+    }
+  }
+
+  /**
+   * Doku dolgusunu bırakıp düz renge döner. Yalnız rengi kurmak YETMİYOR:
+   * geçersiz doku fillStyle'da kaldığı sürece validateBatching hiçbir batch
+   * kurmuyor ve şekil çizilmiyor. Dokuyu beyaza (yani dolgu-yok anlamına gelen
+   * Texture.WHITE'a) çevirmek gerekiyor.
+   */
+  private def düzBoyayaDön(gr: pixiscalajs.PIXI.Graphics, yedek: kojo.doodle.Color): Unit = {
+    parçalar(gr).foreach { gd =>
+      gd.fillStyle.texture = js.Dynamic.global.PIXI.Texture.WHITE
+      gd.fillStyle.matrix = null
+    }
+    boyayıKur(gr, yedek.toRGBDouble, yedek.alpha.get)
   }
 
   /** Kalem rengi -- boyayıKur'un kalem karşılığı. */
