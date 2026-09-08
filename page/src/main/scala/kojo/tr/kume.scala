@@ -6,7 +6,7 @@ package kojo.tr
  * `dizime` / `eşleme` masaüstünde Dizim/Eşlem sarmalayıcılarına dönüyor; onlar
  * henüz portlanmadı, düz Array/Map dönüyoruz.
  */
-trait KümeYöntemleri extends TemelTürler {
+trait KümeYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYöntemleri {
   type Küme[T] = Set[T]
 
   object Küme {
@@ -52,6 +52,8 @@ trait KümeYöntemleri extends TemelTürler {
     def diziye = d.toSeq
     def kümeye = d.toSet
     def yöneye = d.toVector
+    def dizime[S >: T](implicit delil: scala.reflect.ClassTag[S]): Dizim[S] = new Dizim(d.toArray(delil))
+    def eşleme[A, D](implicit delil: T <:< (A, D)): Eşlem[A, D] = Eşlem.değişmezden(d.toMap)
     def eşleğe[A, D](implicit delil: T <:< (A, D)): Eşlek[A, D] = d.toMap
     def say(işlev: T => İkil): Sayı = d.count(işlev)
 

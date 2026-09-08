@@ -8,7 +8,7 @@ package kojo.tr
  * colSeqYöntemleri/SeqYöntemleri ikilisinin karşılığı). Bir List/Vector için
  * ikisi de uygulanabilir; derleyici daha özgülü (DiziMetotları) seçer.
  */
-trait DiziYöntemleri extends TemelTürler {
+trait DiziYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYöntemleri {
 
   object Dizi {
     // List.from; toSeq da Seq.from da DEĞİL. Scala.js'te varargs bir
@@ -93,6 +93,13 @@ trait DiziYöntemleri extends TemelTürler {
     def diziye: Dizi[T] = d.toSeq
     def kümeye: Set[T] = d.toSet
     def yöneye: Vector[T] = d.toVector
+    // dizime/eşleme masaüstünde her sarmalayıcıda ayrı ayrı yazılı; burada
+    // Diz/Dizi'ye konuyor ve alt türler (Dizin, Yöney, Aralık, Yığın, Kuyruk,
+    // EsnekYazı, MiskinDizin) onları KALITIMLA alıyor -- Scala en özel örtük
+    // sınıfı seçtiği için belirsizlik olmuyor (bkz. araclar/kapsam.py'nin
+    // "+miras" sütunu).
+    def dizime[S >: T](implicit delil: scala.reflect.ClassTag[S]): Dizim[S] = new Dizim(d.toArray(delil))
+    def eşleme[A, D](implicit delil: T <:< (A, D)): Eşlem[A, D] = Eşlem.değişmezden(d.toMap)
     def eşleğe[A, D](implicit delil: T <:< (A, D)): Eşlek[A, D] = d.toMap
     def say(işlev: T => İkil): Sayı = d.count(işlev)
 
@@ -229,6 +236,13 @@ trait DiziYöntemleri extends TemelTürler {
     def diziye: Dizi[T] = d.toSeq
     def kümeye: Set[T] = d.toSet
     def yöneye: Vector[T] = d.toVector
+    // dizime/eşleme masaüstünde her sarmalayıcıda ayrı ayrı yazılı; burada
+    // Diz/Dizi'ye konuyor ve alt türler (Dizin, Yöney, Aralık, Yığın, Kuyruk,
+    // EsnekYazı, MiskinDizin) onları KALITIMLA alıyor -- Scala en özel örtük
+    // sınıfı seçtiği için belirsizlik olmuyor (bkz. araclar/kapsam.py'nin
+    // "+miras" sütunu).
+    def dizime[S >: T](implicit delil: scala.reflect.ClassTag[S]): Dizim[S] = new Dizim(d.toArray(delil))
+    def eşleme[A, D](implicit delil: T <:< (A, D)): Eşlem[A, D] = Eşlem.değişmezden(d.toMap)
     def eşleğe[A, D](implicit delil: T <:< (A, D)): Eşlek[A, D] = d.toMap
     def say(işlev: T => İkil): Sayı = d.count(işlev)
 

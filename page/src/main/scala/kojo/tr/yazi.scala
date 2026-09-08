@@ -8,7 +8,7 @@ package kojo.tr
  *  - `dizime` / `eşleme` masaüstünde Dizim/Eşlem sarmalayıcılarına dönüyor;
  *    onlar henüz portlanmadı, bu yüzden düz Array/Map döndürüyoruz.
  */
-trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri with HarfYöntemleri {
+trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri with HarfYöntemleri with DizimYöntemleri with EşlemYöntemleri {
   type EsnekYazı = collection.mutable.StringBuilder
 
   object Yazı {
@@ -103,6 +103,8 @@ trait YazıYöntemleri extends TemelTürler with BelkiYöntemleri with HarfYönt
     def diziye = y.toSeq
     def kümeye = y.toSet
     def yöneye = y.toVector
+    def dizime[S >: Harf](implicit delil: scala.reflect.ClassTag[S]): Dizim[S] = new Dizim(y.toArray(delil))
+    def eşleme[A, D](implicit delil: Harf <:< (A, D)): Eşlem[A, D] = Eşlem.değişmezden(y.toMap)
 
     def sayıyaBelki: Belki[Sayı] = y.toIntOption
     def kesireBelki: Belki[Kesir] = y.toDoubleOption

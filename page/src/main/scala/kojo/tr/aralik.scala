@@ -25,6 +25,24 @@ trait AralıkYöntemleri extends TemelTürler {
     def kesirdenAçık(ilki: Kesir, sonuncu: Kesir, adım: Kesir) = Range.BigDecimal(ilki, sonuncu, adım)
     def kesirdenKapalı(ilki: Kesir, sonuncu: Kesir, adım: Kesir) =
       Range.BigDecimal.inclusive(ilki, sonuncu, adım)
+
+    /**
+     * Öğrenci dostu gösterim: `Aralık(1, 4, 7)`, uzun aralıklarda kısaltılmış.
+     *
+     * `Aralık` bir tür takma adı olduğu için `toString` ezilemiyor; gösterim
+     * İKİ yerden geliyor ve ikisi de buraya bakıyor: `yazıya`/`yazı()` yöntemi
+     * (aşağıda) ve çıktı panelinin kendisi (`TurkishTurtle.paneleYaz`). Tek
+     * gövde, tek biçim -- masaüstündeki `Aralık.gösterim` ile aynı (kojo#46).
+     */
+    def gösterim(r: Range): Yazı = {
+      val gövde =
+        if (r.size <= 10) r.mkString("(", ", ", ")")
+        else {
+          val (b, s2) = (r.take(5), r.drop(r.size - 5))
+          b.mkString("(", ", ", " ...") + s2.mkString(" ", ", ", ")")
+        }
+      s"Aralık$gövde"
+    }
   }
 
   implicit class RangeMetotları(r: Range) {
@@ -40,15 +58,7 @@ trait AralıkYöntemleri extends TemelTürler {
     // Öğrenci dostu gösterim: toString ezilemez (Aralık artık tür takma adı),
     // ama bu yöntem eski çıktıyı verir.
     def yazı(): Yazı = yazıya
-    def yazıya: Yazı = {
-      val gövde =
-        if (r.size <= 10) r.mkString("(", ", ", ")")
-        else {
-          val (b, s2) = (r.take(5), r.drop(r.size - 5))
-          b.mkString("(", ", ", " ...") + s2.mkString(" ", ", ", ")")
-        }
-      s"Aralık$gövde"
-    }
+    def yazıya: Yazı = Aralık.gösterim(r)
     def adım(c: Sayı): Range = r by c
     def diziye = r.toSeq
     def dizine = r.toList

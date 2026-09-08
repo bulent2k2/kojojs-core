@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
  * (`tahta(x)(y) = değer` böyle çalışıyor) betikler o satırlara Türkçe
  * yöntemlerle erişiyor -- `tahta(x).diziye` gibi.
  */
-trait DizikYöntemleri extends TemelTürler with DizimYöntemleri {
+trait DizikYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYöntemleri {
 
   type Dizik[T] = Array[T]
   object Dizik {
@@ -86,6 +86,7 @@ trait DizikYöntemleri extends TemelTürler with DizimYöntemleri {
     def kümeye = d.toSet
     def yöneye = d.toVector
     def dizime[S >: T](implicit delil: ClassTag[S]): Dizim[S] = new Dizim(d.toArray(delil))
+    def eşleme[A, D](implicit delil: T <:< (A, D)): Eşlem[A, D] = Eşlem.değişmezden(d.toMap)
     def eşleğe[A, D](implicit delil: T <:< (A, D)): Eşlek[A, D] = d.toMap
     def say(işlev: T => İkil): Sayı = d.count(işlev)
     def dilim(nereden: Sayı, nereye: Sayı) = d.slice(nereden, nereye)
