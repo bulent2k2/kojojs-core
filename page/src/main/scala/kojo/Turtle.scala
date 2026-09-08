@@ -81,13 +81,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private var penWidth = 2d
   private var penColor = Color.red
-  private var fillColor: Color = _
+  // Dolgu artık düz renk DEĞİL Boya: gradyan ve dokuma da olabiliyor.
+  private var fillBoya: Boya = _
   private var penFontSize = 15
   private var penFontFamily: String = null
   private var penIsUp = false
   private var animationDelay = 1000l
   private val savedPosHe = new mutable.Stack[(PIXI.Point, Double)]
-  private val savedStyles = new mutable.Stack[(Color, Color, Double, Int, Boolean)]
+  private val savedStyles = new mutable.Stack[(Color, Boya, Double, Int, Boolean)]
 
   var commandQs = mutable.Queue.empty[Command] :: Nil
   private val pompa = new PompaDurumu
@@ -272,6 +273,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     sıraya(Dot(diameter))
   }
 
+  def setFillPaint(boya: Boya): Unit = {
+    sıraya(SetFillPaint(boya))
+  }
+
   def setFillColor(color: Color): Unit = {
     sıraya(SetFillColor(color))
   }
@@ -380,6 +385,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
         case SetPenThickness(t) => realSetPenThickness(t)
         case SetPenColor(c)     => realSetPenColor(c)
         case SetFillColor(c)    => realSetFillColor(c)
+        case SetFillPaint(b)    => realSetFillPaint(b)
         case SetPosition(x, y)  => realSetPosition(x, y)
         case ChangePosition(x, y) =>
           realSetPosition(turtleImage.position.x + x, turtleImage.position.y + y)
@@ -449,20 +455,22 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       turtlePath.endFill()
       // kalemin ve varsa kullanıcının açık boyamasının durumunu geri koy
       turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
-      if (fillColor != null) turtlePath.beginFill(fillColor.toRGBDouble, fillColor.alpha.get)
+      if (fillBoya != null) PixiUyum.boyamayaBaşla(turtlePath, fillBoya)(() => kojoWorld.render())
       turtlePathMoveTo(x, y)
       kojoWorld.render()
     }
     kojoWorld.scheduleLater(queueHandler)
   }
 
-  private def realSetFillColor(color0: Color): Unit = {
-    val color = if (color0 == null) noColor else color0
+  private def realSetFillColor(color0: Color): Unit =
+    realSetFillPaint(DüzBoya(if (color0 == null) noColor else color0))
+
+  private def realSetFillPaint(boya: Boya): Unit = {
     // start new path
     turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
     // set new fill
-    fillColor = color
-    turtlePath.beginFill(fillColor.toRGBDouble, fillColor.alpha.get)
+    fillBoya = boya
+    PixiUyum.boyamayaBaşla(turtlePath, fillBoya)(() => kojoWorld.render())
     kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -674,7 +682,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   }
 
   private def realSaveStyle(): Unit = {
-    savedStyles.push((penColor, fillColor, penWidth, penFontSize, penIsUp))
+    savedStyles.push((penColor, fillBoya, penWidth, penFontSize, penIsUp))
     kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -689,7 +697,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     pushQ()
     val (color, fill, width, fontSize, penWasUp) = savedStyles.pop()
     setPenColor(color)
-    setFillColor(fill)
+    setFillPaint(fill)
     setPenThickness(width)
     setPenFontSize(fontSize)
     if (penWasUp) penUp() else penDown()

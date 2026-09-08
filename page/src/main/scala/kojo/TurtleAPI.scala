@@ -16,6 +16,8 @@ trait TurtleAPI extends VertexShapeSupport {
   // yazı yüzü ailesi (CSS font-family); null = PIXI varsayılanı. Koco Yazıyüzü için.
   def setPenFontFamily(name: String): Unit = {}
   def setFillColor(color: Color): Unit
+  /** Gradyan ya da dokuma boyasıyla doldurur (Boya.DüzBoya de geçerli). */
+  def setFillPaint(boya: Boya): Unit
   def setPosition(x: Double, y: Double): Unit
   def setHeading(theta: Double): Unit
   def moveTo(x: Double, y: Double): Unit

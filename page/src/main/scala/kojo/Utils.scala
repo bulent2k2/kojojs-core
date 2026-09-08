@@ -185,7 +185,15 @@ object PixiUyum {
         // hiç görünmüyordu. Yüklemeyi dinleyip bir çizim istiyoruz.
         // (geometry.dirty != cacheDirty kaldığından tazele() gerekmiyor.)
         val bt = dyn(doku).baseTexture
-        if (!bt.valid.asInstanceOf[Boolean]) yüklemeyiBekle(bt, gr, yedek, tazeleyici)
+        if (!bt.valid.asInstanceOf[Boolean])
+          yüklemeyiBekle(bt)(
+            oldu = () => tazeleyici(),
+            olmadı = dosya => {
+              println(s"Uyarı: dokuma boyası yüklenemedi: $dosya -- düz renge dönülüyor")
+              düzBoyayaDön(gr, yedek)
+              tazeleyici()
+            }
+          )
         val ters = dyn(matris).clone().invert()
         parçalar(gr).foreach { gd =>
           gd.fillStyle.texture = doku.asInstanceOf[js.Any]
@@ -220,34 +228,25 @@ object PixiUyum {
    * "error" kapanışı (ya da tersi) önbellekteki BaseTexture üstünde sonsuza
    * dek kalıp gr ile tazeleyici'yi tutuyordu.
    */
-  private def yüklemeyiBekle(
-    bt: js.Dynamic,
-    gr: pixiscalajs.PIXI.Graphics,
-    yedek: kojo.doodle.Color,
-    tazeleyici: () => Unit
-  ): Unit = {
+  private def yüklemeyiBekle(bt: js.Dynamic)(oldu: () => Unit, olmadı: String => Unit): Unit = {
     val kaynak = bt.resource
     val dosya = {
       val u = kaynak.url
       if (js.isUndefined(u) || u == null) "(dosya adı bilinmiyor)" else u.toString
     }
-    def oldu(x: js.Any): Unit = tazeleyici()
-    def olmadı(x: js.Any): Unit = {
-      println(s"Uyarı: dokuma boyası yüklenemedi: $dosya -- düz renge dönülüyor")
-      düzBoyayaDön(gr, yedek)
-      tazeleyici()
-    }
+    def başarı(x: js.Any): Unit = oldu()
+    def başarısızlık(x: js.Any): Unit = olmadı(dosya)
     try {
       kaynak.load().applyDynamic("then")(
-        ((oldu _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any],
-        ((olmadı _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any]
+        ((başarı _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any],
+        ((başarısızlık _): js.Function1[js.Any, Unit]).asInstanceOf[js.Any]
       )
     }
     catch {
       // resource.load() olmayan bir kaynak türü: eski olay yoluna düş.
       case _: Throwable =>
-        bt.once("loaded", () => tazeleyici())
-        bt.once("error", () => olmadı(null))
+        bt.once("loaded", () => oldu())
+        bt.once("error", () => olmadı(dosya))
     }
   }
 
@@ -264,6 +263,83 @@ object PixiUyum {
     }
     boyayıKur(gr, yedek.toRGBDouble, yedek.alpha.get)
   }
+
+  /**
+   * Doku dolgusunu BAŞLATIR (kaplumbağa yolu için).
+   *
+   * boyayıKurBoya'dan farkı: orada şekil çizilmiş oluyor ve graphicsData
+   * üstündeki fillStyle değiştiriliyor; burada şekil daha çizilmedi, PIXI'nin
+   * kendi beginTextureFill'i kullanılıyor. Bunun bir sonucu var:
+   * beginTextureFill matrisin TERSİNİ kendisi alıyor (ölçüldü), yani buraya
+   * doğal (doku -> yerel) matrisi veriyoruz -- boyayıKurBoya'da elle ters
+   * aldığımızın tersine.
+   *
+   * PIXI 4'te beginTextureFill yok; orada yedek düz renge düşülüyor.
+   *
+   * Doku daha YÜKLENMEMİŞSE (DokumaBoya bir dosyadan geliyor) beginTextureFill'i
+   * hemen çağıramayız: validateBatching geçersiz dokulu TEK bir parça görünce
+   * Graphics'in tamamı için batch kurmuyor, ve kaplumbağanın bütün çizimi tek
+   * Graphics (turtlePath) olduğu için yükleme bitene dek daha önce çizilmiş her
+   * şey de kayboluyordu (ölçüldü: 8,5 sn boyunca sahne boş, #40 incelemesi).
+   * Çözüm: yedek renkle ama bu boyaya ÖZGÜ bir yer tutucu dokuyla başlıyoruz --
+   * Texture.WHITE'ın baseTexture'ından yeni bir Texture: geçerli (beyaz, renkle
+   * çarpılınca yedek renk) ama kimliği tek. beginTextureFill ve FillStyle.clone
+   * dokuyu referansla taşıdığından, yükleme bitince "texture eq yerTutucu" olan
+   * parçalar tam olarak bu boyayla çizilenlerdir; yalnız onlar dokuya çevrilir,
+   * başka boyaların parçalarına dokunulmaz. Yükleme başarısızsa parçalar zaten
+   * yedek renkte, yalnız uyarı basılır.
+   */
+  def boyamayaBaşla(gr: pixiscalajs.PIXI.Graphics, boya: Boya)(tazeleyici: () => Unit): Unit =
+    boya match {
+      case DüzBoya(renk) =>
+        gr.beginFill(renk.toRGBDouble, renk.alpha.get)
+      case DokuBoya(doku, matris, yedek) =>
+        if (!beşVeÜstü) gr.beginFill(yedek.toRGBDouble, yedek.alpha.get)
+        else {
+          val bt = dyn(doku).baseTexture
+          if (bt.valid.asInstanceOf[Boolean]) {
+            dyn(gr).beginTextureFill(js.Dynamic.literal(
+              texture = doku.asInstanceOf[js.Any],
+              matrix = matris.asInstanceOf[js.Any],
+              color = 0xffffff,
+              alpha = 1.0
+            ))
+          }
+          else {
+            val yerTutucu: js.Any =
+              js.Dynamic.newInstance(g.PIXI.Texture)(g.PIXI.Texture.WHITE.baseTexture)
+            dyn(gr).beginTextureFill(js.Dynamic.literal(
+              texture = yerTutucu,
+              matrix = null,
+              color = yedek.toRGBDouble,
+              alpha = yedek.alpha.get
+            ))
+            // fillStyle.matrix yerel -> doku yönünde tutulur (bkz. boyayıKurBoya);
+            // beginTextureFill bu tersi kendisi alıyordu, burada elle alıyoruz.
+            val ters = dyn(matris).clone().invert()
+            def dokuyaÇevir(fs: js.Dynamic): Unit =
+              if (fs.texture.asInstanceOf[js.Any] eq yerTutucu) {
+                fs.texture = doku.asInstanceOf[js.Any]
+                fs.matrix = ters.asInstanceOf[js.Any]
+                fs.color = 0xffffff
+                fs.alpha = 1.0
+              }
+            yüklemeyiBekle(bt)(
+              oldu = () => {
+                parçalar(gr).foreach(gd => dokuyaÇevir(gd.fillStyle))
+                // Şu anki boya hâlâ bu yer tutucuysa sonraki şekiller de dokuyla çizilsin.
+                dokuyaÇevir(dyn(gr)._fillStyle)
+                tazele(gr)
+                tazeleyici()
+              },
+              olmadı = dosya => {
+                println(s"Uyarı: dokuma boyası yüklenemedi: $dosya -- düz renkle kalıyor")
+                tazeleyici()
+              }
+            )
+          }
+        }
+    }
 
   /** Kalem rengi -- boyayıKur'un kalem karşılığı. */
   def kalemiKur(gr: pixiscalajs.PIXI.Graphics, renk: Double, saydamlık: Double): Unit = {
