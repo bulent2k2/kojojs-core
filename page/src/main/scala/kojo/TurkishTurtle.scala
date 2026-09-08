@@ -348,9 +348,23 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
    */
   private var açıkSatır: org.scalajs.dom.Element = null
 
+  /**
+   * Panele yazılacak metin. Neredeyse her şey için `String.valueOf`, ama
+   * `Aralık` için değil: `Aralık` bir tür takma adı olduğundan `toString`
+   * ezilemiyor ve Scala'nın kendi gösterimi çıkıyor -- "inexact Range 1 until
+   * 200 by 7". Öğrenci dostu biçim `Aralık.gösterim`de; `yazıya` da onu
+   * kullanıyor, yani iki yol aynı dizeyi veriyor. (Masaüstünde aynı iş metin
+   * üstünde düzenli deyişle yapılıyor -- orada değer değil çıktı metni var;
+   * bkz. kojo#46. Burada değerin kendisi elimizde, o yüzden daha basit.)
+   */
+  private def gösterimi(veri: Any): Yazı = veri match {
+    case r: Range => Aralık.gösterim(r)
+    case _        => String.valueOf(veri)
+  }
+
   private def paneleYaz(veri: Any, satırSonu: İkil): Birim = {
     val panel = document.getElementById("output")
-    val metin = String.valueOf(veri)
+    val metin = gösterimi(veri)
     if (panel == null) {
       if (satırSonu) println(metin) else print(metin)
     }
