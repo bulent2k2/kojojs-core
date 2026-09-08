@@ -33,6 +33,7 @@ trait DizikYöntemleri extends TemelTürler with DizimYöntemleri {
 
   /** Masaüstündeki `ArrayMethods` (kojo: lite/i18n/tr/dizik.scala). */
   implicit class DizikMetotları[T](d: Dizik[T]) {
+    type Belki[B] = Option[B]
     type Col = Dizik[T]
     type Eşlek[A, D] = collection.immutable.Map[A, D]
     def başı: T = d.head
@@ -96,7 +97,63 @@ trait DizikYöntemleri extends TemelTürler with DizimYöntemleri {
     def enUfağı[B](iş: T => B)(implicit karşılaştırma: math.Ordering[B]): T = d.minBy(iş)(karşılaştırma)
     def enİrisi[B >: T](implicit sıralama: math.Ordering[B]): T = d.max(sıralama)
     def enİrisi[B](iş: T => B)(implicit karşılaştırma: math.Ordering[B]): T = d.maxBy(iş)(karşılaştırma)
-  }
+  
+    // --- uçlar, arama --------------------------------------------------
+    // Dizik = Array: yöntemleri ArrayOps'tan geliyor, o yüzden küme
+    // ötekilerden biraz dar (ör. findLast, corresponds, indexOfSlice yok).
+    // Yeni bir dizik ÜRETEN yöntemler ClassTag ister; onu ayrıca alıyoruz.
+    def başıBelki: Belki[T] = d.headOption
+    def sonuBelki: Belki[T] = d.lastOption
+    def bul(deneme: T => İkil): Belki[T] = d.find(deneme)
+    def nerede(deneme: T => İkil): Sayı = d.indexWhere(deneme)
+    def nerede(deneme: T => İkil, başlamaNoktası: Sayı): Sayı = d.indexWhere(deneme, başlamaNoktası)
+    def neredeSondan(deneme: T => İkil): Sayı = d.lastIndexWhere(deneme)
+    def sıralar: Range = d.indices
+    def başındaMı[S >: T](dizi: Dizik[S]): İkil = d.startsWith(dizi)
+    def sonundaMı[S >: T](dizi: Dizik[S]): İkil = d.endsWith(dizi)
+
+    // --- bölme, öbekleme -----------------------------------------------
+    def böl(deneme: T => İkil)(implicit delil: ClassTag[T]): (Col, Col) = d.partition(deneme)
+    def bölİşle[A1: ClassTag, A2: ClassTag](işlev: T => Either[A1, A2]): (Dizik[A1], Dizik[A2]) = d.partitionMap(işlev)
+    def bölDoğruKaldıkça(deneme: T => İkil)(implicit delil: ClassTag[T]): (Col, Col) = d.span(deneme)
+    def bölYerinden(yeri: Sayı)(implicit delil: ClassTag[T]): (Col, Col) = d.splitAt(yeri)
+    def öbekli(boy: Sayı)(implicit delil: ClassTag[T]): Yineleyici[Col] = d.grouped(boy)
+    def kayarÖbekli(boy: Sayı)(implicit delil: ClassTag[T]): Yineleyici[Col] = d.sliding(boy)
+    def kayarÖbekli(boy: Sayı, adım: Sayı)(implicit delil: ClassTag[T]): Yineleyici[Col] = d.sliding(boy, adım)
+    def öbekleİşle[K, B: ClassTag](anahtar: T => K)(değer: T => B): Eşlek[K, Dizik[B]] = d.groupMap(anahtar)(değer)
+    def kombinasyonlar(ögeSayısı: Sayı)(implicit delil: ClassTag[T]): Yineleyici[Col] = d.combinations(ögeSayısı)
+    def permütasyonlar(implicit delil: ClassTag[T]): Yineleyici[Col] = d.permutations
+    def kuyruklar(implicit delil: ClassTag[T]): Yineleyici[Col] = d.tails
+    def önler(implicit delil: ClassTag[T]): Yineleyici[Col] = d.inits
+
+    // --- katlama, tarama -----------------------------------------------
+    def katla[S >: T](z: S)(işlev: (S, S) => S): S = d.fold(z)(işlev)
+    def tara[S >: T: ClassTag](z: S)(işlev: (S, S) => S): Dizik[S] = d.scan(z)(işlev)
+    def taraSoldan[B: ClassTag](z: B)(işlev: (B, T) => B): Dizik[B] = d.scanLeft(z)(işlev)
+    def taraSağdan[B: ClassTag](z: B)(işlev: (T, B) => B): Dizik[B] = d.scanRight(z)(işlev)
+
+    // --- ekleme, çıkarma -----------------------------------------------
+    def sonunaEkle[S >: T: ClassTag](öge: S): Dizik[S] = d.appended(öge)
+    def önüneEkle[S >: T: ClassTag](öge: S): Dizik[S] = d.prepended(öge)
+    def sonunaEkleHepsini[S >: T: ClassTag](öbürü: YinelenebilirBirKere[S]): Dizik[S] = d.appendedAll(öbürü)
+    def önüneEkleHepsini[S >: T: ClassTag](öbürü: YinelenebilirBirKere[S]): Dizik[S] = d.prependedAll(öbürü)
+    def uzat[S >: T: ClassTag](boy: Sayı, öge: S): Dizik[S] = d.padTo(boy, öge)
+    def yama[S >: T: ClassTag](nereden: Sayı, yenisi: YinelenebilirBirKere[S], kaçTane: Sayı): Dizik[S] =
+      d.patch(nereden, yenisi, kaçTane)
+    def fark[S >: T](öbürü: Dizi[S])(implicit delil: ClassTag[T]): Col = d.diff(öbürü)
+    def kesişim[S >: T](öbürü: Dizi[S])(implicit delil: ClassTag[T]): Col = d.intersect(öbürü)
+
+    // --- seçme, düzleştirme, ikili işlemler ----------------------------
+    def seçİşle[B: ClassTag](işlev: PartialFunction[T, B]): Dizik[B] = d.collect(işlev)
+    def seçİşleİlk[B](işlev: PartialFunction[T, B]): Belki[B] = d.collectFirst(işlev)
+    def düzleştir[B](implicit delil: T => YinelenebilirBirKere[B], delil2: ClassTag[B]): Dizik[B] = d.flatten(delil, delil2)
+    def devrik[B](implicit delil: T => Dizik[B], delil2: ClassTag[B]): Dizik[Dizik[B]] = d.transpose(delil)
+    def ikiliyiAç[A1, A2](implicit delil: T => (A1, A2), d1: ClassTag[A1], d2: ClassTag[A2]): (Dizik[A1], Dizik[A2]) =
+      d.unzip(delil, d1, d2)
+    def ikileHepsini[B, S >: T: ClassTag](öbürü: Yinelenebilir[B], buDolgu: S, oDolgu: B): Dizik[(S, B)] =
+      d.zipAll(öbürü, buDolgu, oDolgu)
+    def tersİşle[B: ClassTag](işlev: T => B)(implicit delil: ClassTag[T]): Dizik[B] = d.reverse.map(işlev)
+}
 
   type EsnekDizik[T] = ArrayBuffer[T]
   object EsnekDizik {
