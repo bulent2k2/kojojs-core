@@ -253,6 +253,8 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def saydamlığınıKur(oran: Kesir): Birim = r.setOpacity(oran)
     def kalemRenginiKur(renk: Renk): Birim = r.setPenColor(renk)
     def boyamaRenginiKur(renk: Renk): Birim = r.setFillColor(renk)
+    /** Gradyan ya da dokuma boyası (resim üstünde). */
+    def boyamaRenginiKur(boya: Boya): Birim = r.setFillPaint(boya)
     def kalemKalınlığınıKur(k: Kesir): Birim = r.setPenThickness(k)
 
     // yeni resim döndüren dönüşümler (zincirlenebilir)

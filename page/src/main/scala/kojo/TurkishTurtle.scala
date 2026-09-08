@@ -229,6 +229,15 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def kalemiKaldır(): Birim = englishTurtle.penUp()
   def kalemRenginiKur(renk: Renk): Birim = englishTurtle.setPenColor(renk)
   def boyamaRenginiKur(renk: Renk): Birim = englishTurtle.setFillColor(renk)
+  /**
+   * Gradyan ya da dokuma boyasıyla doldurur (Renk.doğrusalDeğişim, DokumaBoya, ...).
+   *
+   * DİKKAT: Boyanın koordinatları (gradyanın x1,y1 / x2,y2'si, merkezi, dokumanın
+   * köşesi) burada TUVAL koordinatlarıdır -- kaplumbağa doğrudan tuvale çizer.
+   * Resim dönüştürücüsü `boyaRengi(boya)`'da ise aynı sayılar resmin YEREL
+   * koordinatlarıdır.
+   */
+  def boyamaRenginiKur(boya: Boya): Birim = englishTurtle.setFillPaint(boya)
   def kalemKalınlığınıKur(n: Kesir): Birim = englishTurtle.setPenThickness(n)
   def kalemİnikMi: İkil = englishTurtle.penIsDown
 

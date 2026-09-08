@@ -10,6 +10,8 @@ case class SetAnimationDelay(delay: Long) extends Command
 case class SetPenThickness(t: Double) extends Command
 case class SetPenColor(color: Color) extends Command
 case class SetFillColor(color: Color) extends Command
+// Gradyan / dokuma boyası. Ayrı komut: SetFillColor'ın Color imzası korunuyor.
+case class SetFillPaint(boya: Boya) extends Command
 case class Hop(n: Double) extends Command
 case class SetPosition(x: Double, y: Double) extends Command
 // Göreli sıçrama (masaüstü changePosition). Kuyrukta durması şart: geçerli
