@@ -123,7 +123,9 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       kojoWorld.addLayer(turtleLayer)
     }
     turtleImage = loadTurtle(x, y, loader)
-    turtleImage.name = "Turtle Icon"
+    // Ad BakePolicy'de: KojoWorldImpl.kaplumbağaKatmanıMı gerçek kaplumbağayı
+    // Picture{} katmanlarından bu çocuğa bakarak ayırıyor (öneAl'ın hedef sırası).
+    turtleImage.name = BakePolicy.turtleIconName
 
     turtlePath.name = "Turtle Path"
     turtleLayer.addChild(turtlePath)
