@@ -5,7 +5,9 @@ package kojo.tr
  *  - `Eşlek` : değişmez Map (collection.immutable.Map) -- uzantı metotlarıyla
  *  - `Eşlem` : değişebilir Map sarmalayıcısı (ekle/çıkar yapılabilen)
  */
-trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri with DizimYöntemleri {
+// YinelenebilirYöntemleri EN ALTTA: Küme ve Dizi trait'leri de bunu genişletiyor,
+// yani her özgül sarmalayıcı Yinelenebilir sarmalayıcısını yeniyor (belirsizlik yok).
+trait EşlemYöntemleri extends YinelenebilirYöntemleri with BelkiYöntemleri {
   type Eşlek[A, D] = collection.immutable.Map[A, D]
 
   object Eşlek {
@@ -108,7 +110,9 @@ trait EşlemYöntemleri extends TemelTürler with BelkiYöntemleri with DizimYö
   def çıkar(anahtar: A): Belki[D] = m.remove(anahtar)
   def eleYerinde(deneme: ((A, D)) => İkil): this.type = { m.filterInPlace((a, d) => deneme((a, d))); this }
   def değerleriİşleYerinde(işlev: (A, D) => D): this.type = { m.mapValuesInPlace(işlev); this }
-  def hepsiniEkle(ikililer: YinelenebilirBirKere[(A, D)]): this.type = { m.addAll(ikililer); this }
+  def ekleHepsini(ikililer: YinelenebilirBirKere[(A, D)]): this.type = { m.addAll(ikililer); this }
+  @deprecated("eylemle başlayan ada geçildi: ekleHepsini kullanın", "Eylül 2026")
+  def hepsiniEkle(ikililer: YinelenebilirBirKere[(A, D)]): this.type = ekleHepsini(ikililer)
   def çıkarHepsini(anahtarlar: YinelenebilirBirKere[A]): this.type = { m.subtractAll(anahtarlar); this }
   def boşalt(): Birim = m.clear()
 

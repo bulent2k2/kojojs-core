@@ -48,6 +48,7 @@ trait KümeYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYö
     def düşürDoğruKaldıkça(deneme: T => İkil): Col = d.dropWhile(deneme)
     def düşürSağdan(n: Sayı): Col = d.dropRight(n)
 
+    def yineleyici: Yineleyici[T] = d.iterator
     def dizine = d.toList
     def diziye = d.toSeq
     def kümeye = d.toSet

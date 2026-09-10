@@ -50,6 +50,19 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   with RichTurtleCommands {
   private[kojo] val turtleLayer = new PIXI.Container()
   private var turtleImage: PIXI.Container = _
+  // Boyama AYRI bir yolda. Neden: PIXI 5'te her render yarım kalan çokgeni
+  // finishPoly() ile olduğu yerde kapatıyor; kaplumbağa şekli kenar kenar
+  // kurduğu ve canlandırma açıkken her kenar ayrı kareye düştüğü için dolgu
+  // hiç oluşmuyordu (bkz. BoyamaYolu). Burada şekil her seferinde TAMAMLANMIŞ
+  // bir drawPolygon olarak yayınlanıyor -- onu render kesemiyor.
+  // İKİ katman gerekiyor: `boyamaBitmiş` tamamlanmış çokgenleri biriktiriyor
+  // (silinmiyor), `boyamaYolu` yalnız O ANDA çizilmekte olan şekli gösteriyor
+  // ve her köşede yeniden yayınlanıyor. Tek katmanla, her güncellemedeki
+  // clear() önceki kareleri de siliyordu (ölçüldü: 16 kareden yalnız sonuncusu
+  // kalıyordu, o da moveTo ile sıfırlandığı için hiçbiri görünmüyordu).
+  private[kojo] val boyamaBitmiş = new PIXI.Graphics()
+  private[kojo] val boyamaYolu = new PIXI.Graphics()
+  private val boyamaÇokgeni = new BoyamaYolu
   private[kojo] val turtlePath = new PIXI.Graphics()
   private[kojo] val turtlePathPoints = ArrayBuffer[(Double, Double)]()
   var prevMoveTo: Option[Point] = None
@@ -59,6 +72,9 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private var sonYolY = y
 
   private def turtlePathMoveTo(x: Double, y: Double): Unit = {
+    boyamayıİşle() // kalem kalkık taşınma çokgeni bitiriyor
+    boyamaÇokgeni.taşındı(x, y)
+    boyamayıTazele()
     turtlePath.moveTo(x, y)
     sonYolX = x; sonYolY = y
     prevMoveTo = Some(Point(x, y))
@@ -75,6 +91,38 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtlePath.lineTo(x, y)
     sonYolX = x; sonYolY = y
     turtlePathPoints += ((x, y))
+    boyamaÇokgeni.çizildi(x, y)
+    boyamayıTazele()
+  }
+
+  /**
+   * Boyama çokgenini yeniden yayınlar.
+   *
+   * Her kenarda bütün çokgeni yeniden çizmek pahalı görünüyor ama nokta listesi
+   * boya değişince ve kalem kalkık taşınmada sıfırlanıyor, yani n tek bir şeklin
+   * köşe sayısı -- kare için 5. Şeklin TAMAMINI tek seferde yayınlamak, yarım
+   * yolu renderın kesmesine karşı tek güvenilir yol.
+   */
+  /** O anki çokgen bittiyse kalıcı katmana yaz -- sonraki clear() onu silmesin. */
+  private def boyamayıİşle(): Unit = {
+    if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
+      boyamaBitmiş.lineStyle(0, 0, 0)
+      PixiUyum.boyamayaBaşla(boyamaBitmiş, fillBoya)(() => kojoWorld.render())
+      boyamaBitmiş.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      boyamaBitmiş.endFill()
+      PixiUyum.tazele(boyamaBitmiş)
+    }
+  }
+
+  private def boyamayıTazele(): Unit = {
+    boyamaYolu.clear()
+    if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
+      boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
+      PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
+      boyamaYolu.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      boyamaYolu.endFill()
+    }
+    PixiUyum.tazele(boyamaYolu)
   }
 
   private val tempForwardPath = new PIXI.Graphics()
@@ -127,6 +175,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // Picture{} katmanlarından bu çocuğa bakarak ayırıyor (öneAl'ın hedef sırası).
     turtleImage.name = BakePolicy.turtleIconName
 
+    boyamaBitmiş.name = "Turtle Fill (done)"
+    boyamaYolu.name = "Turtle Fill (in progress)"
+    turtleLayer.addChild(boyamaBitmiş) // önce: kalem izi üstte kalsın
+    turtleLayer.addChild(boyamaYolu)
     turtlePath.name = "Turtle Path"
     turtleLayer.addChild(turtlePath)
     if (!forPic) {
@@ -471,8 +523,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // start new path
     turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
     // set new fill
+    boyamayıİşle() // biten çokgen ESKİ boyasıyla kalıcıya yazılsın
     fillBoya = boya
-    PixiUyum.boyamayaBaşla(turtlePath, fillBoya)(() => kojoWorld.render())
+    // turtlePath'e beginFill YAPMIYORUZ: dolgu artık boyamaYolu'nun işi.
+    // Eskiden buradaki beginFill yarım bir çokgen açıyordu ve ilk render onu
+    // kesiyordu -- şeklin dolması yalnız gecikme 0 iken (bütün kenarlar tek
+    // blokta) rastlantıyla çalışıyordu.
+    boyamaÇokgeni.boyaKuruldu(turtleImage.position.x, turtleImage.position.y)
+    boyamayıTazele()
     kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -710,6 +768,9 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private def realClear(): Unit = {
     turtlePath.clear()
     turtlePathPoints.clear()
+    boyamaYolu.clear()
+    boyamaBitmiş.clear()
+    boyamaÇokgeni.temizle()
     initTurtleLayer()
     kojoWorld.render()
     kojoWorld.scheduleLater(queueHandler)

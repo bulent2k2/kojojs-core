@@ -34,6 +34,7 @@ trait DiziYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYön
     // Dizi.apply ile aynı gerekçe ve aynı ölçüm: sınır denetimi + masaüstüyle
     // aynı yazdırma. (List bir collection.Seq'tir.)
     def apply[B](ögeler: B*): Diz[B] = List.from(ögeler)
+    def boş[B]: Diz[B] = collection.Seq.empty[B]
     def unapplySeq[B](dizi: Diz[B]) = collection.Seq.unapplySeq(dizi)
     def doldur[B](n1: Sayı)(f: Sayı => B) = Seq.tabulate(n1)(f)
   }
@@ -89,6 +90,8 @@ trait DiziYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYön
     def sırası[S >: T](öge: S): Sayı = d.indexOf(öge)
     def sırasıSondan[S >: T](öge: S): Sayı = d.lastIndexOf(öge)
 
+    // Yineleyici'ye giriş (sözlükte iterator -> yineleyici yazıyordu, açık değildi)
+    def yineleyici: Yineleyici[T] = d.iterator
     def dizine: Dizin[T] = d.toList
     def diziye: Dizi[T] = d.toSeq
     def kümeye: Set[T] = d.toSet
@@ -327,11 +330,117 @@ trait DiziYöntemleri extends TemelTürler with DizimYöntemleri with EşlemYön
     def tersİşle[B](işlev: T => B): C2[B] = d.reverse.map(işlev)
 }
 
+  /**
+   * Yineleyici (Iterator) -- ögeleri BİR KEZ, baştan sona gezdiren şey.
+   *
+   * öbekli, kayarÖbekli, kombinasyonlar, permütasyonlar, kuyruklar, önler...
+   * hepsi Yineleyici veriyor. Eskiden burada yalnız beş yöntem vardı, öğrenci
+   * tam orada İngilizceye düşüyordu (toList). Masaüstüyle aynı takım artık.
+   *
+   * ÖNEMLİ: Yineleyici tek kullanımlıktır; buradaki yöntemlerin çoğu onu
+   * TÜKETİR. İki kez gezmek gerekiyorsa ikizYap ile çoğalt ya da önce
+   * dizine/diziye ile bir topluluğa çevir.
+   */
   implicit class YineleyiciMetotları[T](d: Yineleyici[T]) {
+    type Belki[B] = Option[B]
+    type Eşlek[A, D] = collection.immutable.Map[A, D]
+
+    // --- çekirdek: elle gezmek ------------------------------------------
+    def dahaVarMı: İkil = d.hasNext
+    def sıradaki: T = d.next()
+
+    // --- eleme ve işleme (yineleyici TÜKENİR) ----------------------------
+    def ele(deneme: T => İkil): Yineleyici[T] = d.filter(deneme)
+    def eleDeğilse(deneme: T => İkil): Yineleyici[T] = d.filterNot(deneme)
     def işle[B](işlev: T => B): Yineleyici[B] = d.map(işlev)
+    def düzİşle[B](işlev: T => YinelenebilirBirKere[B]): Yineleyici[B] = d.flatMap(işlev)
+    def düzleştir[B](implicit delil: T => YinelenebilirBirKere[B]): Yineleyici[B] = d.flatten(delil)
+    def seçİşle[B](işlev: PartialFunction[T, B]): Yineleyici[B] = d.collect(işlev)
+    def seçİşleİlk[B](işlev: PartialFunction[T, B]): Belki[B] = d.collectFirst(işlev)
     def herbiriİçin[B](işlev: T => B): Birim = d.foreach(işlev)
+
+    // --- arama ------------------------------------------------------------
+    def bul(deneme: T => İkil): Belki[T] = d.find(deneme)
+    def varMı(deneme: T => İkil): İkil = d.exists(deneme)
+    def hepsiDoğruMu(deneme: T => İkil): İkil = d.forall(deneme)
+    def hepsiİçinDoğruMu(deneme: T => İkil): İkil = d.forall(deneme)
+    def say(deneme: T => İkil): Sayı = d.count(deneme)
+    def içeriyorMu(öge: Her): İkil = d.contains(öge)
+    def sırası[S >: T](öge: S): Sayı = d.indexOf(öge)
+    def nerede(deneme: T => İkil): Sayı = d.indexWhere(deneme)
+    def karşılıklıMı[S](öbürü: YinelenebilirBirKere[S])(deneme: (T, S) => İkil): İkil =
+      d.corresponds(öbürü)(deneme)
+    def gösterdikleriAynıMı[S >: T](öbürü: YinelenebilirBirKere[S]): İkil = d.sameElements(öbürü)
+
+    // --- kesip biçme ------------------------------------------------------
+    def al(kaçTane: Sayı): Yineleyici[T] = d.take(kaçTane)
+    def alDoğruKaldıkça(deneme: T => İkil): Yineleyici[T] = d.takeWhile(deneme)
+    def düşür(kaçTane: Sayı): Yineleyici[T] = d.drop(kaçTane)
+    def düşürDoğruKaldıkça(deneme: T => İkil): Yineleyici[T] = d.dropWhile(deneme)
+    def dilim(nereden: Sayı, nereye: Sayı): Yineleyici[T] = d.slice(nereden, nereye)
+    def böl(deneme: T => İkil): (Yineleyici[T], Yineleyici[T]) = d.partition(deneme)
+    def bölDoğruKaldıkça(deneme: T => İkil): (Yineleyici[T], Yineleyici[T]) = d.span(deneme)
+    def öbekli(boy: Sayı): Yineleyici[Dizi[T]] = d.grouped(boy).map(_.toSeq)
+    def kayarÖbekli(boy: Sayı): Yineleyici[Dizi[T]] = d.sliding(boy).map(_.toSeq)
+    def kayarÖbekli(boy: Sayı, adım: Sayı): Yineleyici[Dizi[T]] = d.sliding(boy, adım).map(_.toSeq)
+    def yinelemesiz: Yineleyici[T] = d.distinct
+    def yinelemesizİşlevle[B](işlev: T => B): Yineleyici[T] = d.distinctBy(işlev)
+
+    // --- birleştirme ------------------------------------------------------
+    def bileşim[S >: T](öbürü: YinelenebilirBirKere[S]): Yineleyici[S] = d.concat(öbürü)
+    def uzat[S >: T](boy: Sayı, öge: S): Yineleyici[S] = d.padTo(boy, öge)
+    def yama[S >: T](nereden: Sayı, yenisi: Yineleyici[S], kaçTane: Sayı): Yineleyici[S] =
+      d.patch(nereden, yenisi, kaçTane)
+    def ikile[S](öbürü: YinelenebilirBirKere[S]): Yineleyici[(T, S)] = d.zip(öbürü)
+    def ikileHepsini[S >: T, B](öbürü: Yineleyici[B], buDolgu: S, oDolgu: B): Yineleyici[(S, B)] =
+      d.zipAll(öbürü, buDolgu, oDolgu)
+    def ikileSırayla: Yineleyici[(T, Sayı)] = d.zipWithIndex
+
+    // --- katlama ve indirgeme (tüketir) ----------------------------------
+    def indirge[S >: T](işlem: (S, S) => S): S = d.reduce(işlem)
+    def indirgeBelki[S >: T](işlem: (S, S) => S): Belki[S] = d.reduceOption(işlem)
+    def indirgeSoldan[S >: T](işlem: (S, T) => S): S = d.reduceLeft(işlem)
+    def indirgeSağdan[S >: T](işlem: (T, S) => S): S = d.reduceRight(işlem)
+    def katla[S >: T](başlangıç: S)(işlem: (S, S) => S): S = d.fold(başlangıç)(işlem)
+    def soldanKatla[B](başlangıç: B)(işlem: (B, T) => B): B = d.foldLeft(başlangıç)(işlem)
+    def sağdanKatla[B](başlangıç: B)(işlem: (T, B) => B): B = d.foldRight(başlangıç)(işlem)
+    def taraSoldan[B](başlangıç: B)(işlem: (B, T) => B): Yineleyici[B] = d.scanLeft(başlangıç)(işlem)
+    def topla[S >: T](implicit sayısal: Numeric[S]): S = d.sum(sayısal)
+    def çarp[S >: T](implicit sayısal: Numeric[S]): S = d.product(sayısal)
+    def enUfağı[S >: T](implicit sıralama: Ordering[S]): T = d.min(sıralama)
+    def enİrisi[S >: T](implicit sıralama: Ordering[S]): T = d.max(sıralama)
+    def enUfağıBelki[S >: T](implicit sıralama: Ordering[S]): Belki[T] = d.minOption(sıralama)
+    def enİrisiBelki[S >: T](implicit sıralama: Ordering[S]): Belki[T] = d.maxOption(sıralama)
+    def enUfağı[B](iş: T => B)(implicit karşılaştırma: Ordering[B]): T = d.minBy(iş)(karşılaştırma)
+    def enİrisi[B](iş: T => B)(implicit karşılaştırma: Ordering[B]): T = d.maxBy(iş)(karşılaştırma)
+    def enUfağıBelki[B](iş: T => B)(implicit karşılaştırma: Ordering[B]): Belki[T] = d.minByOption(iş)(karşılaştırma)
+    def enİrisiBelki[B](iş: T => B)(implicit karşılaştırma: Ordering[B]): Belki[T] = d.maxByOption(iş)(karşılaştırma)
+    def indirgeSoldanBelki[S >: T](işlem: (S, T) => S): Belki[S] = d.reduceLeftOption(işlem)
+    def indirgeSağdanBelki[S >: T](işlem: (T, S) => S): Belki[S] = d.reduceRightOption(işlem)
+    def taraSağdan[B](başlangıç: B)(işlem: (T, B) => B): Yineleyici[B] = d.scanRight(başlangıç)(işlem)
+    def bölYerinden(yeri: Sayı): (Yineleyici[T], Yineleyici[T]) = d.splitAt(yeri)
+    // sıradaki'nin hata vermeyen biçimi (başıBelki/sonuBelki ile aynı kalıp)
+    def sıradakiBelki: Belki[T] = d.nextOption()
+
+    // --- boyut ve boşluk --------------------------------------------------
+    // DİKKAT: boyu yineleyiciyi TÜKETİR.
+    def boyu: Sayı = d.length
+    def boşMu: İkil = d.isEmpty
+    def doluMu: İkil = d.nonEmpty
+
+    // --- çoğaltma ve önden bakma -----------------------------------------
+    def ikizYap: (Yineleyici[T], Yineleyici[T]) = d.duplicate
+    def bellekli: collection.BufferedIterator[T] = d.buffered
+
+    // --- topluluğa çevirme ------------------------------------------------
     def dizine: Dizin[T] = d.toList
     def diziye: Dizi[T] = d.toSeq
-    def boyu: Sayı = d.size
+    def kümeye: Set[T] = d.toSet
+    def yöneye: Vector[T] = d.toVector
+    def dizime[S >: T](implicit delil: scala.reflect.ClassTag[S]): Dizim[S] = new Dizim(d.toArray(delil))
+    def eşleğe[A, D](implicit delil: T <:< (A, D)): Eşlek[A, D] = d.toMap
+    def yazıYap: Yazı = d.mkString
+    def yazıYap(ara: Yazı): Yazı = d.mkString(ara)
+    def yazıYap(başı: Yazı, ara: Yazı, sonu: Yazı): Yazı = d.mkString(başı, ara, sonu)
   }
 }
