@@ -21,6 +21,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
     extends kojo.tr.SayıYöntemleri
     with kojo.tr.MatematikYöntemleri
     with kojo.tr.BelkiYöntemleri
+    with kojo.tr.İkisindenBiriYöntemleri
     with kojo.tr.BölümselİşlevYöntemleri
     with kojo.tr.YazıYöntemleri
     with kojo.tr.HarfYöntemleri
