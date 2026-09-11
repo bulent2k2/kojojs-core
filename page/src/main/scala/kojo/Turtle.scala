@@ -47,7 +47,8 @@ private[kojo] class PompaDurumu {
 
 class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = null)(implicit kojoWorld: KojoWorld)
   extends TurtleAPI
-  with RichTurtleCommands {
+  with RichTurtleCommands
+  with Boyacı {
   private[kojo] val turtleLayer = new PIXI.Container()
   private var turtleImage: PIXI.Container = _
   // Boyama AYRI bir yolda. Neden: PIXI 5'te her render yarım kalan çokgeni
@@ -74,7 +75,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private def turtlePathMoveTo(x: Double, y: Double): Unit = {
     boyamayıİşle() // kalem kalkık taşınma çokgeni bitiriyor
     boyamaÇokgeni.taşındı(x, y)
-    boyamayıTazele()
+    boyamayıKirlet()
     turtlePath.moveTo(x, y)
     sonYolX = x; sonYolY = y
     prevMoveTo = Some(Point(x, y))
@@ -92,7 +93,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     sonYolX = x; sonYolY = y
     turtlePathPoints += ((x, y))
     boyamaÇokgeni.çizildi(x, y)
-    boyamayıTazele()
+    boyamayıKirlet()
   }
 
   /**
@@ -108,21 +109,66 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
       boyamaBitmiş.lineStyle(0, 0, 0)
       PixiUyum.boyamayaBaşla(boyamaBitmiş, fillBoya)(() => kojoWorld.render())
-      boyamaBitmiş.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      üçgenleriÇiz(boyamaBitmiş) // kalıcı katman da aynı sarım kuralını kullanmalı
       boyamaBitmiş.endFill()
       PixiUyum.tazele(boyamaBitmiş)
     }
   }
 
-  private def boyamayıTazele(): Unit = {
+  /**
+   * Dolgu bayatladı. Yayını YAPMIYOR, yalnız sıraya koyuyor: gerçek
+   * `drawPolygon` render'dan hemen önce, kare başına bir kez çalışıyor
+   * (bkz. Boyacı ve KojoWorld.boyalarıBoşalt).
+   *
+   * Eskiden burada doğrudan yayın vardı ve bu yöntem HER KENARDA çağrıldığı
+   * için n kenarlı bir şekil n kez üçgenleniyordu -- oysa çokHızlı'da bütün
+   * kenarlar tek render'a düşüyor. Ölçüldü (tan-theta, 241 nokta): 241 yayın,
+   * 1 render.
+   */
+  private def boyamayıKirlet(): Unit = kojoWorld.boyaKirlendi(this)
+
+  /**
+   * Bekleyen dolguyu şimdi yayınla. Şekil her zaman TAMAMLANMIŞ olarak
+   * (`drawPolygon`) yayınlanıyor -- bu kural değişmedi, yalnız kaç kez
+   * yayınlandığı değişti. İdempotent: `clear()` ile başlıyor.
+   */
+  private[kojo] def boyayıYayınla(): Unit = {
     boyamaYolu.clear()
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
       boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
       PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
-      boyamaYolu.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      üçgenleriÇiz(boyamaYolu)
       boyamaYolu.endFill()
     }
     PixiUyum.tazele(boyamaYolu)
+  }
+
+  /**
+   * Dolgu çokgenini NON_ZERO ile üçgenleyip PIXI'ye verir.
+   *
+   * NEDEN ÜÇGEN ÜÇGEN: PIXI'ye tek bir çokgen verirsek onu earcut üçgenliyor
+   * ve earcut BASİT (kendini kesmeyen) çokgen varsayıyor -- masaüstü ise
+   * `Path2D.Double` + `fill`, yani NON_ZERO. Kendini kesen yollarda iki taraf
+   * farklı şekil çiziyordu (bkz. Ucgenleyici, oneri-kesisen-dolgu.md).
+   *
+   * Ölçüldü: üçgen başına `drawPolygon` tek bir Mesh'ten ucuz kuruluyor
+   * (0.275 ms / 0.56 ms) ve daha hızlı render oluyor; doku ve gradyan dolgusu
+   * üçgen sınırlarını aşarak SÜREKLİ eşleniyor, çünkü doku dolgusu dünya
+   * uzayında, şekil başına değil.
+   */
+  private def üçgenleriÇiz(gr: PIXI.Graphics): Unit = {
+    if (!Üçgenleyici.kullanılabilir) {
+      // Kütüphane sayfada yok. Çökmek yerine eski davranışa düşüyoruz: kendini
+      // kesen yollar yanlış dolar ama öteki her şey yaşar. Konsola hata basıldı.
+      gr.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      return
+    }
+    val ü = Üçgenleyici.nonzero(boyamaÇokgeni.düzDizi)
+    var i = 0
+    while (i + 5 < ü.length) {
+      gr.drawPolygon(scala.scalajs.js.Array(ü(i), ü(i + 1), ü(i + 2), ü(i + 3), ü(i + 4), ü(i + 5)))
+      i += 6
+    }
   }
 
   private val tempForwardPath = new PIXI.Graphics()
@@ -530,7 +576,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // kesiyordu -- şeklin dolması yalnız gecikme 0 iken (bütün kenarlar tek
     // blokta) rastlantıyla çalışıyordu.
     boyamaÇokgeni.boyaKuruldu(turtleImage.position.x, turtleImage.position.y)
-    boyamayıTazele()
+    boyamayıKirlet()
     kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -771,6 +817,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     boyamaYolu.clear()
     boyamaBitmiş.clear()
     boyamaÇokgeni.temizle()
+    kojoWorld.bekleyenBoyayıUnut(this) // KENDİ yolunu sildi; ötekilerinki dursun
     initTurtleLayer()
     kojoWorld.render()
     kojoWorld.scheduleLater(queueHandler)

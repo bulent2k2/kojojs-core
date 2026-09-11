@@ -22,10 +22,55 @@ trait KojoWorld {
   def scheduleLater(fn: => Unit): Unit
   def runLater(ms: Double)(fn: => Unit): Unit
   def render(): Unit
+
+  // --- Bekleyen dolgular (tembel üçgenleme) ---------------------------------
+  //
+  // Kaplumbağa her kenarda dolgu çokgeninin TAMAMINI yeniden yayınlıyordu.
+  // Şeklin tamamlanmış yayınlanması gerekiyor (bkz. BoyamaYolu), ama her
+  // KENARDA yayınlanması gerekmiyor: render zaten bir requestAnimationFrame'e
+  // toplanıyor, yani n kenar tek render'a düşüyor ve n-1 üçgenleme çöpe
+  // gidiyor. Burada kirli çizerler biriktiriliyor; gerçek yayın render'dan
+  // hemen önce, çizer başına bir kez yapılıyor.
+  //
+  // LinkedHashSet: aynı çizer kaç kez kirlenirse kirlensin bir kez yayınlanır
+  // (asıl kazanç bu), ve kirlenme sırası korunur -- katman sırası önemli.
+  private val bekleyenBoyacılar = scala.collection.mutable.LinkedHashSet.empty[Boyacı]
+
+  /** Çizerin dolgusu bayatladı: sıraya al ve bir render iste. */
+  private[kojo] def boyaKirlendi(b: Boyacı): Unit = {
+    bekleyenBoyacılar += b
+    render()
+  }
+
+  /**
+   * Bekleyen dolguları yayınla. GERÇEK render'dan hemen önce çağrılmalı --
+   * `KojoWorldImpl.flushRender` bunu yapıyor. Sınamalarda, gerçek bir
+   * render'ın gireceği yerde elle çağrılıyor.
+   */
+  private[kojo] def boyalarıBoşalt(): Unit =
+    if (bekleyenBoyacılar.nonEmpty) {
+      // Yayın sırasında yeniden kirlenme olabilir; önce kopyala ve boşalt ki
+      // o kirlenme SONRAKİ kareye kalsın, burada sonsuz döngü olmasın.
+      val sıra = bekleyenBoyacılar.toList
+      bekleyenBoyacılar.clear()
+      sıra.foreach(_.boyayıYayınla())
+    }
+
+  /**
+   * BU çizerin bekleyen dolgusunu düşür -- kendi yolunu sildiği için.
+   *
+   * Çizer başına: küresel bir düşürme, dolgusu duran BAŞKA bir çizerin
+   * boyasını sessizce yok ediyordu (A'nın bekleyeni, B `sil()` deyince
+   * düşüyordu). Yayın istekliyken böyle bir pencere yoktu; tembelleşince
+   * açıldı.
+   */
+  private[kojo] def bekleyenBoyayıUnut(b: Boyacı): Unit = bekleyenBoyacılar -= b
   def moveToFront(obj: PIXI.DisplayObject): Unit
   def moveToBack(obj: PIXI.DisplayObject): Unit
 
   def setBackground(color: Color): Unit
+  def setBackgroundH(c1: Color, c2: Color): Unit
+  def setBackgroundV(c1: Color, c2: Color): Unit
   def frameDeltaTime: Double
   def frameCounter: Long
   def animate(fn: => Unit): Unit
@@ -494,6 +539,12 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def erasePictures(): Unit = {
+    // Bekleyen dolguları BİLEREK düşürmüyoruz. Bu yöntem "Turtle Layer" adlı
+    // çocukları silmiyor (aşağıya bak), yani hayatta kalan katmanlar tam
+    // olarak Boyacıların katmanları -- burada düşürmek, duran bir kaplumbağanın
+    // boyasını sessizce yok etmek olurdu. Katmanı gerçekten silinen bir çizer
+    // (bir resmin içindeki kaplumbağa) kalan yayınını kopmuş bir Graphics'e
+    // yapar; zararsız.
     resetBake() // pişmiş boyayı da temizle (yoksa dokuda hayalet kalır)
     val children = stage.children.toBuffer
     children.foreach { c =>
@@ -549,6 +600,9 @@ class KojoWorldImpl extends KojoWorld {
     if (renderPending) {
       renderPending = false
       window.cancelAnimationFrame(renderHandle)
+      // Bekleyen dolgular tam BURADA yayınlanıyor: kareye kadar biriken n
+      // kirlenme, çizer başına tek üçgenlemeye iniyor.
+      boyalarıBoşalt()
       renderer.render(stage)
     }
   }
@@ -623,7 +677,13 @@ class KojoWorldImpl extends KojoWorld {
     height:            Double,
     antialias:         Boolean = true,
     resolution:        Double  = 1,
-    backgroundColor:   Int     = 0xFFFFFF,
+    // SAYDAM çizicide temizleme rengi SİYAH olmalı. PIXI transparent=true iken
+    // bağlamı premultipliedAlpha ile açıyor; 0xFFFFFF ile temizleyince tampona
+    // (255,255,255,0) yazılıyor, ki ön-çarpımlı alfada geçersiz bir piksel --
+    // Chrome onu OPAK BEYAZ gösteriyor ve tuvalin CSS artalanı hiç görünmüyor.
+    // (Ölçüldü: 0xFFFFFF -> köşe pikseli "255,255,255,0", ekran beyaz;
+    //  0x000000 -> "0,0,0,0", CSS gradyanı görünüyor.)
+    backgroundColor:   Int     = 0x000000,
     clearBeforeRender: Boolean = true
   ): js.Dynamic = {
     js.Dynamic
@@ -633,13 +693,70 @@ class KojoWorldImpl extends KojoWorld {
         antialias = antialias,
         resolution = resolution,
         backgroundColor = backgroundColor,
-        clearBeforeRender = clearBeforeRender
+        clearBeforeRender = clearBeforeRender,
+        // Artalan artık tuvalin CSS'inde (bkz. artalanaKoy). Çizici saydam
+        // olmazsa opak temizleme rengi CSS'in üstünü örter.
+        transparent = true
       )
   }
 
-  def setBackground(color: Color): Unit = {
-    renderer.backgroundColor = color.toRGBDouble
+  // Artalan neden CSS -- ve masaüstünden nerede AYRIŞIYOR.
+  //
+  // Masaüstünde tek bir artalan davranışı yok, İKİ tane var
+  // (SpriteCanvas.setCanvasBackground, 793-810):
+  //
+  //   tam opak DÜZ RENK -> setBackgroundWrapper -> Swing bileşeninin
+  //     artalanı. Sahnenin dışında, kamerayla kaymıyor.
+  //   BAŞKA HER ŞEY (gradyan dahil, çünkü GradientPaint bir Color değil)
+  //     -> `case _` dalı: staging.Impl.API.rectangle(bounds.x, bounds.y, ...)
+  //     ile SAHNEYE konan bir dikdörtgen, DÜNYA koordinatlarında ve
+  //     çağrıldığı andaki görüş alanı kadar.
+  //
+  // Yani gradyanlarda masaüstü artalanı bir sahne düğümü: kamerayla birlikte
+  // ölçekleniyor, kayıyor, ve görüş alanı dışına çıkınca kenarı görünüyor.
+  // Burada CSS kullanmak düz renkte parity, GRADYANDA ise BİLİNÇLİ BİR
+  // AYRIŞMA: CSS artalanı her zaman tuvalin tamamını dolduruyor, yaklaş/kaydır
+  // onu hiç etkilemiyor.
+  //
+  // Ayrışma bilerek: bir öğrenciye "artalanı sarıdan turuncuya boya" dediğinde
+  // beklediği şey tuvalin tamamı, yakınlaştırınca kenarı çıkan bir dikdörtgen
+  // değil. Sahne düğümü yolunu seçseydik stage.scale/position'ı her karede
+  // ters çevirmek gerekirdi. Ama parity SANILMASIN diye buraya yazıldı.
+  //
+  // Bilinen ikinci ayrışma: masaüstünde sil() artalanı varsayılana döndürüyor
+  // (clearHelper -> setBackgroundWrapper(backgroundColor), currentBackgroundRect
+  // siliniyor). ikojo'da erasePictures artalana dokunmuyor, yani sil()'den
+  // sonra gradyan duruyor. Bu ayrışma bu değişiklikten önce de vardı (eski
+  // renderer.backgroundColor da sil()'i atlatıyordu); gradyan artık gerçek
+  // olduğu için daha görünür. Ayrı bir iş.
+  private def cssRenk(c: Color): String = {
+    val r = c.toRGBA
+    "rgba(%d, %d, %d, %s)".format(r.r.get, r.g.get, r.b.get, r.a.get.toString)
   }
+
+  private def artalanaKoy(css: String): Unit = {
+    val biçem = renderer.view.asInstanceOf[html.Canvas].style
+    biçem.background = css
+  }
+
+  def setBackground(color: Color): Unit = {
+    artalanaKoy(cssRenk(color))
+  }
+
+  /**
+   * Yatay gradyan: soldan sağa. Masaüstü `setBackgroundH`in karşılığı, ama
+   * BİREBİR DEĞİL: orada gradyan sahneye konan bir dikdörtgen, burada tuvalin
+   * CSS'i. Ayrıntı için yukarıdaki "Artalan neden CSS" notu.
+   */
+  def setBackgroundH(c1: Color, c2: Color): Unit =
+    artalanaKoy("linear-gradient(to right, %s, %s)".format(cssRenk(c1), cssRenk(c2)))
+
+  /**
+   * Dikey gradyan: yukarıdan aşağıya. Masaüstü `setBackgroundV`in karşılığı,
+   * ama BİREBİR DEĞİL -- bkz. yukarıdaki "Artalan neden CSS" notu.
+   */
+  def setBackgroundV(c1: Color, c2: Color): Unit =
+    artalanaKoy("linear-gradient(to bottom, %s, %s)".format(cssRenk(c1), cssRenk(c2)))
 
   var animating = false
   def notAssetLoading = !AssetLoader.loading

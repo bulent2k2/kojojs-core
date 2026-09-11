@@ -53,5 +53,50 @@ trait KlavyeYöntemleri extends TemelTürler {
     val p = 0x50; val q = 0x51; val r = 0x52; val s = 0x53; val t = 0x54
     val u = 0x55; val v = 0x56; val w = 0x57; val x = 0x58; val y = 0x59
     val z = 0x5a
+
+    // --- Masaüstündeki İngilizce takma adlar ---------------------------------
+    //
+    // Masaüstü (kojo tr/klavye.scala) bu adları da veriyor, çünkü dosya
+    // AWT'nin KeyCodes.scala'sından port edilmişti. Orada çalışan bir
+    // yazılımcık burada "value escape is not a member of ..." ile patlıyordu.
+    //
+    // DEĞERLER İÇİN TÜRKÇE ADLARA BAĞLANIYOR, sayı yazılmıyor: bu dosyanın
+    // başındaki not gereği buradaki değerler DOM keyCode'u, masaüstündeki AWT
+    // VK_*'ı. Masaüstünün sayılarını kopyalamak `tuşBasılıMı(tuşlar.enter)`i
+    // HİÇ doğru döndürmezdi (AWT 10 / DOM 13).
+    val enter = gir
+    val back_space = silGeri
+    val cancel = iptal
+    val clear = temizle
+    val shift = kaldırma
+    val control = kontrol
+    val pause = dur
+    val escape = çık
+    val page_up = sayfaYukarı
+    val page_down = sayfaAşağı
+    val end = satırSonu
+    val home = satırBaşı
+
+    // --- Masaüstünün eskitilmiş yazımları ------------------------------------
+    //
+    // Bu yedi ad masaüstünde snake_case idi ve camelCase'e geçti; orada takma
+    // ad olarak yaşamaya devam ediyorlar, yani onları kullanan yazılımcıklar
+    // hâlâ var. Buraya da eskitilmiş olarak konuyorlar ki o yazılımcıklar
+    // canlıda da derlensin -- temizlemeye çalıştığımız uyumsuzluk tam olarak
+    // bu. Yeni yazılımcıklar camelCase kullanmalı.
+    @deprecated("camelCase yazıma geçildi: silGeri kullanın", "Eylül 2026")
+    val sil_geri = silGeri
+    @deprecated("camelCase yazıma geçildi: büyükHarfKilidi kullanın", "Eylül 2026")
+    val büyük_harf_kilitleme = büyükHarfKilidi
+    @deprecated("camelCase yazıma geçildi: sayfaYukarı kullanın", "Eylül 2026")
+    val sayfa_yukarı = sayfaYukarı
+    @deprecated("camelCase yazıma geçildi: sayfaAşağı kullanın", "Eylül 2026")
+    val sayfa_aşağı = sayfaAşağı
+    @deprecated("camelCase yazıma geçildi: satırSonu kullanın", "Eylül 2026")
+    val satır_sonu = satırSonu
+    @deprecated("camelCase yazıma geçildi: satırBaşı kullanın", "Eylül 2026")
+    val satır_başı = satırBaşı
+    @deprecated("camelCase yazıma geçildi: noktalıVirgül kullanın", "Eylül 2026")
+    val noktalı_virgül = noktalıVirgül
   }
 }
