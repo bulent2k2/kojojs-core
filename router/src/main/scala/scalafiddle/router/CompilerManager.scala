@@ -149,14 +149,20 @@ class CompilerManager extends Actor with ActorLogging {
             compilerInfo.compilerService ! req.updated(src => src + defaultLibs(compilerInfo.scalaVersion))
             // process next in queue
             processQueue()
+          // DİKKAT -- Left'in içindeki metin KULLANICININ EKRANINA çıkıyor.
+          // Zincir: Left(...) -> WebService.CacheError -> HTTP 400 gövdesi ->
+          // istemci (kojojs-editor CompilerHandler) 400'de responseText'i
+          // olduğu gibi çıktı paneline basıyor. Bu yüzden Türkçe ve çocuğa
+          // anlaşılır olmalı. log.error İNGİLİZCE kalıyor: o işletmeciye
+          // bakıyor, aranabilir olması ve yukarı akışla eşleşmesi önemli.
           case None if compilers.isEmpty =>
-            // no compilers registered at this point
+            // hiç derleyici kaydolmamış -- sunucu yeni başlamış olabilir
             log.error("No compiler instance currently registered")
-            sourceActor ! Left("No compiler instance currently registered")
+            sourceActor ! Left("Sunucu yeni başlıyor, derleyici henüz hazır değil. Birazdan yine deneyin.")
           case None =>
-            // no compiler available
+            // derleyici(ler) var ama hiçbiri Ready değil: hepsi derleme yapıyor
             log.error("No suitable compiler available")
-            sourceActor ! Left("No suitable compiler available")
+            sourceActor ! Left("Sunucu şu anda çok yoğun. Biraz sonra yine deneyin.")
         }
       } catch {
         case e: Throwable =>
