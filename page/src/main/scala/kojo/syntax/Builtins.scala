@@ -109,9 +109,8 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def setBackground(color: Color): Unit = {
     kojoWorld.setBackground(color)
   }
-  // background gradients currently not supported. Maybe with pixi v5
-  def setBackgroundH(c1: Color, c2: Color) = setBackground(c1)
-  def setBackgroundV(c1: Color, c2: Color) = setBackground(c1)
+  def setBackgroundH(c1: Color, c2: Color): Unit = kojoWorld.setBackgroundH(c1, c2)
+  def setBackgroundV(c1: Color, c2: Color): Unit = kojoWorld.setBackgroundV(c1, c2)
 
   def disablePanAndZoom(): Unit = {
     kojoWorld.noZoom()

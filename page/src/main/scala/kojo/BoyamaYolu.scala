@@ -68,3 +68,25 @@ class BoyamaYolu {
     a
   }
 }
+
+/**
+ * Dolgusu bekleyen bir çizer. `KojoWorld` bunları render'a kadar biriktiriyor
+ * ve her birini karede EN ÇOK BİR KEZ yayınlıyor.
+ *
+ * NEDEN VAR: `Turtle.turtlePathLineTo` her kenarda bütün çokgeni yeniden
+ * `drawPolygon`a veriyordu. `hızıKur(çokHızlı)` ile bütün kenarlar tek blokta
+ * geliyor ve `KojoWorld.render` hepsini tek bir requestAnimationFrame'e
+ * topluyor -- yani TEK render'a karşılık n üçgenleme yapılıyor, n-1'i çöpe
+ * gidiyor. Ölçüldü (tan-theta.kojo, 241 nokta): 241 yayın, 1 render.
+ *
+ * Çare: kenar eklenince yalnız "kirli" diye kaydolmak, gerçek yayını
+ * render'dan hemen önce yapmak. Şeklin TAMAMLANMIŞ yayınlanması kuralı
+ * bozulmuyor (bkz. yukarıdaki BoyamaYolu açıklaması) -- yalnız kaç kez
+ * yayınlandığı değişiyor.
+ */
+trait Boyacı {
+
+  /** Bekleyen dolguyu şimdi yayınla. Yayın idempotent olmalı: aynı çokgeni
+    * iki kez yayınlamak, bir kez yayınlamakla aynı sonucu vermeli. */
+  private[kojo] def boyayıYayınla(): Unit
+}

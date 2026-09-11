@@ -130,12 +130,46 @@ trait RenkYöntemleri extends TemelTürler {
 
     // Koyu renkler: doodle.Color'da vardı, Türkçe adları yoktu (2026-09, ayna
     // sayfaları için eklendi -- ikojo.in örnekleri darkBlue vb. kullanıyor).
+    // Önce yalnız gereken altısı eklenmişti; artık masaüstündeki (kojo
+    // tr/renk.scala) koyu ailenin TAMAMI burada.
     val koyuMavi: Renk = DRenk.darkBlue
-    val koyuYeşil: Renk = DRenk.darkGreen
-    val koyuKırmızı: Renk = DRenk.darkRed
-    val koyuTuruncu: Renk = DRenk.darkOrange
     val koyuCamgöbeği: Renk = DRenk.darkCyan
-    val koyuMor: Renk = DRenk.darkMagenta
+    val koyuAltınbaşak: Renk = DRenk.darkGoldenrod
+    val koyuKlasikGri: Renk = DRenk.darkGrayClassic
+    val koyuYeşil: Renk = DRenk.darkGreen
+    val koyuHaki: Renk = DRenk.darkKhaki
+    val koyuMorumsu: Renk = DRenk.darkMagenta
+    val koyuZeytinYeşili: Renk = DRenk.darkOliveGreen
+    val koyuTuruncu: Renk = DRenk.darkOrange
+    val koyuOrkidePembesi: Renk = DRenk.darkOrchid
+    val koyuKırmızı: Renk = DRenk.darkRed
+    val koyuSomon: Renk = DRenk.darkSalmon
+    val koyuDenizYeşili: Renk = DRenk.darkSeaGreen
+    val koyuKurşunMavisi: Renk = DRenk.darkSlateBlue
+    val koyuKurşunGrisi: Renk = DRenk.darkSlateGray
+    val koyuTurkuaz: Renk = DRenk.darkTurquoise
+    val koyuMenekşe: Renk = DRenk.darkViolet
+
+    // darkMagenta'nın asıl adı koyuMorumsu: masaüstündeki ad bu ve `morumsu`
+    // (= magenta) ile tutarlı. Burada bir süre yalnız koyuMor vardı; onu
+    // kullanan yazılımcıklar kırılmasın diye takma ad olarak duruyor.
+    @deprecated("masaüstüyle aynı ada geçildi: koyuMorumsu kullanın", "Eylül 2026")
+    val koyuMor: Renk = koyuMorumsu
+
+    // Açık renkler: masaüstündeki ailenin tamamı. Renk değerleri
+    // doodle/CommonColors.scala'da zaten vardı, eksik olan yalnız adlardı.
+    val açıkMavi: Renk = DRenk.lightBlue
+    val açıkMercan: Renk = DRenk.lightCoral
+    val açıkCamgöbeği: Renk = DRenk.lightCyan
+    val açıkAltınbaşakSarısı: Renk = DRenk.lightGoldenrodYellow
+    val açıkYeşil: Renk = DRenk.lightGreen
+    val açıkPembe: Renk = DRenk.lightPink
+    val açıkSomon: Renk = DRenk.lightSalmon
+    val açıkDenizYeşili: Renk = DRenk.lightSeaGreen
+    val açıkGökMavisi: Renk = DRenk.lightSkyBlue
+    val açıkKurşunGrisi: Renk = DRenk.lightSlateGray
+    val açıkÇelikMavisi: Renk = DRenk.lightSteelBlue
+    val açıkSarı: Renk = DRenk.lightYellow
   }
 
   // sık kullanılanlar üst düzeyde
@@ -153,7 +187,9 @@ trait RenkYöntemleri extends TemelTürler {
   val koyuKırmızı = Renkler.koyuKırmızı
   val koyuTuruncu = Renkler.koyuTuruncu
   val koyuCamgöbeği = Renkler.koyuCamgöbeği
-  val koyuMor = Renkler.koyuMor
+  val koyuMorumsu = Renkler.koyuMorumsu
+  @deprecated("masaüstüyle aynı ada geçildi: koyuMorumsu kullanın", "Eylül 2026")
+  val koyuMor = Renkler.koyuMorumsu
   val kırmızı = Renkler.kırmızı
   val mavi = Renkler.mavi
   val mor = Renkler.mor
