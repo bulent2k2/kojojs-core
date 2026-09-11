@@ -54,8 +54,13 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def noktadan(işlev: GeoNokta => Birim): Resim = kb.Picture.fromPath(g => işlev(new GeoNokta(g)))
     // masaüstü: Resim.yazı(içerik, yazıyüzü[, renk]) -- Yazıyüzü ailesi PIXI metin stiline
     def yazı(içerik: Her, yy: Yazıyüzü): Resim = new kojo.TextPic(içerik, yy.boy, Renkler.siyah, yy.ad)
-    // masaüstü Picture.arc: kaplumbağa yayı (başlangıç merkezde, kuzeye bakar)
-    def yay(yarıçap: Kesir, açı: Kesir): Resim = kb.PictureT(t => t.arc(yarıçap, açı))
+    // masaüstü Picture.arc (ArcPic): yayın MERKEZİ (0,0), başlangıcı (r,0).
+    // ikojo'nun kaplumbağa yayı ise başlangıcı (0,0)'a, merkezi (-r,0)'a koyuyor
+    // (Turtle.realArc2 içindeki `trans.translate(-r, 0)`). Aradaki +r ötelemeyi
+    // burada kapatıyoruz, yoksa aynı yazılımcık iki tarafta farklı yere çiziyor
+    // ve ne derleyici ne de sınama bunu görüyor -- bkz. #75. Sınırları
+    // ResimYayTest çiviliyor.
+    def yay(yarıçap: Kesir, açı: Kesir): Resim = kb.trans(yarıçap, 0) -> kb.PictureT(t => t.arc(yarıçap, açı))
     def yazı(içerik: Her, yy: Yazıyüzü, renk: Renk): Resim = new kojo.TextPic(içerik, yy.boy, renk, yy.ad)
 
     def çiz(r: Resim): Birim = r.draw()
