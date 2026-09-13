@@ -350,6 +350,18 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   }
 
   def setAnimationDelay(delay: Long): Unit = {
+    // Eksi gecikme, canlandırmayı SONSUZ döngüye sokar: realForward'ın
+    // `animationDelay == 0` kestirmesi eksi değeri yakalamaz, delayFor eksi
+    // değeri olduğu gibi döndürür (`< 1` dalı), dolayısıyla `frac` her karede
+    // eksi çıkar ve `frac > 1` bitiş koşulu HİÇ sağlanmaz. queueHandler bir
+    // daha zamanlanmaz: kaplumbağa kalıcı olarak donar ve tuvale tuvalden
+    // taşan turuncu bir çizgi kalır. Ölçüldü (2026-09, PIXI 5 + Chromium):
+    // aDelay=-1, kare=1..4 için frac=-7.5, -24.1, -74.1, -90.9, hepsinde
+    // tamam=false; ekran 1. saniyeden 6. saniyeye kadar bayt bayt aynı.
+    // Masaüstü Kojo da eksi gecikmeyi reddediyor (turtle/Turtle.scala:368).
+    if (delay < 0) {
+      throw new IllegalArgumentException("Canlandırma hızı eksi olamaz. Anında çizim için 0 ver.")
+    }
     sıraya(SetAnimationDelay(delay))
   }
 
