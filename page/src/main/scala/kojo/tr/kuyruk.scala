@@ -1,6 +1,6 @@
 package kojo.tr
 
-import scala.collection.mutable.{Stack, Queue, PriorityQueue}
+import scala.collection.mutable.{Stack, Queue, PriorityQueue, ArrayDeque}
 
 /**
  * Yığın (Stack), Kuyruk (Queue) ve Öncelik Sırası (PriorityQueue).
@@ -10,6 +10,16 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
   type Yığın[T] = Stack[T]
   type Kuyruk[T] = Queue[T]
   type ÖncelikSırası[T] = PriorityQueue[T]
+  /**
+   * `ÖncelikSırası` ile aynı tür -- "kuyruk" ailesiyle aynı sözcüğü yeğleyenler için.
+   *
+   * Tür takma adı TEK BAŞINA yetmiyor: `ÖncelikKuyruğu.boş[Sayı]` yazabilmek
+   * için eşlik eden nesnenin de bir adı olmalı, yoksa "not found: value"
+   * hatası veriyor. Aşağıdaki `val` onu sağlıyor.
+   */
+  type ÖncelikKuyruğu[T] = PriorityQueue[T]
+  /** C++'daki `deque`: iki ucundan da ekleme/çıkarma yapılan kuyruk. */
+  type İkiUçluKuyruk[T] = ArrayDeque[T]
 
   object Yığın {
     // Yığın(1, 2, 3) = "1'i it, 2'yi it, 3'ü it", yani TEPEDE 3 olur.
@@ -104,6 +114,11 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     type Eşlek[K, D] = collection.immutable.Map[K, D]
     type Belki[B] = Option[B]
     def ekle(öge: T): Kuyruk[T] = d += öge
+    // ORTAK AD: `koy` üç yapıda da "içine bir öge koy" demek (Yığın'da push,
+    // burada enqueue). Çıkarma için ortak ad KOYULMADI: buradaki `al(n)` zaten
+    // take(n) -- öge çıkarmaz, kopya verir. `al()` eklemek o ikisini aynı ada
+    // bindirirdi. Çıkarmanın adı `baştanAl`: hangi uçtan aldığını söylüyor.
+    def koy(öge: T): Kuyruk[T] = d += öge
     def çıkar(): T = d.dequeue()
     def baştanAl(): T = d.dequeue() // çıkar ile aynı (kitapçık adı)
     def başı: T = d.head
@@ -207,6 +222,7 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     @deprecated("eylemle başlayan ada geçildi: ekleHepsini kullanın", "Eylül 2026")
     def hepsiniEkle(ögeler: YinelenebilirBirKere[T]): Col = ekleHepsini(ögeler)
     def ekleHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
+    def koyHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
     @deprecated("eylemle başlayan ada geçildi: ekleAraya kullanın", "Eylül 2026")
     def araEkle(yeri: Sayı, öge: T): Birim = ekleAraya(yeri, öge)
     def çıkar(yeri: Sayı): T = d.remove(yeri)
@@ -251,6 +267,9 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
 
 }
 
+  /** `ÖncelikSırası` nesnesinin takma adı -- `ÖncelikKuyruğu.boş` / `ÖncelikKuyruğu(...)` için. */
+  val ÖncelikKuyruğu = ÖncelikSırası
+
   implicit class ÖncelikSırasıMetotları[T](d: ÖncelikSırası[T]) {
     type Col = ÖncelikSırası[T]
     type C2[B] = ÖncelikSırası[B]
@@ -258,6 +277,7 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     type Eşlek[K, D] = collection.immutable.Map[K, D]
     type Iter[A] = collection.mutable.Iterable[A]
     def ekle(öge: T): ÖncelikSırası[T] = d.addOne(öge) // `d += öge` ile aynı
+    def koy(öge: T): ÖncelikSırası[T] = d.addOne(öge) // Yığın/Kuyruk ile ortak ad
     def çıkar(): T = d.dequeue()
     def başı: T = d.head
     def boyu: Sayı = d.length
@@ -312,6 +332,7 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     // --- YERİNDE değiştirenler -------------------------------------------
     def işleYerinde(işlev: T => T): Col = { d.mapInPlace(işlev); d }
     def ekleHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
+    def koyHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
     @deprecated("eylemle başlayan ada geçildi: ekleHepsini kullanın", "Eylül 2026")
     def hepsiniEkle(ögeler: YinelenebilirBirKere[T]): Col = ekleHepsini(ögeler)
     def kuyruğa: Kuyruk[T] = d.toQueue
@@ -365,4 +386,87 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     def enİrisi[B >: T](implicit sıralama: math.Ordering[B]): T = d.max(sıralama)
     def enİrisi[B](iş: T => B)(implicit karşılaştırma: math.Ordering[B]): T = d.maxBy(iş)(karşılaştırma)
 }
+
+  /**
+   * İki uçlu kuyruk (C++'daki `deque`, Scala'da `ArrayDeque`).
+   *
+   * İki ucundan da koyup iki ucundan da alabilirsin. Sırayı iki yönde gezmek
+   * gereken işlerde (geri al/yinele, pencere kaydırma, iki uçlu arama)
+   * kuyruk ile yığını ayrı ayrı tutmaktan kolay.
+   *
+   * ADLAR: `koy`/`ekle` sona koyar (Kuyruk ile aynı), `başaKoy` başa.
+   * Alma iki uçlu olduğu için ortak `al` YOK -- `baştanAl`/`sondanAl` hangi
+   * uçtan alındığını söylüyor.
+   *
+   * (Burada önce "Kuyruk yalnız sondan alır, Yığın yalnız tepeden; bu ikisini
+   * birden yapar" yazıyordu. İki yanlış birden: kuyruk BAŞtan alır, sondan
+   * değil; ve aşağıdaki nota bakılırsa "yalnız" da doğru değil.)
+   *
+   * ============ DİKKAT: BU YÖNTEMLER YIĞIN VE KUYRUĞA DA BULAŞIYOR ==========
+   *
+   * Scala 2.13'te `mutable.Stack` DE `mutable.Queue` DE `ArrayDeque`ten
+   * türüyor. `İkiUçluKuyruk` bir tür TAKMA ADI olduğu için (sarmalayıcı sınıf
+   * değil) aşağıdaki yöntemler `Yığın` ve `Kuyruk` değerlerinde de
+   * kullanılabiliyor -- ve deque anlamıyla çalışıyorlar. Ölçüldü:
+   *
+   *   Yığın:  koy(1); koy(2)  -> tepe = 2          (doğru, push)
+   *           başaKoy(0)      -> List(0, 2, 1)
+   *           sondanAl()      -> 1                 YIĞININ DİBİNDEN aldı
+   *
+   *   Kuyruk: koy(1); koy(2); başaKoy(0) -> başı = 0   KUYRUĞA KAYNAK yaptı
+   *           sondanAl()      -> 2                 kuyruğun SONUNDAN aldı
+   *
+   * Yani `yığın.sondanAl()` LIFO'yu, `kuyruk.başaKoy(x)` FIFO'yu bozuyor ve
+   * derleyici ses çıkarmıyor. Bu bir KAZA DEĞİL, bilinen bir bedel: tür takma
+   * adı olmasaydı `İkiUçluKuyruk` bütün Diz/Yinelenebilir yöntemlerini
+   * (ele, işle, bul...) kaybederdi. Sarmalayıcıya çevirmek sızıntıyı keser
+   * ama o bedeli getirir.
+   *
+   * ORTAK ADLARDA sorun yok: `koy`, `başı`, `boyu` gibi adlarda daha ÖZEL olan
+   * örtük sınıf kazanıyor (Stack <: ArrayDeque), yani `yığın.koy` push olarak
+   * çalışıyor. Sızan şey yalnız İkiUçluKuyruk'a ÖZGÜ adlar.
+   *
+   * Bugünkü davranış `TurkishStdlibTest`te çivili -- yarın sessizce değişirse
+   * kırmızı yanar.
+   */
+  object İkiUçluKuyruk {
+    def apply[T](ögeler: T*): İkiUçluKuyruk[T] = ArrayDeque.from(ögeler)
+    def boş[T]: İkiUçluKuyruk[T] = ArrayDeque.empty[T]
+    def doldur[T](başkası: YinelenebilirBirKere[T]): İkiUçluKuyruk[T] = ArrayDeque.from(başkası)
+  }
+
+  implicit class İkiUçluKuyrukMetotları[T](d: İkiUçluKuyruk[T]) {
+    type Col = İkiUçluKuyruk[T]
+    type Belki[B] = Option[B]
+
+    // --- koyma: iki uç ---
+    def koy(öge: T): Col = d.append(öge)
+    def ekle(öge: T): Col = d.append(öge)      // koy ile aynı
+    def sonaKoy(öge: T): Col = d.append(öge)   // koy ile aynı, ucu açıkça söyler
+    def başaKoy(öge: T): Col = d.prepend(öge)
+    def koyHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
+    def ekleHepsini(ögeler: YinelenebilirBirKere[T]): Col = { d.addAll(ögeler); d }
+
+    // --- alma: iki uç (ortak `al` yok, bkz. sınıf notu) ---
+    def baştanAl(): T = d.removeHead()
+    def sondanAl(): T = d.removeLast()
+    def baştanAlBelki: Belki[T] = d.removeHeadOption()
+    def sondanAlBelki: Belki[T] = d.removeLastOption()
+
+    // --- bakma (çıkarmadan) ---
+    def başı: T = d.head
+    def sonu: T = d.last
+    def başıBelki: Belki[T] = d.headOption
+    def sonuBelki: Belki[T] = d.lastOption
+
+    // --- ölçü ve bakım ---
+    def boyu: Sayı = d.length
+    def tane: Sayı = d.size
+    def boşMu: İkil = d.isEmpty
+    def doluMu: İkil = d.nonEmpty
+    def sil(): Birim = d.clear()
+    def ikizle(): Col = d.clone()
+    def dizi: Dizi[T] = d.toList
+    def tersi: Col = ArrayDeque.from(d.reverse)
+  }
 }
