@@ -396,4 +396,48 @@ object PixiUyum {
         yol.points.asInstanceOf[js.Array[Double]].length < 2
       if (boş) gr.moveTo(sonX, sonY)
     }
+
+  /**
+   * Sahneden çıkan bir düğümün (ve altındakilerin) GL kaynaklarını bırakır.
+   *
+   * NEDEN GEREKLİ: PIXI 5 bir Graphics'in geometrisini ÇİZİCİNİN
+   * `geometry.managedGeometries` / `managedBuffers` haritalarında tutuyor.
+   * Düğümü sahneden çıkarmak -- hatta JS nesnesini çöpe vermek -- o kayıtları
+   * düşürmüyor; tek düşüren şey `dispose()`. Her karede resimleriSil() +
+   * yeniden çizim yapan bir canlandır döngüsünde sayaçlar bu yüzden sınırsız
+   * büyüyordu (sorun #91; tarayıcıda ölçüldü, aşağıdaki sayılar oradan).
+   *
+   * NEDEN destroy() DEĞİL de dispose(): `destroy()` düğümü kullanılamaz hale
+   * getirir; `resimleriSil(); çiz(r)` gibi AYNI resmi yeniden çizen bir kalıbı
+   * bozardı (masaüstü Kojo'da o kalıp çalışıyor). `dispose()` yalnız GL
+   * tarafını bırakıyor: şekil verisi CPU'da duruyor ve düğüm bir daha
+   * çizilirse geometri kendiliğinden yeniden yükleniyor.
+   * (Turtle.realClear'daki destroy() farklı: orada çıkarılan parçalara hiç
+   * kimse tutunmuyor.)
+   *
+   * YALNIZ Graphics: Sprite/Mesh gibi düğümlerin geometrisi PAYLAŞILMIŞ
+   * olabiliyor, onu bırakmak başkasının çizimini bozardı. Bir düğümün Graphics
+   * olup olmadığını deponun başka yerlerindeki ölçütle anlıyoruz: finishPoly
+   * işlevi var mı.
+   *
+   * SINIR -- yalnız GEOMETRİ: gradyan (`Boya`) dolguların BaseTexture'ı ayrı
+   * bir kaynak ve burası ona dokunmuyor. Ölçüldü (gradyan dolgulu aynı döngü,
+   * 120 kare): geometri/tampon/sahne tavanlanıyor (4/8/2) ama doku sayacı
+   * 24'ten 218'e doğrusal çıkıyor -- master'da da öyle (29 -> 233), yani bu
+   * bırakma onu ne doğuruyor ne kötüleştiriyor. Doku ömrü `Boya`ya bağlı
+   * olmalı, resmin silinmesine değil (aynı Boya birden çok resimde olabilir):
+   * sorun #95.
+   */
+  def glKaynaklarınıBırak(düğüm: Any): Unit =
+    if (beşVeÜstü && düğüm != null) {
+      val d = dyn(düğüm)
+      if (js.typeOf(d.finishPoly) == "function") {
+        val geo = d.geometry
+        if (!js.isUndefined(geo) && geo != null && js.typeOf(geo.dispose) == "function") geo.dispose()
+      }
+      val çocuklar = d.children
+      if (!js.isUndefined(çocuklar) && çocuklar != null) {
+        çocuklar.asInstanceOf[js.Array[js.Dynamic]].foreach(glKaynaklarınıBırak)
+      }
+    }
 }

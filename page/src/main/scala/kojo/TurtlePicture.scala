@@ -50,10 +50,14 @@ class TurtlePicture private[kojo] (fn: Turtle => Unit)(implicit val kojoWorld: K
     kojoWorld.addLayer(tnode)
   }
 
+  // GL kaynaklarını burada bırakmıyoruz: removeLayer katmanın ALTINDAKİ bütün
+  // Graphics'lerin geometrisini dispose ediyor (bkz. PixiUyum.glKaynaklarınıBırak,
+  // sorun #91). Eskiden burada kapalı bir `turtle.turtlePath.destroy()` duruyordu;
+  // destroy yanlış araçtı -- resmi yeniden çizilemez hale getirirdi ve yalnız tek
+  // bir parçayı kapsıyordu.
   def erase(): Unit = {
     ready.foreach { _ =>
       kojoWorld.removeLayer(picLayer)
-      //      turtle.turtlePath.destroy()
     }
   }
 

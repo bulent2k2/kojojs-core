@@ -183,6 +183,21 @@ object BakePolicy {
     i
   }
 
+  /**
+   * Bir sahne çocuğu GERÇEK kaplumbağanın katmanı mı?
+   *
+   * Ad TEK BAŞINA yetmez -- Turtle.init `forPic` olsun olmasın her katmana
+   * "Turtle Layer" adını veriyor, yani Resim{} katmanları da o adı taşıyor.
+   * Ayırt edici şey içerik: simge yalnız gerçek kaplumbağaya ekleniyor.
+   *
+   * Karar burada, çünkü ada bakmak iki yerde birden yanlış sonuç veriyordu:
+   * tepeSırası'nda (resim öteki resimlerin altına düşüyordu) ve
+   * erasePictures'ta (Resim{} katmanları HİÇ silinmiyordu -- sorun #91).
+   * Üçüncü bir yer hâlâ ada bakıyor: isStaleByName (bkz. sorun #96).
+   */
+  def gerçekKaplumbağaMı(ad: String, çocukAdları: collection.Seq[String]): Boolean =
+    ad == turtleLayerName && çocukAdları.contains(turtleIconName)
+
   // "öne al"ın hedef sırası: SONDAKİ kaplumbağa katmanlarının hemen ALTI.
   //
   // Sahnede kaplumbağa katmanını tepede tutan bir şey yok (addLayer yalnız
@@ -226,9 +241,13 @@ class KojoWorldImpl extends KojoWorld {
   var screenHeight = canvasHeight
   // Seçenek nesnesi biçimi: PIXI 5'in tek biçimi, PIXI 4 de kabul ediyor
   // (tarayıcıda ölçüldü: her ikisinde de 64x32 istendiğinde 64x32 çizici).
-  private val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
+  // private[kojo]: KaynakSizintisiTest çizicinin kendi sayaçlarını
+  // (geometry.managedGeometries / managedBuffers) okuyor -- sorun #91'in
+  // ölçüsü o sayaçlar.
+  private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
   private val interaction = renderer.plugins.interaction
-  private val stage = new PIXI.Container()
+  // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
+  private[kojo] val stage = new PIXI.Container()
   window.addEventListener("resize", resize)
   init()
 
@@ -320,6 +339,8 @@ class KojoWorldImpl extends KojoWorld {
       unbakeAll()
     }
     stage.removeChild(layer)
+    // Sahneden çıkmak GL kaynağını bırakmıyor; bırakan tek şey dispose (#91).
+    PixiUyum.glKaynaklarınıBırak(layer)
     render()
   }
 
@@ -539,17 +560,26 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def erasePictures(): Unit = {
-    // Bekleyen dolguları BİLEREK düşürmüyoruz. Bu yöntem "Turtle Layer" adlı
-    // çocukları silmiyor (aşağıya bak), yani hayatta kalan katmanlar tam
-    // olarak Boyacıların katmanları -- burada düşürmek, duran bir kaplumbağanın
-    // boyasını sessizce yok etmek olurdu. Katmanı gerçekten silinen bir çizer
-    // (bir resmin içindeki kaplumbağa) kalan yayınını kopmuş bir Graphics'e
-    // yapar; zararsız.
+    // Silinmeyen tek şey GERÇEK kaplumbağaların katmanı. Ölçüt ADA BAKMAK
+    // DEĞİL: Turtle.init "Turtle Layer" adını Resim{} katmanlarına da veriyor,
+    // ve ada bakan eski sürüm bu yüzden resim katmanlarını HİÇ SİLMİYORDU.
+    //
+    // Bu bir kaynak sızıntısından ÖNCE bir DOĞRULUK kusuruydu: resimleriSil()
+    // Resim{} ile çizilmiş resimleri silmiyor, ekranda bırakıyordu (ölçüldü:
+    // master'da çağrıdan sonra resim.tnode.parent hâlâ sahne, görünür=true).
+    // Sahnenin ve GL kaynaklarının her karede büyümesi onun yan ürünüydü.
+    // (Sorun #91, KaynakSizintisiTest. Doku tarafı için #95, pişirme kolu #96.)
+    //
+    // Bekleyen dolguları BİLEREK düşürmüyoruz: hayatta kalan katmanlar duran
+    // kaplumbağaların katmanları, orada düşürmek onların boyasını sessizce yok
+    // etmek olurdu. Katmanı silinen bir çizer (bir resmin içindeki kaplumbağa)
+    // kalan yayınını kopmuş bir Graphics'e yapar; zararsız.
     resetBake() // pişmiş boyayı da temizle (yoksa dokuda hayalet kalır)
     val children = stage.children.toBuffer
     children.foreach { c =>
-      if (c.name != "Turtle Layer") {
+      if (!kaplumbağaKatmanıMı(c)) {
         stage.removeChild(c)
+        PixiUyum.glKaynaklarınıBırak(c) // bkz. removeLayer / #91
       }
     }
     render()
@@ -626,19 +656,14 @@ class KojoWorldImpl extends KojoWorld {
   private def süsSonrasıDip: Int =
     BakePolicy.dipSırası((0 until stage.children.length).map(i => stage.getChildAt(i).name))
 
-  // Gerçek kaplumbağanın katmanı mı? Ada bakmak YETMEZ: Picture{} katmanları da
-  // "Turtle Layer" adını taşıyor (bkz. BakePolicy.tepeSırası). Gerçek kaplumbağa
-  // katmanında turtleIconName ("Turtle Icon") çocuğu var.
+  // Gerçek kaplumbağanın katmanı mı? Ölçüt BakePolicy.gerçekKaplumbağaMı'da
+  // (saf, Node'da sınanabilir); burada yalnız çocukların adları toplanıyor.
+  // Ad kontrolü kısa devre yaptığı için dizi yalnız "Turtle Layer" adlı
+  // çocuklar için kuruluyor.
   private def kaplumbağaKatmanıMı(c: PIXI.DisplayObject): Boolean =
     c.name == BakePolicy.turtleLayerName && {
       val kap = c.asInstanceOf[PIXI.Container]
-      var i = 0
-      var bulundu = false
-      while (i < kap.children.length && !bulundu) {
-        if (kap.getChildAt(i).name == BakePolicy.turtleIconName) bulundu = true
-        i += 1
-      }
-      bulundu
+      BakePolicy.gerçekKaplumbağaMı(c.name, (0 until kap.children.length).map(i => kap.getChildAt(i).name))
     }
 
   // Sahnedeki son kaplumbağa katmanı öbeğinin hemen altındaki sıra.
