@@ -190,6 +190,15 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    * (`drawPolygon`) yayınlanıyor -- bu kural değişmedi, yalnız kaç kez
    * yayınlandığı değişti. İdempotent: `clear()` ile başlıyor.
    */
+  private[kojo] def boyacıKatmanı: PIXI.Container = turtleLayer
+
+  // Katmana AÇIK olarak "silindi" imi konmuşsa hayır. İmi yalnız silme
+  // yolları koyuyor, yalnız addLayer kaldırıyor (bkz. PixiUyum.Silindiİmi).
+  // Katmanın `parent`'ının null olmasına BAKMIYORUZ: pişirme de düğümü sahne
+  // dışında tutuyor ve çizim yolu noteMutation çağırmadığı için çizmekte olan
+  // bir resim pişebilir -- `parent` çıkarımı onu silinmiş sanardı (#109).
+  private[kojo] def boyasıSürüyor: Boolean = !PixiUyum.katmanSilindiMi(turtleLayer)
+
   private[kojo] def boyayıYayınla(): Unit = {
     boyamaYolu.clear()
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
@@ -512,10 +521,16 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   }
 
   def clear(): Unit = {
+    // Yeni koşumun başı: sorun #73'ün notu yeniden düşebilsin (eşzamanlı kol;
+    // gerekçe DuraklamaUyarısı.unut'ta).
+    DuraklamaUyarısı.unut()
     sıraya(Clear)
   }
 
   def pause(seconds: Double): Unit = {
+    // forPic DEĞİL: Resim{} gövdesindeki durakla o resmin kendi kuyruğunda ve
+    // orada gerçekten geciktiriyor -- not düşmek yanlış alarm olurdu (#73).
+    if (!forPic) DuraklamaUyarısı.duraklama()
     sıraya(Pause(seconds))
   }
 

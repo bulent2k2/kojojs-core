@@ -30,6 +30,9 @@ case class DüzBoya(renk: Color) extends Boya
 case class DokuBoya(doku: PIXI.Texture, matris: PIXI.Matrix, yedek: Color) extends Boya
 
 object Boya {
+  /** `dokuYap`ın ürettiği BaseTexture'lara koyduğu im; `glKaynaklarınıBırak` onu arıyor. */
+  private[kojo] val GradyanDokusuİmi = "__kocoGradyanDokusu"
+
   private def tuval(g: Int, y: Int): dom.html.Canvas = {
     val c = dom.document.createElement("canvas").asInstanceOf[dom.html.Canvas]
     c.width = g
@@ -90,6 +93,11 @@ object Boya {
       set = ((_: js.Any) => ()): js.Function1[js.Any, Unit],
       configurable = true
     ))
+    // Kendi ürettiğimiz gradyan dokusunu İMLE. Resim silinirken GL yüklemesini
+    // yalnız bu imli dokular için bırakıyoruz (bkz. PixiUyum.glKaynaklarınıBırak,
+    // sorun #95): Texture.WHITE gibi paylaşılan PIXI dokuları ve dokuma()nın
+    // dosyadan gelen dokusu imsiz kalır, onlara dokunulmaz.
+    taban.updateDynamic(GradyanDokusuİmi)(true)
     js.Dynamic.newInstance(P.Texture)(taban).asInstanceOf[PIXI.Texture]
   }
 
