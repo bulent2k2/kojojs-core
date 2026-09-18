@@ -36,10 +36,29 @@ trait KojoWorld {
   // (asıl kazanç bu), ve kirlenme sırası korunur -- katman sırası önemli.
   private val bekleyenBoyacılar = scala.collection.mutable.LinkedHashSet.empty[Boyacı]
 
+  /** Bekleyen boya sırasının boyu -- sınama dikişi (bkz. #109 savı). */
+  private[kojo] def bekleyenBoyaSayısı: Int = bekleyenBoyacılar.size
+
+  /**
+   * Şimdiye dek yapılmış dolgu yayını sayısı -- sınama dikişi.
+   *
+   * #109'in savı bunu okuyor: silinmiş bir resim için yayın SÜRMEMELİ.
+   * Sırayı okumak yetmiyordu, çünkü flushRender sırayı kare sınırından önce
+   * boşaltıyor ve sınama hep 0 görüyordu (kırma sınamasıyla anlaşıldı).
+   */
+  private[kojo] var yayınSayısı = 0L
+
   /** Çizerin dolgusu bayatladı: sıraya al ve bir render iste. */
   private[kojo] def boyaKirlendi(b: Boyacı): Unit = {
-    bekleyenBoyacılar += b
-    render()
+    // Silinmiş bir resmin çizeri sıraya GERİ GİRMESİN. Katmanı sıradan bir kez
+    // düşürmek yetmiyor: kaplumbağanın komut kuyruğu silmeden SONRA da
+    // boşalmaya devam ediyor ve her kenar burayı yeniden çağırıp çizeri sıraya
+    // geri koyuyor (sorun #109). Ölçüldü, 40 karede: yalnız düşürme 77/82/118
+    // -- sızıntı zamanlamaya bağlı; bu kapıyla 76/76/76, yani tam canlı iş.
+    if (b.boyasıSürüyor) {
+      bekleyenBoyacılar += b
+      render()
+    }
   }
 
   /**
@@ -53,8 +72,67 @@ trait KojoWorld {
       // o kirlenme SONRAKİ kareye kalsın, burada sonsuz döngü olmasın.
       val sıra = bekleyenBoyacılar.toList
       bekleyenBoyacılar.clear()
-      sıra.foreach(_.boyayıYayınla())
+      sıra.foreach { b => yayınSayısı += 1; b.boyayıYayınla() }
     }
+
+  /**
+   * Sahneden ÇIKARILAN bir katmanın çizerini bekleyen sıradan düşür.
+   *
+   * Yoksa silinmiş bir resmin dolgusu, kaplumbağanın komut kuyruğu boşaldıkça
+   * yeniden yeniden üçgenleniyor: görünmeyen bir şekil için tam maliyet.
+   * Ölçüldü (sorun #109; resimleriSil + canlandır, 120 nokta x 7 kat, 40 kare):
+   * 80 canlı yayın 0 ms, 317-361 ÖLÜ yayın 512-531 ms -- üçgenleme süresinin
+   * ~%96'sı sahnede olmayan şekillere gidiyordu.
+   *
+   * Yalnız verilen katmanın çizerini düşürüyor: hayatta kalan kaplumbağaların
+   * bekleyen boyası duruyor (erasePictures'ın kendi notunun altını çizdiği
+   * ayrım). Çizer ileride yeniden kirlenirse boyaKirlendi onu sıraya geri
+   * koyar, yani bilgi kaybı yok.
+   */
+  private[kojo] def katmanınBoyasınıUnut(katman: PIXI.Container): Unit = {
+    // Önce İMLE, sonra düşür -- iki ayrı sızıntıyı iki ayrı şey kapatıyor:
+    //   düşürme : sırada DURAN yayını atıyor (asıl kazanç; tek başına
+    //             40 karede 162-364'ten 77-118'e indiriyor)
+    //   im      : çizerin sıraya GERİ girmesini engelliyor (komut kuyruğu
+    //             boşaldıkça her kenar boyaKirlendi'yi yeniden çağırıyor);
+    //             kalan 0-42'lik zamanlamaya bağlı sızıntıyı kapatıp sayıyı
+    //             belirlenimci 76'ya, yani tam canlı işe çiviliyor
+    // İkisi tek yerde duruyor ki ileride ayrı düşmesinler.
+    //
+    // İKİSİ DE ALT AĞACA YÜRÜR (#115). Eskiden ikisi de yalnız `katman`ın
+    // KENDİSİNE bakıyordu; bir resim bir GPics'in içindeyse sahneden çıkan
+    // düğüm grubun kabı, çizerin kendi turtleLayer'ı ise onun ALTINDA, yani
+    // ne im tutuyordu ne `ne katman` eşleşiyordu. Ölçüldü, 40 kare:
+    //   çıplak iki gül      74 / 74 / 74
+    //   GPics(gül, gül)    512 / 533   ->  düzeltmeden sonra çıplakla aynı
+    PixiUyum.altAğacıSilindiİmle(katman)
+    if (bekleyenBoyacılar.nonEmpty) {
+      // Çizer başına düşürüyoruz, küresel değil: hayatta kalan kardeşlerin
+      // bekleyeni durmalı (#106/#111'in kuralı). Alt ağaç ölçütü de çizer
+      // başına -- katmanı `katman`ın altındaysa düşer, değilse durur.
+      val düşenler = bekleyenBoyacılar.filter(b => altındaMı(b.boyacıKatmanı, katman)).toList
+      if (düşenler.nonEmpty) {
+        bekleyenBoyacılar --= düşenler
+        // GERÇEKTEN bir yayın düştüyse o çizerin KENDİ katmanına yaz: hiç
+        // yayınlanmamış bir dolgu bu düşmeyle KAYBOLUYOR, resim yeniden
+        // çizilince dolgusuz görünüyordu (#111'in erase() yolu için kapattığı
+        // kusurun aynısı, öteki kapıdan). TurtlePicture.realDraw imi okuyup
+        // yeniden kirletiyor. Grup kabına değil ÇOCUĞA yazılıyor: realDraw
+        // çocuğun kendi tnode'una bakıyor (#115).
+        düşenler.foreach(b => PixiUyum.düşenBoyayıİmle(b.boyacıKatmanı))
+      }
+    }
+  }
+
+  /** `alt`, `üst`ün kendisi mi ya da altındaki bir düğüm mü? */
+  private def altındaMı(alt: PIXI.DisplayObject, üst: PIXI.Container): Boolean = {
+    var d: PIXI.DisplayObject = alt
+    var bulundu = false
+    while (d != null && !bulundu) {
+      if (d eq üst) bulundu = true else d = d.parent
+    }
+    bulundu
+  }
 
   /**
    * BU çizerin bekleyen dolgusunu düşür -- kendi yolunu sildiği için.
@@ -64,7 +142,10 @@ trait KojoWorld {
    * düşüyordu). Yayın istekliyken böyle bir pencere yoktu; tembelleşince
    * açıldı.
    */
-  private[kojo] def bekleyenBoyayıUnut(b: Boyacı): Unit = bekleyenBoyacılar -= b
+  /** true: gerçekten bekleyen bir yayın vardı ve düşürüldü. Çağıranın bunu
+    * bilmesi gerekiyor -- düşürülen yayın BİLGİ taşıyor (bkz.
+    * TurtlePicture.erase). */
+  private[kojo] def bekleyenBoyayıUnut(b: Boyacı): Boolean = bekleyenBoyacılar.remove(b)
   def moveToFront(obj: PIXI.DisplayObject): Unit
   def moveToBack(obj: PIXI.DisplayObject): Unit
 
@@ -157,18 +238,36 @@ object BakePolicy {
   def shouldConsider(childCount: Int, unzoomed: Boolean): Boolean =
     childCount >= bakeChildThreshold && unzoomed
 
-  // Ucuz ön kontrol (ad + durağanlık). Etkileşim kontrolü pahalı (ağaç
+  // Ucuz ön kontrol (kimlik + durağanlık). Etkileşim kontrolü pahalı (ağaç
   // dolaşımı) olduğundan ayrı: yalnız bunu geçen adaylar için hesaplanır.
-  // Kaplumbağa katmanı gibi süs katmanı da pişirme dışı: pişirmek onu sahneden
-  // çıkarıp dokuya gömer; sonraki eksenleriGizle/ızgarayıGizle çağrısı görünür
-  // bir etki yapamaz ve ekranda hayalet eksen kalır.
-  def isStaleByName(name: String, lastMut: Long, frame: Long): Boolean =
-    name != turtleLayerName && name != decorLayerName && (frame - lastMut > bakeAfterFrames)
+  //
+  // GERÇEK kaplumbağa pişirme dışı: pişmek onu sahneden çıkarıp dokuya gömer,
+  // bir daha hareket edemez. Süs katmanı da öyle: sonraki eksenleriGizle /
+  // ızgarayıGizle görünür bir etki yapamaz, ekranda hayalet eksen kalır.
+  //
+  // Ölçüt ADA DEĞİL bayrağa bakıyor (sorun #96). Eskiden `name != turtleLayerName`
+  // yazıyordu, ama Turtle.init o adı forPic kaplumbağalara DA veriyor: Resim{}
+  // katmanları da "Turtle Layer" adını taşıyor ve muafiyete takılıp HİÇ
+  // pişmiyorlardı. Ölçüldü (canlandır döngüsü, 500 durağan Resim{}, 90 kare):
+  // ad ölçütüyle sahne çocuğu 501'de sabit kalıyordu, yani baskılamanın
+  // performans kazancı tam da kalabalık sahnede devre dışıydı.
+  // Bayrağı çağıran taraf hesaplıyor (BakePolicy.gerçekKaplumbağaMı), tıpkı
+  // kaplumbağaÖncesiTepe'nin yaptığı gibi -- burası saf kalsın diye.
+  //
+  // Bayrak ADI GEÇEREK (by-name) alınıyor ve EN SONA konuyor: hesaplaması
+  // çocuk adlarından bir dizi kuruyor ve bu sınıftaki her düğümün adı zaten
+  // "Turtle Layer", yani hedeflediğimiz kalabalık sahnede kısa devre hiç
+  // tutmuyor. Durağanlık kontrolü bedavaya yakın; önce o eleyince taze
+  // düğümler için dizi hiç kurulmuyor. (Ölçümde tek koşuda binlerce "taze"
+  // eleme görülüyor -- karşılığı o kadar boşa dizi olurdu.)
+  def isStaleCheap(gerçekKaplumbağa: => Boolean, name: String, lastMut: Long, frame: Long): Boolean =
+    name != decorLayerName && (frame - lastMut > bakeAfterFrames) && !gerçekKaplumbağa
 
-  // Bir sahne çocuğu pişmeye aday mı? Kaplumbağa katmanı ve etkileşimli
+  // Bir sahne çocuğu pişmeye aday mı? Gerçek kaplumbağa, süs ve etkileşimli
   // düğümler muaf; yalnızca bakeAfterFrames karedir damgalanmayanlar aday.
-  def isStaleCandidate(name: String, interactive: Boolean, lastMut: Long, frame: Long): Boolean =
-    isStaleByName(name, lastMut, frame) && !interactive
+  def isStaleCandidate(gerçekKaplumbağa: => Boolean, name: String, interactive: Boolean,
+      lastMut: Long, frame: Long): Boolean =
+    isStaleCheap(gerçekKaplumbağa, name, lastMut, frame) && !interactive
 
   // "arkaya at"ın hedef sırası: baştaki süs katmanlarının (eksen/ızgara) hemen
   // üstü. Süs, tuvalin süsü -- kullanıcının çizimi değil -- ve süsKatmanı onu
@@ -193,10 +292,17 @@ object BakePolicy {
    * Karar burada, çünkü ada bakmak iki yerde birden yanlış sonuç veriyordu:
    * tepeSırası'nda (resim öteki resimlerin altına düşüyordu) ve
    * erasePictures'ta (Resim{} katmanları HİÇ silinmiyordu -- sorun #91).
-   * Üçüncü bir yer hâlâ ada bakıyor: isStaleByName (bkz. sorun #96).
+   * Üçüncü yer de (pişirme adaylığı, isStaleCheap) artık buna bakıyor -- eskiden
+   * ada bakıyordu ve Resim{} katmanları hiç pişmiyordu (sorun #96).
    */
-  def gerçekKaplumbağaMı(ad: String, çocukAdları: collection.Seq[String]): Boolean =
-    ad == turtleLayerName && çocukAdları.contains(turtleIconName)
+  // Çocuk adları IterableOnce: çağıran taraf TEMBEL verebilsin (bir Iterator),
+  // dizi kurmak zorunda kalmasın. Sorun #96 bu işlevi sıcak yola soktu (her
+  // kare, her durağan çocuk) ve heves eden `.map` orada ölçülebilir bir yük:
+  // 500 resimli 95 karelik koşuda 125.626 çağrı, 251.252 çocuk adı dizgisi
+  // (inceleme #102). `contains` zaten ilk eşleşmede duruyor; girdiyi de tembel
+  // vermek diziyi tümden kaldırıyor. Sınamalar Seq geçiyor -- o da IterableOnce.
+  def gerçekKaplumbağaMı(ad: String, çocukAdları: => IterableOnce[String]): Boolean =
+    ad == turtleLayerName && çocukAdları.iterator.contains(turtleIconName)
 
   // "öne al"ın hedef sırası: SONDAKİ kaplumbağa katmanlarının hemen ALTI.
   //
@@ -325,6 +431,17 @@ class KojoWorldImpl extends KojoWorld {
 
   def addLayer(layer: PIXI.Container): Unit = {
     stage.addChild(layer)
+    // (yeniden) sahneye giren katman silinmiş değil: "silindi" imini kaldır.
+    // İmi koyan tek yer silme yolları, kaldıran tek yer burası (#109).
+    //
+    // İSTİSNA -- süsKatmanı: eksen/ızgara katmanını addLayer'dan geçmeden,
+    // doğrudan `stage.addChildAt(g, 0)` ile geri takıyor. Yani resimleriSil()
+    // onu sahneden çıkarıp "silindi" diye imliyor ve o im BİR DAHA KALKMIYOR.
+    // Bugün zararsız: süs katmanı bir Graphics, çizeri yok, imine kimse
+    // bakmıyor. #115'in alt ağaç yürüyüşü imlenen kümeyi büyüttüğü için
+    // yazılı duruyor -- ileride süs katmanına bir çizer bağlanırsa burası
+    // sessizce yanlış davranır.
+    PixiUyum.katmanınSilindiİminiSil(layer)
     // yeni düğümü bu kareyle damgala: yoksa hiç damgalanmadığından çizildiği
     // karenin sonunda pişer; "kur, birkaç kare sonra hareket ettir" kalıbı
     // pişir->unbake->pişir gel-gitine girerdi. Damgayla bakeAfterFrames kare
@@ -341,6 +458,7 @@ class KojoWorldImpl extends KojoWorld {
     stage.removeChild(layer)
     // Sahneden çıkmak GL kaynağını bırakmıyor; bırakan tek şey dispose (#91).
     PixiUyum.glKaynaklarınıBırak(layer)
+    katmanınBoyasınıUnut(layer) // #109: silinen resmin dolgusu yayınlanmaya devam etmesin
     render()
   }
 
@@ -459,10 +577,13 @@ class KojoWorldImpl extends KojoWorld {
       if (c ne bakeSprite) {
         val stamp = c.asInstanceOf[js.Dynamic].__kojoMut
         val last = if (js.isUndefined(stamp)) -1L else stamp.asInstanceOf[Double].toLong
-        // "Turtle Layer": kaplumbağa/Picture{} katmanları (Turtle.init hepsine
-        // bu adı verir) muaf. Etkileşimli düğümler de muaf (isabet testi).
-        // Ucuz ad/durağanlık kontrolünü ÖNCE yap; pahalı hasInteractive ağaç
+        // GERÇEK kaplumbağa muaf; Resim{} katmanları DEĞİL (ikisi de "Turtle Layer"
+        // adını taşıyor, ayırt eden şey "Turtle Icon" çocuğu -- sorun #96).
+        // Etkileşimli düğümler de muaf (isabet testi).
+        // Ucuz kimlik/durağanlık kontrolünü ÖNCE yap; pahalı hasInteractive ağaç
         // dolaşımını yalnız o kontrolü geçen adaylar için çalıştır.
+        // kaplumbağaKatmanıMı da ada bakıp kısa devre yapıyor, yani çocuk adları
+        // dizisi yalnız "Turtle Layer" adlı çocuklar için kuruluyor.
         // __kojoNoBake: bir kez pişirilip sonra değişen düğüm (her saniye güncellenen
         // FPS/skor yazısı gibi) bir daha pişirilmez -- yoksa her değişimde tüm iz
         // çözülüp yeniden pişiyordu (bkz. noteMutation). SINIR: bayrak kalıcıdır,
@@ -472,7 +593,8 @@ class KojoWorldImpl extends KojoWorld {
         // (ilk geri almada yeniden pişmeye izin, 2.-3.'de dışla) ya da uzun süre
         // durağan kalanın bayrağını silmek.
         val noBake = js.DynamicImplicits.truthValue(c.asInstanceOf[js.Dynamic].__kojoNoBake)
-        if (!noBake && BakePolicy.isStaleByName(c.name, last, frameCount) && !hasInteractive(c)) {
+        if (!noBake && BakePolicy.isStaleCheap(kaplumbağaKatmanıMı(c), c.name, last, frameCount)
+          && !hasInteractive(c)) {
           toBake += c
         }
       }
@@ -570,16 +692,47 @@ class KojoWorldImpl extends KojoWorld {
     // Sahnenin ve GL kaynaklarının her karede büyümesi onun yan ürünüydü.
     // (Sorun #91, KaynakSizintisiTest. Doku tarafı için #95, pişirme kolu #96.)
     //
-    // Bekleyen dolguları BİLEREK düşürmüyoruz: hayatta kalan katmanlar duran
-    // kaplumbağaların katmanları, orada düşürmek onların boyasını sessizce yok
-    // etmek olurdu. Katmanı silinen bir çizer (bir resmin içindeki kaplumbağa)
-    // kalan yayınını kopmuş bir Graphics'e yapar; zararsız.
+    // Bekleyen dolguları KÜRESEL olarak düşürmüyoruz: hayatta kalan katmanlar
+    // duran kaplumbağaların katmanları, hepsini düşürmek onların boyasını
+    // sessizce yok etmek olurdu (bkz. TembelSilmeTest).
+    //
+    // Ama katmanı silinen çizer de düşürülmüyor ve BU BEDAVA DEĞİL. Eskiden
+    // öyle yazıyordu ("kopmuş bir Graphics'e yayın yapar; zararsız"); o not
+    // #94'ten önce, Resim{} katmanlarının buradan HİÇ ÇIKMADIĞI dünyada
+    // yazılmıştı. Artık çıkıyorlar, yani gerekçe değişti:
+    //
+    //   DOĞRULUK bakımından gerçekten zararsız -- görsel bir şey bozulmuyor,
+    //   ve GL kaynağı da geri yüklenmiyor (ölçüldü: çizici sahne dışı katmanı
+    //   ziyaret etmiyor, sayaçlar 0/0'da kalıyor).
+    //   MALİYET bakımından değil: bir sonraki boyalarıBoşalt() sahnede olmayan
+    //   şeklin ÇOKGENİNİ BAŞTAN üçgenliyor (n büyük ve kesişen şekillerde
+    //   ~95 ms, bkz. #68).
+    //
+    // TurtlePicture.erase() bunu çizer başına düşürerek kapattı; burada
+    // kapanmadı, çünkü erasePictures Picture.erase()'ten geçmiyor -- sahne
+    // çocuklarını doğrudan atıyor, yani elinde katman var, çizer yok.
+    //
+    // BURADAKİ maliyeti ölçüldü (#109): her karede resimleriSil() + 10 dolu
+    // resim çizen döngüde dolgu yayınlarının YARISI sahne dışına gidiyor ve
+    // boyalarıBoşalt()'ın maliyetinin %96-99'u boşa (120 kenarda kare başına
+    // ~1.34 ms -> ~0.02 ms). Sebebi draw()'un eşzamansızlığı: resmin dolgusu
+    // bekleyene girdiğinde bir sonraki karenin resimleriSil()'i onu çoktan
+    // sahneden çıkarmış oluyor. İki aday yol #109'da: yayın anında koruma
+    // (Turtle.boyayıYayınla katmanı sahnede değilse çıksın) ya da burada
+    // çizer başına düşürme.
+    //
+    // BU DALDA (b) yolu uygulandı: katmanınBoyasınıUnut hem katmanı "silindi"
+    // diye imliyor hem de çizeri sıradan düşürüyor (Boyacı artık katmanına
+    // gönderme taşıyor), yani erasePictures da kapalı. İm düşürmenin ÜSTÜNE
+    // geliyor: düşürme sırada duran yayını atıyor, im çizerin sıraya geri
+    // girmesini engelliyor (ölçüm: katmanınBoyasınıUnut'un yanındaki not).
     resetBake() // pişmiş boyayı da temizle (yoksa dokuda hayalet kalır)
     val children = stage.children.toBuffer
     children.foreach { c =>
       if (!kaplumbağaKatmanıMı(c)) {
         stage.removeChild(c)
         PixiUyum.glKaynaklarınıBırak(c) // bkz. removeLayer / #91
+        katmanınBoyasınıUnut(c.asInstanceOf[PIXI.Container]) // #109
       }
     }
     render()
@@ -663,7 +816,10 @@ class KojoWorldImpl extends KojoWorld {
   private def kaplumbağaKatmanıMı(c: PIXI.DisplayObject): Boolean =
     c.name == BakePolicy.turtleLayerName && {
       val kap = c.asInstanceOf[PIXI.Container]
-      BakePolicy.gerçekKaplumbağaMı(c.name, (0 until kap.children.length).map(i => kap.getChildAt(i).name))
+      BakePolicy.gerçekKaplumbağaMı(
+        c.name,
+        Iterator.range(0, kap.children.length).map(i => kap.getChildAt(i).name)
+      )
     }
 
   // Sahnedeki son kaplumbağa katmanı öbeğinin hemen altındaki sıra.

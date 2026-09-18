@@ -140,10 +140,35 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
   def kalemBoyu(k: Kesir): Dönüştürücü = kb.penThickness(k) // masaüstü adı (resim.scala KalemBoyuBD)
   // masaüstünün bağımsız dönüştürücü adları (trInit: döndür/büyüt/götür = *BD)
   def döndür(açı: Kesir): Dönüştürücü = kb.rot(açı)
+  /**
+   * (x, y) noktasının ÇEVRESİNDE döndüren dönüştürücü (masaüstü: rotp).
+   *
+   * Aynı adlı Resim YÖNTEMİ (aşağıda, ResimMetotları içinde) bir resmi
+   * yerinde döndürüyor; bu ise `*` ile zincirlenip `->` ile uygulanıyor --
+   * tıpkı döndür/büyüt/götür çiftlerinde olduğu gibi:
+   *   çiz(götür(-30, -200) * döndürMerkezli(-90, 0, 0) -> Resim.yazı(...))
+   * Bu biçim olmadan masaüstündeki yazılımcıkları (unit-circle, hunted,
+   * tangram-skier) üç satıra bölmeden taşımak mümkün değildi.
+   */
+  def döndürMerkezli(açı: Kesir, x: Kesir, y: Kesir): Dönüştürücü = kb.rotp(açı, x, y)
   def büyüt(oran: Kesir): Dönüştürücü = kb.scale(oran)
   def büyüt(xOranı: Kesir, yOranı: Kesir): Dönüştürücü = kb.scaleXY_experimental(xOranı, yOranı)
   def götür(n: Nokta): Dönüştürücü = kb.trans(n.x, n.y)
   def götür(yy: Yöney2B): Dönüştürücü = kb.trans(yy.x, yy.y)
+  /**
+   * Resmi ÜSTTEN AŞAĞI n piksel boyunca söndürür, n'den aşağısını çizmez
+   * (masaüstü `soluk`/SolukBD, İngilizce `fade`). `saydamlık`tan farkı: o
+   * resmin tamamını eşit oranda saydamlaştırıyor, bu ise yukarıdan aşağı bir
+   * geçiş veriyor -- yansıma/silinme etkisi için.
+   *
+   *   çiz(yansıtX -> (soluk(230) -> eğreltiOtuResim))
+   *
+   * `n` EKRAN pikselidir, resmin kendi birimi değil: `büyüt(2)` ile büyütülmüş
+   * bir resimde de şerit yine n ekran pikseli sürer (ölçüldü, SolukTest).
+   *
+   * Gerekçe, PIXI süzgeci ve ölçümler: kojo/Soluk.scala.
+   */
+  def soluk(n: Sayı): Dönüştürücü = kb.fade(n)
   // masaüstünde saydamlığı ÇARPAR (opacMod); burada kurar -- tek katman için aynı sonuç
   def saydamlık(oran: Kesir): Dönüştürücü = kb.postDrawTransform(_.setOpacity(oran))
 

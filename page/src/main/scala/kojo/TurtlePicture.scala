@@ -45,9 +45,34 @@ class TurtlePicture private[kojo] (fn: Turtle => Unit)(implicit val kojoWorld: K
     }
   }
 
+  // erase() bekleyen dolguyu düşürüyor (sahne dışına boşa üçgenleme olmasın,
+  // #68). Ama düşürülen yayın BİLGİ taşıyor: hiç yayınlanmamış bir dolgu öyle
+  // KAYBOLUYOR ve resim yeniden çizilince dolgusuz görünüyor. #106 bunu
+  // getirdi, #109'un incelemesinde ölçüldü:
+  //
+  //   çiz -> boşalt -> sil -> çiz -> boşalt : dolgu duruyor  (ilk yayın olmuş)
+  //   çiz -> sil -> çiz -> boşalt           : dolgu YOK      (hiç yayın olmadı)
+  //
+  // İkincisi ulaşılabilir, çünkü draw/erase eşzamansız (ready.foreach) ama
+  // mikro-görevler bir sonraki kareden ÖNCE koşuyor: `çiz(r); r.sil(); çiz(r)`
+  // diyen düz bir betik tam o sıraya giriyor.
+  //
+  // O yüzden düşürdüğümüzü hatırlıyoruz ve yeniden çizimde yeniden
+  // kirletiyoruz. Koşullu: her çizimde kirletmek, bir kez çizilen resme
+  // fazladan bir üçgenleme bindirirdi.
+  private var dolguDüşürüldü = false
+
   import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
   def realDraw(): Unit = {
+    // erasePictures() yolu Picture.erase()'ten geçmiyor, yani dolguDüşürüldü'yü
+    // kuramıyor -- elinde katman var, çizer yok. O yüzden bilgiyi katmanın
+    // üzerinden okuyoruz (#109). addLayer imleri siliyor, o yüzden ÖNCE.
+    val katmandanDüştü = PixiUyum.düşenBoyaVarMı(tnode)
     kojoWorld.addLayer(tnode)
+    if (dolguDüşürüldü || katmandanDüştü) {
+      dolguDüşürüldü = false
+      kojoWorld.boyaKirlendi(turtle)
+    }
   }
 
   // GL kaynaklarını burada bırakmıyoruz: removeLayer katmanın ALTINDAKİ bütün
@@ -57,6 +82,15 @@ class TurtlePicture private[kojo] (fn: Turtle => Unit)(implicit val kojoWorld: K
   // bir parçayı kapsıyordu.
   def erase(): Unit = {
     ready.foreach { _ =>
+      // Bekleyen dolguyu ÖNCE düşür: picLayer kaplumbağanın kendi katmanı,
+      // yani buradan sonra çizer sahnede değil. Düşürülmezse bir sonraki
+      // boyalarıBoşalt() onu yine yayınlıyor -- sahnede olmayan bir şeklin
+      // çokgeni bir kez daha üçgenleniyor (#68; n büyük ve kesişen
+      // şekillerde bu ~95 ms).
+      //
+      // Çizer başına, küresel değil: ötekilerin bekleyeni durmalı, yoksa
+      // başkasının dolgusu sessizce yok olur (bkz. TembelSilmeTest).
+      if (kojoWorld.bekleyenBoyayıUnut(turtle)) dolguDüşürüldü = true
       kojoWorld.removeLayer(picLayer)
     }
   }

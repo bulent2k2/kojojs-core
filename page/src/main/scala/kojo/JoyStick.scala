@@ -1,5 +1,7 @@
 package kojo
 
+import scala.scalajs.js
+
 import kojo.syntax.Builtins
 
 class JoyStick(radius: Double)(builtins: Builtins) {
@@ -8,6 +10,22 @@ class JoyStick(radius: Double)(builtins: Builtins) {
   perimeter.setFillColor(ColorMaker.rgb(120, 120, 120).fadeOut(0.2))
   perimeter.setPenColor(cm.black)
   perimeter.setPenThickness(4)
+
+  // İsabet alanını AÇIKÇA kuruyoruz, dolguya bırakmıyoruz: PIXI 5'in isabet
+  // sınaması görünmeyen dolguyu atlıyor (GraphicsGeometry.containsPoint,
+  // fillStyle.visible). Bizim setFillColor'ımız alpha 0 verilince tam onu
+  // yapıyor (Utils.boyayıKur: `visible = saydamlık > 0`). Sonuç: saydam
+  // çevreli bir kol -- ki telefon oyunlarında istenen görünüm bu -- hiç
+  // sürüklenemiyordu, yani kol sessizce ölüyordu (#110).
+  //
+  // hitArea YEREL koordinatlarda ve daire yerel (0,0) merkezli çiziliyor,
+  // yani setPosition kolu taşıyınca alan da onunla gidiyor.
+  //
+  // Ölçüm (PIXI'nin kendi interaction.hitTest'i ile, merkez noktada):
+  //   düzeltmeden önce: varsayılan çevre true, saydam çevre FALSE
+  //   düzeltmeden sonra: ikisi de true
+  perimeter.tnode.asInstanceOf[js.Dynamic].hitArea =
+    js.Dynamic.newInstance(js.Dynamic.global.PIXI.Circle)(0, 0, radius)
 
   val control = Picture.circle(radius / 2)
   control.setPenColor(noColor)

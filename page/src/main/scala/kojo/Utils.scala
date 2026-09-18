@@ -127,6 +127,230 @@ object PixiUyum {
   }
 
   /**
+   * Resmi, DOLGUSU GÖRÜNMESE DE tıklanabilir yapar (#114).
+   *
+   * NEDEN: PIXI'nin isabet sınaması yalnız GÖRÜNÜR dolguya bakıyor --
+   * `Graphics.containsPoint` `fillStyle.visible` olmayan parçaları atlıyor
+   * (v4'te aynı şey `data.fill`). Kalem çizgisi isabet sınamasına hiç
+   * girmiyor. Sonuç: dolgusu kurulmamış ya da saydam kurulmuş bir resme
+   * `fareyeTıklayınca` bağlanıyor, `interactive` doğru kuruluyor, ama resim
+   * hiçbir fare olayı almıyor -- sessizce ölü. Ölçüldü, dördü de ölüydü:
+   * dolgusuz daire, saydam dolgulu daire, kaplumbağa çizimi; yalnız görünür
+   * dolgulu olan çalışıyordu.
+   *
+   * ÇARE: isabet alanını açıkça kur ve geometriye SOR -- dolgunun
+   * görünürlüğüne bırakma. `hitArea.contains` çağrıldığında, alt ağaçtaki her
+   * Graphics'in görünmez dolgularını GEÇİCİ olarak görünür damgalayıp
+   * PIXI'nin KENDİ `containsPoint`'ini çağırıyor, sonra damgayı geri alıyoruz.
+   * Çevirme eşzamanlı ve aynı çağrının içinde geri alınıyor, yani araya render
+   * giremez; ekranda hiçbir şey değişmiyor.
+   *
+   * NEDEN "dolguyu kalıcı görünür damgala" DEĞİL (daha kısa olurdu): ölçtüm,
+   * pahalı. 200 noktalı kendini kesen bir kaplumbağa çiziminde geometri
+   * 804 köşe / 1200 dizinden 15.570 / 8.961'e çıkıyor (19x) ve render süresi
+   * ikiye katlanıyor -- kimsenin görmediği bir dolgu için libtess üçgenlemesi
+   * (#68'in bedeli). Bu yol render'a hiç dokunmuyor.
+   *
+   * NEDEN SINIR KUTUSU DEĞİL: kutu, şeklin dışını da tıklanabilir yapardı.
+   * Ölçüldü: bu yolla r=50 dairede yerel (40,40) -- kutunun içi, dairenin
+   * dışı -- isabet ALMIYOR. Kutu yalnız ucuz ELEME olarak kullanılıyor.
+   *
+   * BEDEL (ölçüldü, 2000 hitTest): yalın dairede satıcı yolu ~6-10 ms, bu yol
+   * ~15-19 ms. 2395 parçalı patolojik bir çizimde satıcı ~42-50 ms, bu yol
+   * ~108-122 ms; geometri iki ölçümde birebir aynı, yani fark bayrak çevirme.
+   * Çağrı başına ~0.04 ms; 60 Hz'de bir resim için saniyede ~2 ms.
+   *
+   * ELLE KURULMUŞ ALANA DOKUNMUYOR: kumanda kolu çevresine (#113) açık bir
+   * PIXI.Circle konuyor; orada bu genel yol devreye girmiyor.
+   */
+  /**
+   * Parçanın çokgeni KAPALI mı -- ilk ve son nokta çakışıyor mu.
+   *
+   * NEDEN GEREKLİ (#118): PIXI açık bir yolun dolgusunu, yolu örtük olarak
+   * kapatarak kuruyor. Yani L biçimli iki kenarlık bir kaplumbağa çiziminin
+   * "dolgusu", ÇİZİLMEMİŞ üçüncü kenarla kapanan bir üçgen. O üçgeni isabet
+   * alanı saymak, ekranda hiçbir şey olmayan yeri tıklanabilir yapıyordu
+   * (ölçüldü: L yolunun içi KENDİSİ dönüyordu). Bu yüzden görünmez dolguyu
+   * yalnız KAPALI parçalar için çeviriyoruz.
+   *
+   * Nokta dizisi olmayan parçalar (daire, elips, dikdörtgen) doğası gereği
+   * kapalı. İki noktalı bir parça düz çizgidir, kapalı olamaz.
+   *
+   * Yarım birimlik tolerans: kaplumbağanın kapattığı kare tam kapanmıyor
+   * (ölçüldü: son nokta (0,-0)), kayan nokta artığı kalıyor.
+   */
+  private def parçaKapalıMı(p: js.Dynamic): Boolean = {
+    val nk = p.shape.points
+    if (js.isUndefined(nk) || nk == null) true
+    else {
+      val a = nk.asInstanceOf[js.Array[Double]]
+      if (a.length < 6) false
+      else {
+        val dx = a(0) - a(a.length - 2)
+        val dy = a(1) - a(a.length - 1)
+        dx * dx + dy * dy <= 0.25
+      }
+    }
+  }
+
+  /** Noktanın doğru PARÇASINA uzaklığının karesi (doğrunun değil: uçlar sınırlı). */
+  private def uzaklıkKare(x: Double, y: Double, x1: Double, y1: Double, x2: Double, y2: Double): Double = {
+    val dx = x2 - x1
+    val dy = y2 - y1
+    val boy2 = dx * dx + dy * dy
+    val t = if (boy2 == 0) 0.0 else math.max(0.0, math.min(1.0, ((x - x1) * dx + (y - y1) * dy) / boy2))
+    val px = x1 + t * dx
+    val py = y1 + t * dy
+    (x - px) * (x - px) + (y - py) * (y - py)
+  }
+
+  /**
+   * Nokta parçanın KALEM ŞERİDİNİN içinde mi (#118).
+   *
+   * PIXI'nin isabet sınaması yalnız dolguya bakıyor ("only deal with fills"),
+   * kalem çizgisini hiç sınamıyor. Alanı olmayan bir yol -- Resim.çizgi,
+   * Resim.yatayÇizgi, kaplumbağa çizgisi -- bu yüzden sessizce ölüydü.
+   *
+   * MASAÜSTÜ KOJO NE YAPIYOR (kaynaktan okundu, tahmin değil): Piccolo'nun
+   * PPath.intersects'i dolgu sınaması başarısız olunca STROKE'LANMIŞ ŞEKLİ
+   * sınıyor, ve PInputManager isabeti `PCamera.pick(x, y, 1)` ile, yani
+   * 1 birimlik bir payla arıyor. Buradaki şerit tam onun karşılığı:
+   * kalem kalınlığının yarısı + 1 birim pay.
+   */
+  private def şeritteMi(p: js.Dynamic, x: Double, y: Double, pay: Double): Boolean = {
+    val nk = p.shape.points
+    if (js.isUndefined(nk) || nk == null) false
+    else {
+      val a = nk.asInstanceOf[js.Array[Double]]
+      val kalınlık =
+        if (beşVeÜstü) p.lineStyle.width.asInstanceOf[Double]
+        else p.lineWidth.asInstanceOf[Double]
+      val yarı = kalınlık / 2 + pay
+      val eşik = yarı * yarı
+      var i = 0
+      var bulundu = false
+      while (i + 3 < a.length && !bulundu) {
+        if (uzaklıkKare(x, y, a(i), a(i + 1), a(i + 2), a(i + 3)) <= eşik) bulundu = true
+        i += 2
+      }
+      bulundu
+    }
+  }
+
+  def isabetAlanınıKur(kök: pixiscalajs.PIXI.DisplayObject): Unit = {
+    val k = dyn(kök)
+    if (!js.isUndefined(k.hitArea) && k.hitArea != null) return // elle kurulan alan üstün
+
+    def sor(n: js.Dynamic, küresel: js.Dynamic, pay: Double): Boolean = {
+      var bulundu = false
+      if (js.typeOf(n.containsPoint) == "function") {
+        val gd =
+          if (beşVeÜstü) {
+            val geo = n.geometry
+            if (js.isUndefined(geo) || geo == null) null
+            else geo.graphicsData.asInstanceOf[js.Array[js.Dynamic]]
+          }
+          else n.graphicsData.asInstanceOf[js.Array[js.Dynamic]]
+        if (gd != null && !js.isUndefined(gd) && gd.length > 0) {
+          var çevrilen = 0
+          var i = 0
+          while (i < gd.length) {
+            val p = gd(i)
+            val görünür =
+              if (beşVeÜstü) p.fillStyle.visible.asInstanceOf[Boolean]
+              else p.fill.asInstanceOf[Boolean]
+            // AÇIK parçanın dolgusunu çevirmiyoruz: o dolgu, çizilmemiş bir
+            // kapanış kenarıyla kurulmuş hayalet bir alan (#118).
+            if (!görünür && parçaKapalıMı(p)) {
+              if (beşVeÜstü) p.fillStyle.visible = true else p.fill = true
+              p.kojoDolguÇevrildi = true
+              çevrilen += 1
+            }
+            else p.kojoDolguÇevrildi = false
+            i += 1
+          }
+          // try/finally: geri alma bu döngüde ATLANMAMASI gereken tek şey.
+          // containsPoint'in patlaması beklenmez, ama atlanırsa görünmez
+          // dolgular KALICI olarak görünür kalır -- yani hem ekran değişir hem
+          // de 19x üçgenleme bedeli sürekli hâle gelir.
+          try bulundu = n.containsPoint(küresel).asInstanceOf[Boolean]
+          finally if (çevrilen > 0) {
+            i = 0
+            while (i < gd.length) {
+              val p = gd(i)
+              if (p.kojoDolguÇevrildi.asInstanceOf[Boolean]) {
+                if (beşVeÜstü) p.fillStyle.visible = false else p.fill = false
+              }
+              i += 1
+            }
+          }
+          // Dolgu tutmadıysa KALEM ŞERİDİNE bak: alanı olmayan yollar (#118).
+          if (!bulundu) {
+            val yerel = n.toLocal(küresel)
+            val yx = yerel.x.asInstanceOf[Double]
+            val yy = yerel.y.asInstanceOf[Double]
+            var j = 0
+            while (j < gd.length && !bulundu) {
+              val p = gd(j)
+              val kalemGörünür =
+                if (beşVeÜstü) p.lineStyle.visible.asInstanceOf[Boolean]
+                else !js.isUndefined(p.lineWidth) && p.lineWidth.asInstanceOf[Double] > 0
+              if (kalemGörünür && şeritteMi(p, yx, yy, pay)) bulundu = true
+              j += 1
+            }
+          }
+        }
+      }
+      if (bulundu) true
+      else {
+        val ç = n.children.asInstanceOf[js.Array[js.Dynamic]]
+        if (js.isUndefined(ç) || ç == null) false
+        else {
+          var i = 0
+          var b = false
+          while (i < ç.length && !b) { b = sor(ç(i), küresel, pay); i += 1 }
+          b
+        }
+      }
+    }
+
+    k.hitArea = js.Dynamic.literal(
+      contains = js.Any.fromFunction2 { (x: Double, y: Double) =>
+        // Şeridin payı EKRAN biriminde (masaüstündeki pick halo'su gibi), yerel
+        // birime dünya ölçeğine bölerek çevriliyor. Ölçek iki eksende ayrı
+        // okunuyor ve KÜÇÜĞÜ alınıyor: eşit olmayan ölçekte (büyütXY) pay iki
+        // eksende de en az 1 ekran birimi kalsın.
+        val dt = k.worldTransform
+        val öx = math.sqrt(
+          dt.a.asInstanceOf[Double] * dt.a.asInstanceOf[Double] +
+            dt.b.asInstanceOf[Double] * dt.b.asInstanceOf[Double]
+        )
+        val öy = math.sqrt(
+          dt.c.asInstanceOf[Double] * dt.c.asInstanceOf[Double] +
+            dt.d.asInstanceOf[Double] * dt.d.asInstanceOf[Double]
+        )
+        val ölçek = math.min(öx, öy)
+        val pay = if (ölçek > 0) 1.0 / ölçek else 1.0
+
+        // ucuz eleme: yerel sınır kutusunun dışındaki nokta için geometriyi hiç
+        // gezme. Kutu, kararı veren sınamayla AYNI payla genişletiliyor. Sabit
+        // 1 birim kullanmak küçültülmüş resimlerde elemeyi şeritten dar
+        // bırakıyordu (ölçüldü: ölçek 0.05'te şeridin eşiği 21 yerel birim ama
+        // eleme 2 birimde kesiyordu, yani etkin pay 1 ekran birimi değil
+        // ölçek x 1 ekran birimiydi) -- eleme, kararı veren sınamadan dar olamaz.
+        val s = k.getLocalBounds()
+        val sx = s.x.asInstanceOf[Double] - pay
+        val sy = s.y.asInstanceOf[Double] - pay
+        if (x < sx || y < sy ||
+            x > sx + s.width.asInstanceOf[Double] + 2 * pay ||
+            y > sy + s.height.asInstanceOf[Double] + 2 * pay)
+          false
+        else sor(k, k.toGlobal(js.Dynamic.newInstance(js.Dynamic.global.PIXI.Point)(x, y)), pay)
+      }
+    )
+  }
+
+  /**
    * Geometriyi yeniden kurdurur. v4 iki sayacı artırmakla yetiniyordu;
    * v5'te bunlar Graphics'te değil geometry'de ve invalidate() ile işliyor.
    */
@@ -398,6 +622,51 @@ object PixiUyum {
     }
 
   /**
+   * Graphics'in dolgu boyalarındaki gradyan dokularını bırakır (sorun #95).
+   *
+   * Gradyan (`Boya`) dolgunun BaseTexture'ı geometriden AYRI bir kaynak:
+   * katmanı sahneden çıkarmak onu çizicinin `managedTextures` dizisinden
+   * düşürmüyor, düşüren tek şey `dispose()`. Ölçüldü (gradyan dolgulu
+   * canlandır döngüsü, 120 kare): bırakmadan doku sayacı 0'dan 130'a doğrusal
+   * çıkıyor, bırakınca 3'te duruyor.
+   *
+   * Geometride olduğu gibi `dispose()`, `destroy()` DEĞİL -- ve burada bu daha
+   * da önemli, çünkü `Boya` kullanıcının elinde yaşıyor olabilir: aynı `b`yi
+   * birden çok resme vermek geçerli. `dispose()` yalnız GL yüklemesini
+   * bırakıyor, tuval KAYNAĞI (`resource`) duruyor ve doku bir daha çizilirse
+   * kendiliğinden geri yükleniyor. Ölçüldü: çizim sonrası sayaç 2, dispose
+   * sonrası 1, aynı Boya yeniden çizilince yine 2 ve `resource` ayakta. Yani
+   * paylaşılan bir Boya'yı bırakmak başkasının çizimini BOZMUYOR, olsa olsa
+   * bir yeniden yüklemeye mal oluyor. `destroy()` ile ayrım burada: o da
+   * sayacı düşürüp yeniden yüklenmiş gibi gösteriyor ve `valid` yine true
+   * kalıyor, ama `resource`u koparıyor -- doku bir daha asla üretilemiyor
+   * (ölçüldü; sınamadaki çivi bu yüzden `resource`, `valid` değil).
+   *
+   * YALNIZ İMLİ DOKULAR: yalnız `Boya.dokuYap`ın ürettiği gradyan dokuları
+   * bırakılıyor (`Boya.GradyanDokusuİmi`). `Texture.WHITE` gibi paylaşılan
+   * PIXI dokularına ve `Boya.dokuma`nın dosyadan yüklediği dokuya
+   * dokunulmuyor: ikincisi URL başına önbellekte paylaşılıyor, her karede
+   * bırakıp yeniden yüklemek gereksiz iş olurdu.
+   */
+  private def gradyanDokularınıBırak(geometri: js.Dynamic): Unit = {
+    val veri = geometri.graphicsData
+    if (!js.isUndefined(veri) && veri != null) {
+      veri.asInstanceOf[js.Array[js.Dynamic]].foreach { gd =>
+        val fs = gd.fillStyle
+        if (!js.isUndefined(fs) && fs != null) {
+          val doku = fs.texture
+          if (!js.isUndefined(doku) && doku != null) {
+            val taban = doku.baseTexture
+            if (!js.isUndefined(taban) && taban != null &&
+              taban.selectDynamic(Boya.GradyanDokusuİmi).asInstanceOf[js.UndefOr[Boolean]].contains(true) &&
+              js.typeOf(taban.dispose) == "function") taban.dispose()
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Sahneden çıkan bir düğümün (ve altındakilerin) GL kaynaklarını bırakır.
    *
    * NEDEN GEREKLİ: PIXI 5 bir Graphics'in geometrisini ÇİZİCİNİN
@@ -420,24 +689,120 @@ object PixiUyum {
    * olup olmadığını deponun başka yerlerindeki ölçütle anlıyoruz: finishPoly
    * işlevi var mı.
    *
-   * SINIR -- yalnız GEOMETRİ: gradyan (`Boya`) dolguların BaseTexture'ı ayrı
-   * bir kaynak ve burası ona dokunmuyor. Ölçüldü (gradyan dolgulu aynı döngü,
-   * 120 kare): geometri/tampon/sahne tavanlanıyor (4/8/2) ama doku sayacı
-   * 24'ten 218'e doğrusal çıkıyor -- master'da da öyle (29 -> 233), yani bu
-   * bırakma onu ne doğuruyor ne kötüleştiriyor. Doku ömrü `Boya`ya bağlı
-   * olmalı, resmin silinmesine değil (aynı Boya birden çok resimde olabilir):
-   * sorun #95.
+   * GEOMETRİ VE GRADYAN DOKUSU: gradyan (`Boya`) dolgunun BaseTexture'ı ayrı
+   * bir kaynak; onu da bırakıyoruz (bkz. gradyanDokularınıBırak, sorun #95).
+   * Eskiden yalnız geometri bırakılıyordu ve gradyan dolgulu aynı döngüde
+   * geometri/tampon/sahne tavanlanırken doku sayacı doğrusal büyümeyi
+   * sürdürüyordu.
    */
   def glKaynaklarınıBırak(düğüm: Any): Unit =
     if (beşVeÜstü && düğüm != null) {
       val d = dyn(düğüm)
       if (js.typeOf(d.finishPoly) == "function") {
         val geo = d.geometry
-        if (!js.isUndefined(geo) && geo != null && js.typeOf(geo.dispose) == "function") geo.dispose()
+        if (!js.isUndefined(geo) && geo != null) {
+          gradyanDokularınıBırak(geo)
+          if (js.typeOf(geo.dispose) == "function") geo.dispose()
+        }
       }
       val çocuklar = d.children
       if (!js.isUndefined(çocuklar) && çocuklar != null) {
         çocuklar.asInstanceOf[js.Array[js.Dynamic]].foreach(glKaynaklarınıBırak)
       }
     }
+
+  // --- "Bu katman silindi" imi ------------------------------------------------
+  //
+  // Sahneden silinmiş bir resmin çizeri bekleyen boya sırasına GERİ GİRMESİN
+  // diye (#109): kaplumbağanın komut kuyruğu silmeden sonra da boşalmaya devam
+  // ediyor ve her kenar boyaKirlendi'yi yeniden çağırıyor. Sıradan bir kez
+  // düşürmek bu geri girişi kapatmıyor (ölçüm: KojoWorld.katmanınBoyasınıUnut
+  // yanındaki not) -- ikisi birlikte gerekiyor.
+  //
+  // NEDEN AÇIK BİR İM, katmanın `parent`'ının null olmasına BAKMAK DEĞİL:
+  // pişirme de düğümleri sahne dışında tutuyor (#96/#102) ve çizim yolu
+  // (turtlePathLineTo) noteMutation çağırmıyor -- yani çizmekte olan bir
+  // resmin katmanı durağan görünüp pişebilir. `parent`'a bakan bir çıkarım onu
+  // "silinmiş" sayıp dolgusunu sessizce düşürürdü. Bu im yalnız SİLME
+  // yollarının (removeLayer, erasePictures) koyduğu, yalnız addLayer'ın
+  // kaldırdığı bir bayrak; pişirme stage.removeChild/addChildAt'ı DOĞRUDAN
+  // çağırıyor, yani ime hiç dokunmuyor. Tehlike tasarımdan siliniyor.
+  //
+  // NEDEN KATMANIN ÜZERİNDE, KojoWorld'de bir küme değil: küme silinmiş
+  // katmanlara gönderme tutardı (sızıntı). İm katmanla birlikte ölüyor.
+  // (Aynı deyim Boya.GradyanDokusuİmi'nde de kullanılıyor.)
+  //
+  // İÇ İÇE RESİMLER: silme yolunda yalnız VERİLEN katman değil, altındaki
+  // katmanlar da imleniyor (bkz. altAğacıSilindiİmle, #115). Bir resim bir
+  // GPics'in içindeyse sahneden çıkan düğüm grubun kabı; çizerin kendi
+  // turtleLayer'ı onun ALTINDA kalıyor ve eskiden ne imleniyordu ne sıradan
+  // düşüyordu -- ölçüldü: 40 karede çıplak iki gül 74 yayın, aynı ikisi bir
+  // GPics içindeyken 512-533. İmi KALDIRAN yol (addLayer) zaten çocuk başına
+  // çalışıyor: BasePicSequence.realDraw her çocuk için p.draw() çağırıyor,
+  // o da addLayer'dan geçiyor.
+  private val Silindiİmi = "__kocoKatmanSilindi"
+
+  // İKİNCİ İM: "bu katmanın BEKLEYEN yayını düşürüldü".
+  //
+  // Düşürülen yayın BİLGİ taşıyor: hiç yayınlanmamış bir dolgu öyle kaybolur
+  // ve resim yeniden çizilince dolgusuz görünür. #111 bu telafiyi
+  // `Picture.erase()` yolu için ekledi (TurtlePicture.dolguDüşürüldü); aynı
+  // kusur `resimleriSil()` kapısından da geliyordu, çünkü o Picture.erase()'ten
+  // geçmiyor -- elinde katman var, çizer yok. Bu im o bilgiyi katmanın üzerinde
+  // taşıyor, realDraw okuyup yeniden kirletiyor (#109, #112 incelemesi).
+  //
+  // "Silindi"den AYRI bir im, çünkü koşulları farklı: her silinen katman
+  // imleniyor ama yalnız GERÇEKTEN bir yayın düşürülen katmanın yeniden
+  // kirletilmesi gerekiyor. Her çizimde kirletmek, bir kez çizilen her resme
+  // fazladan bir üçgenleme bindirirdi (#111'in altını çizdiği ayrım).
+  private val DüşenBoyaİmi = "__kocoDüşenBoya"
+
+  private def imKoy(o: Any, im: String): Unit = if (o != null) dyn(o).updateDynamic(im)(true)
+  private def imSil(o: Any, im: String): Unit = if (o != null) dyn(o).updateDynamic(im)(false)
+  private def imVarMı(o: Any, im: String): Boolean =
+    o != null && dyn(o).selectDynamic(im).asInstanceOf[js.UndefOr[Boolean]].getOrElse(false)
+
+  /** Katmanı "sahneden silindi" diye imle (silme yolları çağırıyor). */
+  def katmanıSilindiİmle(katman: Any): Unit = imKoy(katman, Silindiİmi)
+
+  /** Katman silinmiş mi? İm hiç konmamışsa HAYIR -- yeni kurulmuş bir katman
+    * (Resim{} gövdesi çiz()'den ÖNCE çalışıyor) canlı sayılmalı, yoksa dolgu
+    * hiç oluşmaz. */
+  def katmanSilindiMi(katman: Any): Boolean = imVarMı(katman, Silindiİmi)
+
+  /** Bu katmanın bekleyen yayını GERÇEKTEN düşürüldü diye imle. */
+  def düşenBoyayıİmle(katman: Any): Unit = imKoy(katman, DüşenBoyaİmi)
+
+  /** Düşürülmüş bir yayın var mı? realDraw, addLayer imleri silmeden ÖNCE okuyor. */
+  def düşenBoyaVarMı(katman: Any): Boolean = imVarMı(katman, DüşenBoyaİmi)
+
+  /**
+   * `katman`ı VE altındaki bütün düğümleri "silindi" diye imler (#115).
+   *
+   * Neden alt ağaç: bir GPics (BasePicSequence) silindiğinde sahneden çıkan
+   * düğüm grubun kabı, ama dolgusu bekleyen çizerlerin katmanı onun altındaki
+   * çocuklar. Yalnız kabı imlemek onları durdurmuyordu: kaplumbağanın komut
+   * kuyruğu boşaldıkça her kenar boyaKirlendi'yi yeniden çağırıp çizeri sıraya
+   * geri koyuyordu.
+   *
+   * Graphics/Sprite düğümlerini AYIKLAMIYORUZ: PIXI 5'te ikisi de Container'dan
+   * türüyor, yani ucuz ve güvenilir bir ayırt edici yok. Fazladan im koymak
+   * zararsız -- imi yalnız `boyasıSürüyor` (turtleLayer üstünde) ve
+   * `düşenBoyaVarMı` (tnode üstünde) okuyor; öteki düğümlerde kimse bakmıyor.
+   * Yürüyüşün kendisi glKaynaklarınıBırak'ın zaten yaptığı yürüyüşün aynısı.
+   */
+  def altAğacıSilindiİmle(düğüm: Any): Unit =
+    if (düğüm != null) {
+      katmanıSilindiİmle(düğüm)
+      val çocuklar = dyn(düğüm).children
+      if (!js.isUndefined(çocuklar) && çocuklar != null) {
+        çocuklar.asInstanceOf[js.Array[js.Dynamic]].foreach(altAğacıSilindiİmle)
+      }
+    }
+
+  /** Katman (yeniden) sahneye giriyor: her iki imi de kaldır. addLayer çağırıyor. */
+  def katmanınSilindiİminiSil(katman: Any): Unit = {
+    imSil(katman, Silindiİmi)
+    imSil(katman, DüşenBoyaİmi)
+  }
 }
