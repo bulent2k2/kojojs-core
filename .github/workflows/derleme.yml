@@ -1,0 +1,65 @@
+# page modülünü derler.
+#
+# NEDEN VAR: bu depoda hiç CI yoktu (`.github` dizini bile yoktu), yani bir
+# senkronun derlendiğini gösteren tek kanıt, PR yazarının elle koşturduğu
+# `page/compile` idi.
+#
+# Şimdi gerekli olmasının sebebi: `page/src/main/scala` ÜRETİLMİŞ bir kopya --
+# kojojs-dev'den `sync-kojojs-core.sh` ile geliyor ve o betiğin kilidi
+# kaldırıldı (kojojs-dev#120), yani senkron rutin bir işe dönüyor. Kilidin
+# eskiden koruduğu şey tam olarak "senkron core build'ini kırar" idi; kilit
+# gidince o korumanın yerini alacak şey bu iş.
+#
+# Kovaladığı hata sınıfı somut: kojojs-core#26 öncesinde canlı sitedeki
+# /yardim/komutlar sayfası `soluk` ve `döndürMerkezli` gösterilerini
+# gösteriyordu ama derleyici tarafında o API yoktu -- öğrenci tıklayınca
+# derleme hatası alıyordu ve hiçbir şey kırmızı yanmıyordu.
+#
+# KAPSAMI DAR, BİLEREK: yalnız `page` derleniyor. `compiler-server` ve
+# `client` modülleri ağır (akka, scalatags, tam Scala.js bağlama) ve bu depoda
+# senkronla değişmiyorlar. Derleme denetimi tek sınama takımı olmayan bir
+# depoda bile "kaynak kendi içinde tutarlı mı" sorusuna ucuz bir cevap; sınama
+# takımının yerine geçmiyor (davranış savları kojojs-dev'de koşuyor).
+name: derleme
+
+# push yalnız master'da: dalları zaten pull_request tetikliyor, ikisi birden
+# açıkken her PR itmesi işi iki kez koşturuyor (kardeş kojojs-dev deposunda
+# ölçülmüş bir davranış).
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  page-derleme:
+    name: page modülü derleniyor mu
+    runs-on: ubuntu-latest
+    # Soğuk koşuda bağımlılık indirmesi derlemeden uzun sürüyor; asılı kalan
+    # bir çözümlemeyi runner'ın 6 saatlik varsayılanına kadar beklemeyelim.
+    timeout-minutes: 30
+    env:
+      # Kaynakta Türkçe adlı tanımlar var (res$AydınlıkBD gibi .class adları);
+      # UTF-8 olmadan zinc InvalidPathException ile çöküyor. Kozmetik değil.
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      # Action'lar MAJOR etiketine sabitleniyor (SHA'ya değil), kardeş
+      # kojojs-dev deposuyla aynı politika: güvenlik yamaları kendiliğinden
+      # gelsin, kırıcı değişiklik major atlarken bilinçli olsun.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # 21: kojojs-dev ve kojo depolarının ölçülmüş seçimi; depolar arası
+          # tek sürümde durmak için aynısı.
+          java-version: "21"
+          cache: sbt
+
+      - uses: sbt/setup-sbt@v1
+
+      - name: page/compile
+        run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 page/compile
