@@ -165,9 +165,15 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtleLayer.addChild(boyamaYolu)
     turtleLayer.addChild(turtlePath)
     if (!forPic && turtleImage != null) turtleLayer.addChild(turtleImage)
-    // Yeni çizer biçemsiz doğuyor; kalemi ve varsa açık boyamayı geri koy.
+    // Yeni çizer biçemsiz doğuyor; KALEMİ geri koyuyoruz -- dolguyu DEĞİL.
+    // Kalem yoluna açık bir beginFill koymak, PIXI'nin her çizimde çağırdığı
+    // finishPoly'nin o yolu kapatıp DOLU çokgen olarak boyamasına yol açıyor:
+    // kalem izi, altındaki gerçek dolgunun üstünü kendi rengiyle örtüyor.
+    // Dolgu boyamaYolu'nun (ve biten şekiller için boyamayıİşle'nin) işi.
+    // Ölçüldü (#126, ornekler/14-agir-dolgu.kojo): burada fillBoya hâlâ ESKİ
+    // renk olduğu için ikinci şeklin kalem yolu MAVİ dolguyla doğuyor ve
+    // altındaki kırmızı dolguyu örtüyor -- iki gül de mavi görünüyor.
     turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
-    if (fillBoya != null) PixiUyum.boyamayaBaşla(turtlePath, fillBoya)(() => kojoWorld.render())
     // Yolun sürekliliği: yoluSürdür boş yolu zaten sonYol'dan başlatıyor, ama
     // arada moveTo gelmeyen yollar (realSetFillPaint) için burada da koyuyoruz.
     turtlePath.moveTo(sonYolX, sonYolY)
@@ -230,7 +236,13 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       gr.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
       return
     }
-    val ü = Üçgenleyici.nonzero(boyamaÇokgeni.düzDizi)
+    // Süre ÖLÇÜLÜYOR: pahalı dolguyu kullanıcıya bildirmek için (#68). Nokta
+    // sayısına bakmak yetmiyor -- kesişmeyen 4000 nokta 6 ms, kesişen 1000
+    // nokta 95 ms. Bedeli iki performance.now(); bkz. ÜçgenlemeUyarısı.
+    val düz = boyamaÇokgeni.düzDizi
+    val t0 = ÜçgenlemeUyarısı.saat()
+    val ü = Üçgenleyici.nonzero(düz)
+    ÜçgenlemeUyarısı.üçgenlemeBitti(ÜçgenlemeUyarısı.saat() - t0, düz.length / 2)
     var i = 0
     while (i + 5 < ü.length) {
       gr.drawPolygon(scala.scalajs.js.Array(ü(i), ü(i + 1), ü(i + 2), ü(i + 3), ü(i + 4), ü(i + 5)))
@@ -637,9 +649,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       turtlePath.beginFill(penColor.toRGBDouble, penColor.alpha.get)
       turtlePath.drawCircle(x, y, çap / 2)
       turtlePath.endFill()
-      // kalemin ve varsa kullanıcının açık boyamasının durumunu geri koy
+      // kalemin durumunu geri koy -- dolguyu DEĞİL (bkz. kalemYolunuDondur, #126)
       turtlePath.lineStyle(penWidth, penColor.toRGBDouble, penColor.alpha.get)
-      if (fillBoya != null) PixiUyum.boyamayaBaşla(turtlePath, fillBoya)(() => kojoWorld.render())
       turtlePathMoveTo(x, y)
       kojoWorld.render()
     }
