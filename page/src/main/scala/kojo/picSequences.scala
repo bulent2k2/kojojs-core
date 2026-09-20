@@ -20,7 +20,28 @@ abstract class BasePicSequence(val pics: Seq[Picture]) extends Picture with Read
   def layoutChildren(): Unit
   def layout(): Unit = {
     layoutChildren()
-    makeDone()
+    // YALNIZ makeDone korunuyor, layoutChildren DEĞİL. `çiz(g); ...; çiz(g)` kalıbı öteki
+    // resim türlerinde çalışıyor, grupta çalışmıyordu: childrenReady TAMAMLANMIŞ bir future
+    // olduğu için foreach ikinci çizimde de koşuyor ve makeDone zaten tamamlanmış söze ikinci
+    // kez success diyor -> IllegalStateException, SESSİZCE (hata bir future geri çağrısının
+    // içinde, betiğe ulaşmıyor, yalnız konsola düşüyor). Sorun #121.
+    //
+    // NEDEN layout()ün TAMAMINI korumuyoruz: yeniden yerleşim GEREKLİ. Çocuk arada
+    // değiştiyse ikinci çizim onu yeni boyuta göre yerleştirmeli -- ölçüldü, HPics(100,60,80),
+    // ilk çocuk scale(2):
+    //   yalnız makeDone korunur : (0,0) (203,0) (265,0)   yeni boyuta göre  ✅
+    //   layout()ün tamamı korunur: (0,0) (102,0) (164,0)   BAYAT, büyüyen çocuk komşusuna biner
+    // İlk denememde tamamını korumuştum; #123 incelemesi bu bedeli ölçtü.
+    //
+    // makeDone'un "tam bir kez" sözleşmesi de böylece bozulmuyor: ikinci kez hiç çağrılmıyor.
+    // ÖLÇÜLÜ OLMAK GEREK: bu sınıfta makeDone'u çağıran tek yer burası (ötekiler ImagePic,
+    // ImagePicRaw, TextPic, TurtlePicture, VectorGraphicsPic), yani gruplar için "ikinci
+    // yerleşim" uyarısı fiilen kalktı -- artık desteklenen bir işlem olduğu için doğrusu da
+    // bu. Sözleşme öteki resim türleri için duruyor; grup için bir işaret kaynağı değil.
+    //
+    // İki çizim ilk yerleşimden ÖNCE gelirse de doğru: iki geri çağrı da kaydolur,
+    // birincisi made'i kurar, ikincisi yalnız yerleşimi yeniler.
+    if (!made) makeDone()
   }
 
   def realDraw(): Unit = {
@@ -31,7 +52,7 @@ abstract class BasePicSequence(val pics: Seq[Picture]) extends Picture with Read
     kojoWorld.addLayer(tnode)
     import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
     childrenReady.foreach { _ =>
-      layout()
+      layout() // ikinci çizimde de koşuyor; korunan yer layout()ün İÇİ (bkz. yukarı, #121)
     }
   }
 
@@ -214,10 +235,22 @@ object BatchPics {
 }
 
 class BatchPics(pics: Seq[Picture])(implicit val kojoWorld: KojoWorld) extends BasePicSequence(pics) {
-  def layoutChildren(): Unit = {
-    pics.tail.foreach { p =>
-      p.invisible()
-    }
+  // GÖSTERİLEN resmi görünür, ötekileri görünmez yapıyor -- "tail'i gizle" DEĞİL.
+  // Eskiden `pics.tail.invisible()` diyordu, yani pics.head'in görünür olmasına güvenip
+  // indeksi hiç okumuyordu. Yerleşim ikinci çizimde yeniden koştuğunda (#121) bu
+  // GÖRÜNÜRLÜĞÜ SIFIRLIYOR -- ölçüldü, showNext bir kez ilerledikten sonra:
+  //   ilk çizim            true,false,false
+  //   showNext ilerletince false,true,false
+  //   layoutChildren yine  false,false,false   <- hiçbiri görünmüyor, currPicIndex=1
+  // Yani hiçbiri görünmeyen bir ara oluşuyor ve sonraki showNext pics(2)'ye atlayarak
+  // pics(1)'i hiç göstermiyor. İndeksi okuyunca yöntem idempotent oluyor.
+  //
+  // YAN ETKİSİ, bilinçli: görünürlük artık İDDİA EDİLİYOR, yalnız kuyruk gizlenmiyor. Bu
+  // yüzden gösterilen resmi elle `görünmez()` yapıp grubu yeniden çizmek onu GERİ GETİRİYOR
+  // (master'da o yol istisna atıyor ve gizli kalıyordu). Bir yığın resmi için "yerleşim"
+  // tam olarak bu demek. GrupYenidenCizimTest'te çivili (#123 incelemesi §4b).
+  def layoutChildren(): Unit = pics.zipWithIndex.foreach { case (p, i) =>
+    if (i == currPicIndex) p.visible() else p.invisible()
   }
 
   var currPicIndex = 0
