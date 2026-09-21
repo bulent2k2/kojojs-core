@@ -51,6 +51,29 @@ import scala.scalajs.js
  * dolgu canlandırmayı tek başına düşüremez; üstüne çıkan düşürebilir.
  * Ölçümle yerleşimi: 250x7 (~8 ms) susuyor, 1000x7 (~95 ms) konuşuyor.
  */
+/**
+ * Bir ÇİZERİN o anki şeklinin birikimi.
+ *
+ * KÜRESEL OLAMAZ, ölçüldü (#130 incelemesi): `KojoWorld.boyalarıBoşalt` tek
+ * turda BİRDEN ÇOK çizerin boyasını yayınlıyor, yani iki ayrı `Resim{}`in iki
+ * ayrı şeklinin süresi aynı kovaya akardı. İlk sürümde tam bu oldu: iki resim,
+ * her biri 30 ms, panele "şu ana dek 60 ms" düştü -- oysa hiçbir şekil 60 ms
+ * harcamamıştı. Daha kötüsü, araya giren UCUZ ve BİTMİŞ bir şekil başkasının
+ * birikimini üstlenebiliyordu: 4 noktalı bir kareye 50 ms fatura edilip
+ * kullanıcıya o karenin nokta sayısını yarıya indirmesi öğütleniyordu.
+ *
+ * Yani düzeltilen kusurun (yanlış nokta sayısı) daha kötü bir biçimi: orada
+ * sayı yanlıştı ama ŞEKİL doğruydu; burada ikisi de yanlış olabiliyordu.
+ */
+private[kojo] final class ŞekilBirikimi {
+  private[kojo] var toplamMs = 0.0
+  private[kojo] var bildirildi = false
+  private[kojo] def unut(): Unit = {
+    toplamMs = 0.0
+    bildirildi = false
+  }
+}
+
 object ÜçgenlemeUyarısı {
 
   /** Bir karelik bütçe (60 kare/saniye). */
@@ -82,13 +105,34 @@ object ÜçgenlemeUyarısı {
         js.isUndefined(js.Dynamic.global.window.performance)) () => 0.0
     else () => window.performance.now()
 
+  /**
+   * Bir ŞEKLİN dolgusu, o şekil bitmeden birkaç kez yayınlanıyor: `scheduleLater`
+   * ilk 100 komutu eşzamanlı koşturup sonrasını erteliyor (KojoWorld.MaxBurst),
+   * arada `requestAnimationFrame` devreye girip BÜYÜYEN çokgeni yeniden
+   * üçgenliyor. Ölçüldü (gerçek tarayıcı, #125): 250 noktalık bir gül için not
+   * "146 nokta" diyordu -- kullanıcının betiğinde olmayan bir sayı.
+   *
+   * O yüzden ölçüm ŞEKİL BAŞINA birikiyor ve not şekil başına EN ÇOK BİR KEZ
+   * düşüyor. Kullanıcının ödediği bedel zaten toplam: yarım yayınlar da
+   * gerçekten harcanmış süre.
+   */
+  /**
+   * Şekil BİTMEDEN konuşma eşiği. Bitmeyi beklemek yetmiyor, çünkü bir şekil
+   * hiç bitmeyebilir: şekli tamamlayan tek şey kalem kalkık taşınma
+   * (`turtlePathMoveTo`) ya da boya değişimi (`realSetFillPaint`), ve betiğin
+   * SON şekli çoğu zaman ikisini de görmeden bitiyor.
+   * `ornekler/14-agir-dolgu.kojo`'nun 1000 noktalık gülü tam böyle -- yalnız
+   * tamamlanmış şekle bakan bir uyarı, uyarılması gereken şekli susturuyordu.
+   */
+  private[kojo] val erkenÇarpan = 3.0
+
   private var sonNotZamanı = Double.NegativeInfinity
   private var notSayısı = 0
 
   /** Panele GERÇEKTEN kaç not düştü. Zaman kapısına takılanlar sayılmıyor. */
   private[kojo] def düşenNotSayısı: Int = notSayısı
 
-  /** Yalnız sınamalar için. */
+  /** Yalnız sınamalar için: KÜRESEL durum (zaman kapısı ve sayaç). */
   private[kojo] def hepsiniUnut(): Unit = {
     sonNotZamanı = Double.NegativeInfinity
     notSayısı = 0
@@ -100,15 +144,22 @@ object ÜçgenlemeUyarısı {
    * Bütçeyi aşmadıysa hiçbir şey yapmıyor -- sıcak yolda tek bir
    * karşılaştırma.
    */
-  private[kojo] def üçgenlemeBitti(süreMs: Double, noktaSayısı: Int): Unit =
-    if (süreMs > bütçeMs) {
+  private[kojo] def üçgenlemeBitti(
+      birikim: ŞekilBirikimi, süreMs: Double, noktaSayısı: Int, bitti: Boolean): Unit = {
+    birikim.toplamMs += süreMs
+    val toplam = birikim.toplamMs
+    val konuşulabilir = toplam > bütçeMs && (bitti || toplam > erkenÇarpan * bütçeMs)
+    if (!birikim.bildirildi && konuşulabilir) {
       val şimdi = saat()
       if (şimdi - sonNotZamanı >= enAzAralıkMs) {
         sonNotZamanı = şimdi
         notSayısı += 1
-        paneleYaz(metin(süreMs, noktaSayısı))
+        birikim.bildirildi = true
+        paneleYaz(metin(toplam, noktaSayısı, bitti))
       }
     }
+    if (bitti) birikim.unut()
+  }
 
   /**
    * Okunabilir olsun diye üç parça: NE oldu (sayılarla), NEDEN, NE YAPILABİLİR.
@@ -120,9 +171,13 @@ object ÜçgenlemeUyarısı {
    * için düşen bir not kendi gerekçesini yalanlıyordu. Dar bir bant ama tam
    * da yavaş makinelerin bandı: orada süreler eşiğin hemen üstünde kümelenir.
    */
-  private[kojo] def metin(süreMs: Double, noktaSayısı: Int): String =
-    s"Not: bu şeklin dolgusunu hesaplamak ${süreMs.round} ms sürdü " +
-      s"($noktaSayısı nokta) -- bir karelik bütçe $bütçeMs ms. " +
+  private[kojo] def metin(süreMs: Double, noktaSayısı: Int, bitti: Boolean): String =
+    (if (bitti)
+       s"Not: bu şeklin dolgusunu hesaplamak ${süreMs.round} ms sürdü ($noktaSayısı nokta)"
+     else
+       s"Not: bu şeklin dolgusu şu ana dek ${süreMs.round} ms aldı " +
+         s"(şimdilik $noktaSayısı nokta; şekil büyüdükçe artacak)") +
+      s" -- bir karelik bütçe $bütçeMs ms. " +
       "Kendini kesen şekillerde dolgu hesabı nokta sayısıyla karesele yakın " +
       "büyüyor, yani nokta sayısını yarıya indirmek süreyi dörtte bire yakın " +
       "düşürür. Canlandırma içindeyse daha az noktayla çizmeyi ya da " +
