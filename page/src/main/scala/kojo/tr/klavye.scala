@@ -3,7 +3,7 @@ package kojo.tr
 /**
  * Tuş kodlarının Türkçesi -- oyun yazmak için `tuşBasılıMı(tuşlar.sol)` gibi.
  *
- * DEĞERLER DOM `KeyboardEvent.keyCode`'una göre -- masaüstündeki (ve KojoJS'in
+ * DEĞERLER DOM `KeyboardEvent.keyCode`'una göre -- masaüstündeki (ve iKojo'nun
  * kendi `KeyCodes` sınıfındaki) AWT VK_* değerlerine göre DEĞİL.
  *
  * Sebep: `KojoWorld.isKeyPressed` tarayıcının verdiği `e.keyCode` ile

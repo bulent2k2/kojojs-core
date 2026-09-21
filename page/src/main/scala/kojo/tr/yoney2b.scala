@@ -4,7 +4,7 @@ package kojo.tr
  * 2 boyutlu yöney (vektör) -- oyun fiziği için: hız, sekme, yön.
  *
  * TASARIM: masaüstünde `Yöney2B` Vector2D'yi SARAN bir case class. Burada TAKMA
- * AD (`type Yöney2B = kojo.Vector2D`) olarak bağlanıyor, çünkü KojoJS'in sekme
+ * AD (`type Yöney2B = kojo.Vector2D`) olarak bağlanıyor, çünkü iKojo'nun sekme
  * işlevleri (`bouncePicOffStage` vb.) gerçek `Vector2D` istiyor -- sarmalayıcı
  * olsa her çağrıda açıp sarmak gerekirdi ve Türkçe kod İngilizce API ile
  * uyumsuzlaşırdı. Aynı gerekçe Nokta için de geçerli.

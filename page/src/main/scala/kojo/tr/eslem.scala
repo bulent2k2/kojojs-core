@@ -127,7 +127,7 @@ trait EşlemYöntemleri extends YinelenebilirYöntemleri with BelkiYöntemleri {
   def eşleğe: collection.immutable.Map[A, D] = m.toMap
 
   // --- masaüstü Koco ile eşitleme (bkz. lite/i18n/tr/eslem.scala) --------
-  // Aşağıdakiler masaüstündeki Eşlem'de baştan beri vardı, ikojo'da eksikti.
+  // Aşağıdakiler masaüstündeki Eşlem'de baştan beri vardı, iKojo'da eksikti.
   def kaldır = m.lift
   def kuyruğu = m.tail
   def önü = m.init

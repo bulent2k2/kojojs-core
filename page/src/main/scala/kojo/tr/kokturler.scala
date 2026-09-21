@@ -5,7 +5,7 @@ package kojo.tr
  *
  * DİKKAT: masaüstündeki özgün dosya TÜRKÇE ANAHTAR KELİMELER kullanıyor --
  * `özellik` (trait), `tanım` (def), `baskın` (override) -- ki bunlar yalnızca
- * yamalı scala-tr derleyicisinde var. KojoJS standart Scala ile derlendiği için
+ * yamalı scala-tr derleyicisinde var. iKojo standart Scala ile derlendiği için
  * anahtar kelimeler İngilizceye çevrildi; ÜYE ADLARI Türkçe kaldı, yani
  * kullanıcının yazdığı kod aynı görünüyor:
  *

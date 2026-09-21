@@ -8,7 +8,7 @@ import pixiscalajs.PIXI
  * Bunlar olmadan Türkçe API'den ÇEVRİLMEMİŞ İngilizce türler sızıyordu:
  * `resim.konum` bir `PIXI.Point`, `resim.sınırları` bir `PIXI.Rectangle`
  * döndürüyordu. Masaüstü Koco'da `type Nokta = Point` ve
- * `type Dikdörtgen = Rectangle` var; burada KojoJS'in PIXI karşılıklarına
+ * `type Dikdörtgen = Rectangle` var; burada iKojo'nun PIXI karşılıklarına
  * bağlanıyorlar.
  *
  * PIXI.Point'in x/y'si `var` -- yani nokta DEĞİŞEBİLİR. `resim.konum`'un

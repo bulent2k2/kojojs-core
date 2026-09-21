@@ -3,7 +3,7 @@ package kojo
 import com.vividsolutions.jts.geom.Geometry
 import org.scalajs.dom.document
 
-// Turkish (Koco) turtle wrapper for KojoJS.
+// Turkish (Koco) turtle wrapper for iKojo.
 //
 // ÖNEMLİ: englishTurtle'ın türü `TurtleAPI` ve Builtins buraya `turtle`
 // (GlobalTurtleForPicture) geçiyor, `turtle0` DEĞİL. Sebep: TurtlePicture.apply
@@ -79,13 +79,13 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def sol(): Birim = englishTurtle.left(90)
   def dön(açı: Kesir, yarıçap: Kesir): Birim = englishTurtle.turn(açı, yarıçap)
   def dön(açı: Kesir): Birim = englishTurtle.turn(açı)
-  // desktop calls this jumpTo; KojoJS spells it setPosition
+  // desktop calls this jumpTo; iKojo spells it setPosition
   def atla(x: Kesir, y: Kesir): Birim = englishTurtle.setPosition(x, y)
   def ilerle(x: Kesir, y: Kesir): Birim = englishTurtle.moveTo(x, y)
   def noktayaGit(x: Kesir, y: Kesir): Birim = englishTurtle.lineTo(x, y)
   def git(x: Kesir, y: Kesir): Birim = englishTurtle.moveTo(x, y) // goTo/moveTo
   // Masaüstünde hop kalem durumunu bozduğu için saveStyle/restoreStyle ile
-  // sarılıyor. KojoJS'te Hop -> realForward(n, hop=true) ve penIsUp'a HİÇ
+  // sarılıyor. iKojo'da Hop -> realForward(n, hop=true) ve penIsUp'a HİÇ
   // dokunmuyor, yani sarmalama gereksiz -- üstelik zararlı: restoreStyle
   // fillColor'ı geri koyarken (başlangıçta null) realSetFillColor beginFill
   // çağırıyor ve PIXI Graphics kalıcı olarak doldurma kipine geçiyor.
@@ -116,7 +116,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   /**
    * Kaplumbağanın o andaki konumu ve yönü -- GERİ ÇAĞIRMAYLA.
    *
-   * Neden düz bir `konum` değeri yok: KojoJS'te her kaplumbağa komutu bir
+   * Neden düz bir `konum` değeri yok: iKojo'da her kaplumbağa komutu bir
    * kuyruğa giriyor, çağrıldığı anda çalışmıyor. `ileri(100)` yazdığında
    * kaplumbağa daha kıpırdamamıştır. Anlık bir okuma bu yüzden kuyruktaki
    * komutlardan ÖNCEKİ değeri verirdi -- sessizce yanlış cevap.
@@ -198,7 +198,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   /**
    * `konumuOku` gibi, ama yönü verir -- derece cinsinden, 0 ile 360 arasında.
    *
-   * KojoJS'in ham `heading`'i dönüşleri biriktiriyor: dört kez sağa dönen bir
+   * iKojo'nun ham `heading`'i dönüşleri biriktiriyor: dört kez sağa dönen bir
    * kaplumbağa için -270 diyor. Aynı yön, ama çocuğa 90 demek gerekiyor.
    */
   def yönüOku(işlev: Kesir => Birim): Birim =
@@ -261,7 +261,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // Devre 6: nokta artık gerçek (Turtle.realDot, dolu daire).
   def nokta(çap: Sayı): Birim = englishTurtle.dot(çap)
   def nokta(): Birim = englishTurtle.dot(25)
-  // ışınlar KojoJS'te henüz UYGULANMADI (beamsOn/Off = {}); dosyanın geleneği
+  // ışınlar iKojo'da henüz UYGULANMADI (beamsOn/Off = {}); dosyanın geleneği
   // gereği sessizce çalışmış gibi görünmesinler:
   // Işınlar (dört yönü gösteren farlar): İngilizce yüzeyde beamsOn/beamsOff
   // var ama gövdeleri boş (TurtleAPI.scala) -- yani ad tanınır ve betik derlenir,
@@ -440,7 +440,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
 
   // ---- masaüstü Koco takma adları ve yer tutucular (Devre 1) ----
   // Masaüstü betiklerinin (ornekler/masaustu) OLDUĞU GİBİ derlenmesi için
-  // trInit.scala'daki adlar. Her satırın sağında ikojo'daki asıl karşılık;
+  // trInit.scala'daki adlar. Her satırın sağında iKojo'daki asıl karşılık;
   // davranışı farklı olanlar yorumda söyleniyor. Yeni bir ad eklerken önce
   // araclar/ucurum.py çıktısındaki sıklığa bak.
 
@@ -556,7 +556,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def artalandaOynat(kod: => Birim): Birim = kod
 
   // Kaplumbağanın konumunu/yönünü SENKRON okuyan `konum` ve `doğrultu`
-  // (masaüstü trInit.scala) BİLEREK eklenmedi: ikojo'da kaplumbağa komutları
+  // (masaüstü trInit.scala) BİLEREK eklenmedi: iKojo'da kaplumbağa komutları
   // kuyruğa giriyor, o yüzden senkron bir okuma kuyruktaki komutlardan ÖNCEKİ
   // konumu verirdi -- sessizce yanlış çizim. Kuyruk sırasını koruyan geri
   // çağrımlı biçimleri kullanın: konumuOku(k => ...), yönüOku(y => ...).

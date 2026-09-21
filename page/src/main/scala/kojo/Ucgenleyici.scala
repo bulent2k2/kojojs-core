@@ -21,7 +21,7 @@ import scala.scalajs.js
  * Bir çokgeni NON_ZERO sarım kuralıyla üçgenler.
  *
  * NEDEN VAR: masaüstü Kojo dolguyu `Path2D.Double` + `Graphics2D.fill` ile
- * yapıyor, yani varsayılan `WIND_NON_ZERO`. ikojo ise PIXI `Graphics`e
+ * yapıyor, yani varsayılan `WIND_NON_ZERO`. iKojo ise PIXI `Graphics`e
  * bırakıyordu, o da earcut kullanıyor ve earcut BASİT (kendini kesmeyen)
  * çokgen varsayıyor. `tan-theta.kojo` gibi kendi üstünden geçen yollarda iki
  * taraf farklı şekil çiziyordu.

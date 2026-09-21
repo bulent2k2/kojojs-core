@@ -326,6 +326,10 @@ trait Picture {
    * Gerekçe ve bedel ölçümleri: PixiUyum.isabetAlanınıKur.
    */
   private def etkileşimeAç(): Unit = {
+    // Bütün resim fare işleyicilerinin tek boğazı -- dünyaya da buradan haber
+    // veriyoruz: bu betikte kuyruk boşalsa bile fareyle daha komut gelebilir,
+    // yani dolgu notu "bitti" diye kesin konuşamaz (#140 incelemesi §1).
+    kojoWorld.girdiİşleyicisiKaydedildi()
     tnode.interactive = true
     PixiUyum.isabetAlanınıKur(tnode)
   }

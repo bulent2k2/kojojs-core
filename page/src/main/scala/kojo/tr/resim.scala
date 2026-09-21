@@ -55,7 +55,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     // masaüstü: Resim.yazı(içerik, yazıyüzü[, renk]) -- Yazıyüzü ailesi PIXI metin stiline
     def yazı(içerik: Her, yy: Yazıyüzü): Resim = new kojo.TextPic(içerik, yy.boy, Renkler.siyah, yy.ad)
     // masaüstü Picture.arc (ArcPic): yayın MERKEZİ (0,0), başlangıcı (r,0).
-    // ikojo'nun kaplumbağa yayı ise başlangıcı (0,0)'a, merkezi (-r,0)'a koyuyor
+    // iKojo'nun kaplumbağa yayı ise başlangıcı (0,0)'a, merkezi (-r,0)'a koyuyor
     // (Turtle.realArc2 içindeki `trans.translate(-r, 0)`). Aradaki +r ötelemeyi
     // burada kapatıyoruz, yoksa aynı yazılımcık iki tarafta farklı yere çiziyor
     // ve ne derleyici ne de sınama bunu görüyor -- bkz. #75. Sınırları
@@ -69,7 +69,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def diziDikey(resimler: Resim*): Resim = kb.picCol(resimler: _*)
     def diziYatay(resimler: Resim*): Resim = kb.picRow(resimler: _*)
     def dizi(resimler: Resim*): Resim = kb.picStack(resimler: _*)
-    // masaüstü takma adları (Devre 1) -- sağda ikojo/İngilizce karşılığı
+    // masaüstü takma adları (Devre 1) -- sağda iKojo/İngilizce karşılığı
     def düz(en: Kesir, boy: Kesir): Resim = kb.Picture.line(en, boy)
     def köşegen(en: Kesir, boy: Kesir): Resim = kb.Picture.line(en, boy)
     def yatay(boy: Kesir): Resim = kb.Picture.hline(boy)

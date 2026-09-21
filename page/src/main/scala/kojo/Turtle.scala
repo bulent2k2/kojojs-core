@@ -246,7 +246,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    * gürültüsü içinde (yukarıdaki bir kerelik bedel yüzünden). Kazanç ikinci
    * şekilden itibaren başlıyor.
    *
-   * NEDEN HÂLÂ ÜÇGEN ÜÇGEN: dördü de ikojo'nun Graphics'e bağlı yerleri, ve
+   * NEDEN HÂLÂ ÜÇGEN ÜÇGEN: dördü de iKojo'nun Graphics'e bağlı yerleri, ve
    * bir mesh denemesi bu sırayla çarpar (hepsi #129 incelemesinde ölçüldü):
    *
    *   1. `PixiUyum.tazele` PATLAR. Bu yöntemin iki çağıranı da (satır 148 ve
@@ -629,6 +629,13 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private def queueHandler(): Unit = {
     if (commandQ.size == 0) {
+      // Kuyruk boşaldı. Daha komut GELEMEYECEKSE betik bitmiş demektir ve bu
+      // şekle bir daha nokta eklenmez -- biriken dolgu süresi artık nihai,
+      // bildirilebilir (#134). Gelebiliyorsa susuyoruz; hangi üç yoldan
+      // gelebildiği ve niye üçünün de sayılması gerektiği `komutGelebilir`de
+      // yazılı (#140 incelemesi §1). Canlandırma o yolların yalnız biri, ve
+      // en sık olanı: boşalma orada kare başına 1.63 kez oluyor.
+      if (!kojoWorld.komutGelebilir) ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi)
       // Zincir burada kopuyor; bundan sonraki ilk komut pompayı yeniden başlatır.
       pompa.kuyrukBoşaldı()
     }
