@@ -285,22 +285,40 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
         } ~ path("durum") {
           // Kayıtlı/Ready derleyici sayısını dışarıdan görünür kılar
           // (koco-deploy#17). Bir arıza sırasında kapasitenin 2 mi 1 mi 0 mı
-          // olduğu bugün dışarıdan görülemiyordu; teşhis ancak yeniden
-          // başlatmadan önce `ps` çekilebilirse mümkün oluyordu.
+          // olduğu görülemiyordu; teşhis ancak yeniden başlatmadan önce `ps`
+          // çekilebilirse mümkün oluyordu.
           //
-          // KONTEYNER İÇİNDEN: nginx yalnız beyaz listedeki yolları router'a
-          // geçiriyor (koco-deploy/nginx.conf), /durum listede YOK -- yani bu
-          // uç dışarıdan erişilebilir değil, bilerek:
-          //     flyctl ssh console -a ikojo -C "curl -s localhost:8880/durum"
-          // Dışarıya açmak istenirse tek satırlık bir nginx location yeter;
-          // o ayrı ve bilinçli bir karar olsun (sayılar işletme bilgisi).
+          // İKİ KATMANLI KORUMA, ve ikisi de tek başına yeterli değil:
+          //
+          // 1) nginx yalnız beyaz listedeki yolları router'a geçiriyor
+          //    (koco-deploy/nginx.conf) ve /durum o listede YOK. Ama bu koruma
+          //    BAŞKA BİR DEPODA duruyor: oraya bir gün yakalayıcı bir location
+          //    girerse uç sessizce açılır ve burada hiçbir şey haber vermez.
+          // 2) Bu yüzden `secret` de isteniyor -- deponun kendi kalıbı, aşağıdaki
+          //    /compiler rotasındaki ile aynı anahtar (Config.secret,
+          //    SCALAFIDDLE_SECRET ortam değişkeni).
+          //
+          // DİKKAT: reference.conf'taki öntanımlı değer "secret", yani ortam
+          // değişkeni AYARLANMAZSA bu koruma yoktur (anahtar yukarı akış
+          // deposunda herkese açık). Kurulumun SCALAFIDDLE_SECRET vermesi şart;
+          // koco-deploy start.sh bunu yapıyor.
+          //
+          // Yerel geliştirmede:
+          //     curl -s "localhost:8880/durum?secret=$SCALAFIDDLE_SECRET"
           //
           // ÖNBELLEKSİZ: cacheOr kasten kullanılmıyor, önbelleğe alınmış bir
           // durum çıktısı yanlış bilgi demek.
-          complete {
-            ask(compilerManager, GetStatus).mapTo[RouterStatus].map { status =>
-              HttpResponse(entity = HttpEntity(`application/json`, write(status).getBytes("UTF-8")))
-                .withHeaders(`Cache-Control`(`no-cache`))
+          parameter("secret".?) { verilen =>
+            if (!verilen.contains(Config.secret)) {
+              // Anahtarın yanlış mı eksik mi olduğunu söylemiyoruz; 403 yeter.
+              complete(HttpResponse(StatusCodes.Forbidden))
+            } else {
+              complete {
+                ask(compilerManager, GetStatus).mapTo[RouterStatus].map { status =>
+                  HttpResponse(entity = HttpEntity(`application/json`, write(status).getBytes("UTF-8")))
+                    .withHeaders(`Cache-Control`(`no-cache`))
+                }
+              }
             }
           }
         } ~ path("compile") {
