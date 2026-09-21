@@ -256,9 +256,18 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    *   2. `glKaynaklarınıBırak` SESSİZCE atlar (en ciddisi). Kapısı
    *      `typeof finishPoly == "function"`; Mesh'te o yok, yani geometrisi
    *      hiç `dispose` edilmez -- #91/#95'te kapatılan GL sızıntısı geri gelir.
-   *   3. Doku ve gradyan dolgusu. `beginTextureFill` eşlemeyi DÜNYA uzayında
-   *      yapıyor, o yüzden dolgu üçgen sınırlarını aşarak sürekli görünüyor;
-   *      Mesh'in kendi shader'ı ve UV'leri olur, süreklilik bedava gelmez.
+   *   3. Doku ve gradyan dolgusu. `beginTextureFill` eşlemeyi ŞEKLİN YEREL
+   *      uzayında ve ŞEKİL BAŞINA yapıyor, o yüzden dolgu üçgen sınırlarını
+   *      aşarak sürekli görünüyor. (Burada eskiden "DÜNYA uzayında" yazıyordu;
+   *      yanlıştı, #132 incelemesi §2'de ölçüldü: düğüm 7 piksel kaydırılınca
+   *      görüntü SAF ÖTELEME oluyor, yani desen şekille birlikte taşınıyor.
+   *      `DokuBoya`nın kendi belgesi de "şeklin YEREL koordinatına" diyor.
+   *      Ayrım kritik: "dünya" diye okuyan biri UV hesabına `worldTransform`u
+   *      katar ve resim taşındıkça dolgusu YÜZEN bir mesh yazar.)
+   *      Mesh'in kendi shader'ı ve UV'leri olur, süreklilik bedava gelmez --
+   *      ama pahalı da değil: köşe başına tek `matris.applyInverse` ile sonuç
+   *      Graphics yoluyla BİT BİREBİR aynı çıkıyor, dönüştürülmüş düğümde de
+   *      (ölçüldü, `MeshUvSondaTest`).
    *   4. İsabet alanı -- ama sanıldığı gibi değil, ve KÜÇÜK. `Mesh.containsPoint`
    *      VAR ve gerçek bir üçgen sınaması yapıyor; kıran şey PIXI değil,
    *      `Utils.isabetAlanınıKur` içindeki kendi kapımız: `containsPoint`
