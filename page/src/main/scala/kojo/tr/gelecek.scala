@@ -8,10 +8,10 @@ import scala.concurrent.{ExecutionContext, Future}
  * Masaüstündeki `gelecek.scala`dan alınmayanlar ve nedenleri:
  *  - `JGelecek` (java.util.concurrent.Future): Scala.js javalib'inde yok.
  *  - `PEtkinlik` (edu.umd.cs.piccolo.activities.PActivity): Piccolo masaüstü
- *    çizim kütüphanesi; KojoJS PIXI kullanıyor.
+ *    çizim kütüphanesi; iKojo PIXI kullanıyor.
  *  - `Gelecek.olmaz` (Future.never): 2.12'de mevcut değil.
  *
- * KojoJS'te tarayıcı tek iş parçacıklı olduğu için `İşletimBağlamı.küresel`
+ * iKojo'da tarayıcı tek iş parçacıklı olduğu için `İşletimBağlamı.küresel`
  * gerçekte olayları sıraya alır, paralel çalıştırmaz.
  */
 trait GelecekYöntemleri extends TemelTürler {

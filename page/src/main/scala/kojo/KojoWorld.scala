@@ -159,6 +159,54 @@ trait KojoWorld {
   def timer(ms: Long)(fn: => Unit): Unit
   def setRefreshRate(fps: Int): Unit
   def stopAnimation(): Unit
+
+  /**
+   * Komut kuyruğu boşaldıktan SONRA daha komut gelebilir mi.
+   *
+   * `Turtle.queueHandler` kuyruk boşalınca buna bakıyor (#134): false ise
+   * betik bitmiştir, şekle bir daha nokta eklenmez, ve biriken dolgu süresi
+   * NİHAİDİR -- ancak o zaman "şu kadar sürdü (N nokta)" diye kesin
+   * konuşulabilir.
+   *
+   * ÜÇ KAYNAK, ve üçü de sayılmak zorunda:
+   *
+   *   canlandırma  `canlandır` döngüsü dönüyor; bir sonraki kare yine çizer.
+   *                Ölçüldü (#134): 250x7 gül, 30 kare -- döngüde 49 boşalmanın
+   *                49'unda da `animating` true, tek atışlık betikte tek
+   *                boşalmada false. Ayrım temiz.
+   *   zamanlayıcı  `timer(ms)`: kuyruk TIKLAR ARASINDA boşalıyor, ve bir
+   *                sonraki tık nokta ekleyecek. `timers` bunu tam tutuyor
+   *                (`stopAnimation` temizliyor).
+   *   girdi        `tuşaBasınca` / resim fare işleyicileri: kuyruk TUŞLAR
+   *                ARASINDA boşalıyor. `ornekler/11-acilar-ve-radyan.kojo`
+   *                böyle bir betik.
+   *
+   * İLK SÜRÜM YALNIZ BİRİNCİSİNİ SAYIYORDU (#140 incelemesi §1) ve ötekiler
+   * için notu yanlış yere götürüyordu: 17 noktaya büyüyecek bir şekil için
+   * "30 ms sürdü (5 NOKTA)" yazıyor, üstelik `bildirildi` imini koyduğu için
+   * `erkenÇarpan`ın sonradan düşeceği DÜRÜST notu ("şimdilik N nokta; şekil
+   * büyüdükçe artacak") büsbütün susturuyordu. Bu, #125'te bir kez
+   * düzeltilmiş hatanın ta kendisi, ters yönde.
+   *
+   * EMİN DEĞİLSEK SUSUYORUZ: bu yüzden girdi imi bir kez kurulunca geri
+   * ALINMIYOR. Pencereye eklenen tuş dinleyicileri zaten hiç kaldırılmıyor,
+   * yani "artık yok" diyebileceğimiz bir an yok. Bedeli: aynı sayfada girdi
+   * işleyicisi kuran bir betikten sonra boşalma yolu susar (`erkenÇarpan`
+   * çalışmayı sürdürür). Yanlış sayı basmaktansa susmak yeğ -- deponun kendi
+   * tarihi bunu söylüyor.
+   */
+  private[kojo] def komutGelebilir: Boolean
+
+  /**
+   * "Bu betik bir girdi işleyicisi kurdu" -- yani kuyruk boşalsa bile
+   * kullanıcı bir tuşa/fareye dokununca daha komut gelebilir.
+   *
+   * Tek bir yerden çağrılması gerekmiyor, ama her ÇAĞRILMAYAN yer sessiz bir
+   * kusur: o betikte not yanlış sayıyla kesin konuşur. Bugünkü çağıranlar:
+   * `onKeyPress`, `onKeyRelease`, ve `Picture.etkileşimeAç` (bütün resim fare
+   * işleyicilerinin tek boğazı).
+   */
+  private[kojo] def girdiİşleyicisiKaydedildi(): Unit
   def setup(fn: => Unit): Unit
 
   def drawStage(fillc: Color)(implicit kojoWorld: KojoWorld)
@@ -906,7 +954,7 @@ class KojoWorldImpl extends KojoWorld {
   //
   // Bilinen ikinci ayrışma: masaüstünde sil() artalanı varsayılana döndürüyor
   // (clearHelper -> setBackgroundWrapper(backgroundColor), currentBackgroundRect
-  // siliniyor). ikojo'da erasePictures artalana dokunmuyor, yani sil()'den
+  // siliniyor). iKojo'da erasePictures artalana dokunmuyor, yani sil()'den
   // sonra gradyan duruyor. Bu ayrışma bu değişiklikten önce de vardı (eski
   // renderer.backgroundColor da sil()'i atlatıyordu); gradyan artık gerçek
   // olduğu için daha görünür. Ayrı bir iş.
@@ -940,6 +988,11 @@ class KojoWorldImpl extends KojoWorld {
     artalanaKoy("linear-gradient(to bottom, %s, %s)".format(cssRenk(c1), cssRenk(c2)))
 
   var animating = false
+
+  private var girdiİşleyicisiVar = false
+  private[kojo] def girdiİşleyicisiKaydedildi(): Unit = girdiİşleyicisiVar = true
+  private[kojo] def komutGelebilir: Boolean =
+    animating || timers.nonEmpty || girdiİşleyicisiVar
   def notAssetLoading = !AssetLoader.loading
   var timers = Vector.empty[Int]
   private var prevFrameTime: Double = _
@@ -1360,12 +1413,14 @@ class KojoWorldImpl extends KojoWorld {
   def mouseXY = interaction.mouse.getLocalPosition(stage)
 
   def onKeyPress(fn: Int => Unit): Unit = {
+    girdiİşleyicisiKaydedildi() // artık kuyruk boşalsa da betik bitmiş sayılmaz
     def keyDown(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }
     window.addEventListener("keydown", keyDown(_), false)
   }
   def onKeyRelease(fn: Int => Unit): Unit = {
+    girdiİşleyicisiKaydedildi()
     def keyUp(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }

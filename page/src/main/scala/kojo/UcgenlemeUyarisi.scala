@@ -68,9 +68,14 @@ import scala.scalajs.js
 private[kojo] final class ŞekilBirikimi {
   private[kojo] var toplamMs = 0.0
   private[kojo] var bildirildi = false
+
+  /** En son yayında görülen nokta sayısı -- `şekilDurdu` bunu bildiriyor. */
+  private[kojo] var sonNoktaSayısı = 0
+
   private[kojo] def unut(): Unit = {
     toplamMs = 0.0
     bildirildi = false
+    sonNoktaSayısı = 0
   }
 }
 
@@ -147,6 +152,7 @@ object ÜçgenlemeUyarısı {
   private[kojo] def üçgenlemeBitti(
       birikim: ŞekilBirikimi, süreMs: Double, noktaSayısı: Int, bitti: Boolean): Unit = {
     birikim.toplamMs += süreMs
+    birikim.sonNoktaSayısı = noktaSayısı
     val toplam = birikim.toplamMs
     val konuşulabilir = toplam > bütçeMs && (bitti || toplam > erkenÇarpan * bütçeMs)
     if (!birikim.bildirildi && konuşulabilir) {
@@ -160,6 +166,43 @@ object ÜçgenlemeUyarısı {
     }
     if (bitti) birikim.unut()
   }
+
+  /**
+   * Şekil BÜYÜMEYİ BIRAKTI: komut kuyruğu boşaldı ve canlandırma dönmüyor,
+   * yani betik bitti ve bu şekle bir daha nokta eklenmeyecek.
+   *
+   * NEDEN AYRI BİR GİRİŞ. Bir şekli "bitmiş" sayan iki yol var
+   * (`turtlePathMoveTo` ve `realSetFillPaint`), ve betiğin SON şekli çoğu
+   * zaman ikisini de görmüyor. `erkenÇarpan` o boşluğun kaba vekiliydi:
+   * bütçeyi aşan ama 50.1 ms'yi aşmayan her son şekil sessiz kalıyordu --
+   * `ornekler/14-agir-dolgu.kojo`'nun 35 ms'lik gülü tam oraya düşüyordu
+   * (#133). Buradaki giriş o boşluğu kapatıyor.
+   *
+   * SAHNEYE DOKUNMUYOR, bilerek: `boyamayıİşle` gibi kalıcı düğüm YAZMIYOR,
+   * yalnız biriken süreyi bildiriyor. `bitti` bugün iki ayrı soruyu birden
+   * cevaplıyor -- "çokgen tamamlandı mı" (pahalı, sahne durumu) ve "daha
+   * nokta gelecek mi" (yalnız rapor); burada yalnız ikincisi soruluyor.
+   *
+   * ÇAĞIRAN YER KRİTİK, ölçüldü (#134): kuyruk boşalması canlandırma
+   * döngüsünde kare başına 1.63 kez oluyor. Oraya kalıcı düğüm yazan bir
+   * kanca koymak #91/#109'da kapatılan sızıntıyı geri getirirdi. Çağıran
+   * `canlandırmaSürüyor` kapısının arkasında: ölçümde 49 boşalmanın 49'u da
+   * canlandırma içindeydi, yani hepsi susturuluyor.
+   *
+   * `erkenÇarpan` KALDIRILMADI: o hâlâ BÜYÜMEKTE olan çok ağır bir şekli
+   * (örneğin 1000 noktalı gülü, daha bitmeden) haber veriyor. Buradaki
+   * giriş yalnız durmuş şekli kapsıyor; ikisi ayrı durum.
+   */
+  private[kojo] def şekilDurdu(birikim: ŞekilBirikimi): Unit =
+    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs) {
+      val şimdi = saat()
+      if (şimdi - sonNotZamanı >= enAzAralıkMs) {
+        sonNotZamanı = şimdi
+        notSayısı += 1
+        birikim.bildirildi = true
+        paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
+      }
+    }
 
   /**
    * Okunabilir olsun diye üç parça: NE oldu (sayılarla), NEDEN, NE YAPILABİLİR.

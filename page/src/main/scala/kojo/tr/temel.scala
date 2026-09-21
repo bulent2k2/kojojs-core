@@ -11,7 +11,7 @@ package kojo.tr
  * gibi adları kullanabiliyorlar.
  *
  * ÖNEMLİ: `doğru`/`yanlış` masaüstünde kütüphane değeri DEĞİL; yamalı Scala
- * derleyicisinin (scala-tr) Türkçe anahtar kelimeleri. KojoJS standart Scala ile
+ * derleyicisinin (scala-tr) Türkçe anahtar kelimeleri. iKojo standart Scala ile
  * derlendiği için burada `val` olarak sağlıyoruz.
  */
 trait TemelTürler {

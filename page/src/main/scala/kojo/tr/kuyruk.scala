@@ -338,7 +338,7 @@ trait KuyrukYöntemleri extends TemelTürler with EşlemYöntemleri with DizimY�
     def kuyruğa: Kuyruk[T] = d.toQueue
 
     // --- masaüstü Koco ile eşitleme (bkz. lite/i18n/tr/kuyruk.scala) ------
-    // Masaüstündeki mutPriQueMethods'ta baştan beri olan, ikojo'da eksik olanlar.
+    // Masaüstündeki mutPriQueMethods'ta baştan beri olan, iKojo'da eksik olanlar.
     def ekle(ögeler: T*) = d.enqueue(ögeler: _*)
     def baştanAl(): T = d.dequeue()
     def baştanAlHepsini[T2 >: T]: Dizi[T2] = d.dequeueAll.toList // ArraySeq veriyordu: çıktıda DizikDizisi görünüyordu

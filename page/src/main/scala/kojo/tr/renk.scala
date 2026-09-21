@@ -6,7 +6,7 @@ import kojo.doodle.{Color => DRenk}
  * Renklerin Türkçesi.
  *
  * Masaüstünde İKİ renk türü var: `java.awt.Color` (temel renkler) ve
- * `kojo.doodle.Color` (zengin isim listesi). KojoJS'te AWT yok, tek tür var --
+ * `kojo.doodle.Color` (zengin isim listesi). iKojo'da AWT yok, tek tür var --
  * bu yüzden port SADELEŞİYOR: `Renk` = `kojo.doodle.Color`.
  *
  * `renksiz` masaüstünde KColor.noColor; burada saydam siyah.
