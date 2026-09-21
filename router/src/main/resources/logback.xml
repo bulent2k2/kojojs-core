@@ -28,9 +28,12 @@
         <appender-ref ref="FILE" />
     </appender>
 
-    <appender name="ASYNCCONSOLE" class="ch.qos.logback.classic.AsyncAppender">
-        <appender-ref ref="CONSOLE" />
-    </appender>
+    <!-- ASYNCCONSOLE appender'ı BİLEREK YOK. Buraya kadar tanımlıydı ama
+         hiçbir yerden referans verilmiyordu (master'da da öyleydi); aşağıdaki
+         gerekçe senkron konsolu seçtiği için, tam o adı taşıyan kullanılmayan
+         bir appender'ı dosyada bırakmak "hazır duruyor, root'a bunu bağlayayım"
+         daveti olurdu. Gerekçeyi yazıp aracı bırakmak, gerekçeyi sessizce geri
+         alınabilir kılıyor. Geri eklemek isteyen önce aşağıyı okusun. -->
 
     <!-- KONSOL EKLENDİ (koco-deploy#17). Önceden root'ta YALNIZ ASYNCFILE
          vardı: router'ın bütün günlüğü konteyner içindeki

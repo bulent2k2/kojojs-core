@@ -323,7 +323,12 @@ class CompilerManager extends Actor with ActorLogging {
       )
 
     case other =>
-      log.error(s"Received unknown message $other")
+      // .take(150): kardeş aktörün normu (CompilerService.scala:68). Bu satır
+      // bu değişiklikle ilk kez konteyner günlüğüne de düşüyor, o yüzden
+      // sınırsız bırakmak artık ucuz değil. Kaynak taşıyan mesaj buraya
+      // DÜŞEMEZ (`case req: CompilerRequest` tipe göre yakalıyor), yani
+      // sızıntı değil; hijyen ve tutarlılık.
+      log.error(s"Received unknown message ${other.toString.take(150)}")
   }
 }
 
