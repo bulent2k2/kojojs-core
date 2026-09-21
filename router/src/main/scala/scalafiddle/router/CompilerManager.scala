@@ -22,6 +22,31 @@ case object RefreshLibraries
 
 case object CheckCompilers
 
+// Dışarıdan durum sorgusu (WebService'in /durum ucu). Yalnız okur, hiçbir şeyi
+// değiştirmez. Alanlar İNGİLİZCE: bu uç işletmeciye bakıyor ve kodun kendi
+// sözlüğünü (CompilerState.Ready/Compiling/Initializing) yansıtması, günlük
+// satırlarıyla eşleştirilebilmesi için önemli -- kullanıcıya çıkan metinlerin
+// Türkçe olması kuralı buraya uygulanmıyor.
+case object GetStatus
+
+case class CompilerStatus(id: String,
+                          scalaVersion: String,
+                          state: String,
+                          lastActivitySeconds: Long,
+                          lastSeenSeconds: Long)
+
+object CompilerStatus { implicit val rw: ReadWriter[CompilerStatus] = macroRW }
+
+case class RouterStatus(registered: Int,
+                        ready: Int,
+                        compiling: Int,
+                        initializing: Int,
+                        queued: Int,
+                        pending: Int,
+                        compilers: Seq[CompilerStatus])
+
+object RouterStatus { implicit val rw: ReadWriter[RouterStatus] = macroRW }
+
 class CompilerManager extends Actor with ActorLogging {
   import CompilerManager._
 
@@ -142,7 +167,19 @@ class CompilerManager extends Actor with ActorLogging {
       try {
         selectCompiler(req) match {
           case Some(compilerInfo) =>
-            compilers.update(compilerInfo.id, compilerInfo.copy(state = CompilerState.Compiling))
+            // lastActivity BURADA da tazeleniyor. Eskiden tazelenmiyordu:
+            // gönderim updateCompilerState'i atlayıp doğrudan copy(state = ...)
+            // yaptığı için Compiling'e geçen derleyicinin lastActivity'si bir
+            // önceki Ready anında kalıyordu. /durum'un ilk koşusunda görüldü:
+            // derleyici Compiling'e yeni girmişken lastActivitySeconds=18.
+            // Önemi teşhisin ötesinde: "ne zamandır Compiling" ölçüsü
+            // takılma gözcüsünün (koco-deploy#17, 2. madde) dayanacağı sayı.
+            //
+            // Derleyici SEÇİMİNİ değiştirmiyor: selectCompiler yalnız Ready
+            // olanları lastActivity'ye göre sıralıyor, Ready'deki değeri ise
+            // her zaman yanıt/CompilerReady dalındaki updateCompilerState
+            // yazıyor. Buradaki yazı yalnız Compiling süresince görünür.
+            compilers.update(compilerInfo.id, compilerInfo.copy(state = CompilerState.Compiling, lastActivity = now))
             compilationPending += compilerInfo.id -> sourceActor
             // add default libs
             log.debug(s"Sending compiler request to ${compilerInfo.id}")
@@ -260,6 +297,30 @@ class CompilerManager extends Actor with ActorLogging {
             context.stop(compiler.compilerService)
           }
       }
+
+    case GetStatus =>
+      sender() ! RouterStatus(
+        registered = compilers.size,
+        ready = compilers.values.count(_.state == CompilerState.Ready),
+        compiling = compilers.values.count(_.state == CompilerState.Compiling),
+        initializing = compilers.values.count(_.state == CompilerState.Initializing),
+        queued = compilerQueue.size,
+        pending = compilationPending.size,
+        compilers = compilers.values.toSeq.sortBy(_.id).map { c =>
+          // lastActivity yalnız durum değişiminde yazılıyor (ping ona
+          // DOKUNMUYOR), yani "ne zamandır bu durumda" ölçüsü budur.
+          // lastSeen ise ping'le tazeleniyor: "süreç yaşıyor mu" sorusuna o
+          // bakıyor. İkisinin yan yana görünmesi asıl mesele: arızanın
+          // profili olan "yaşıyor, ping atıyor, ama Compiling'de takılı"
+          // hâli ancak ikisi birlikte okununca görülüyor -- yüksek
+          // lastActivitySeconds + düşük lastSeenSeconds + state=Compiling.
+          CompilerStatus(c.id,
+                         c.scalaVersion,
+                         c.state.toString,
+                         (now - c.lastActivity) / 1000,
+                         (now - c.lastSeen) / 1000)
+        }
+      )
 
     case other =>
       log.error(s"Received unknown message $other")
