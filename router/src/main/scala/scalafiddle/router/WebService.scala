@@ -282,6 +282,27 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
               }
             }
           }
+        } ~ path("durum") {
+          // Kayıtlı/Ready derleyici sayısını dışarıdan görünür kılar
+          // (koco-deploy#17). Bir arıza sırasında kapasitenin 2 mi 1 mi 0 mı
+          // olduğu bugün dışarıdan görülemiyordu; teşhis ancak yeniden
+          // başlatmadan önce `ps` çekilebilirse mümkün oluyordu.
+          //
+          // KONTEYNER İÇİNDEN: nginx yalnız beyaz listedeki yolları router'a
+          // geçiriyor (koco-deploy/nginx.conf), /durum listede YOK -- yani bu
+          // uç dışarıdan erişilebilir değil, bilerek:
+          //     flyctl ssh console -a ikojo -C "curl -s localhost:8880/durum"
+          // Dışarıya açmak istenirse tek satırlık bir nginx location yeter;
+          // o ayrı ve bilinçli bir karar olsun (sayılar işletme bilgisi).
+          //
+          // ÖNBELLEKSİZ: cacheOr kasten kullanılmıyor, önbelleğe alınmış bir
+          // durum çıktısı yanlış bilgi demek.
+          complete {
+            ask(compilerManager, GetStatus).mapTo[RouterStatus].map { status =>
+              HttpResponse(entity = HttpEntity(`application/json`, write(status).getBytes("UTF-8")))
+                .withHeaders(`Cache-Control`(`no-cache`))
+            }
+          }
         } ~ path("compile") {
           handleRejections(CorsDirectives.corsRejectionHandler) {
             CorsDirectives.cors(corsSettings) {

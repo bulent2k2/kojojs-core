@@ -2,7 +2,16 @@
 
 <configuration scan="true">
     <jmxConfigurator />
+    <!-- ThresholdFilter ZORUNLU, kozmetik değil: root seviyesi DEBUG ve
+         CompilerManager.selectCompiler `log.debug(s"Source\n${req.source}")`
+         yazıyor. Süzgeç olmadan konsola (yani konteyner günlüğüne, yani
+         `flyctl logs` çıktısına) KULLANICININ KAYNAK KODU dökülür. Dosya
+         appender'ı DEBUG'ta kalmaya devam ediyor; bu süzgeç yalnız konsolu
+         kısıyor, bugünkü dosya davranışı aynen duruyor. -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
         <encoder>
             <pattern>%d{dd-MM-yyyy} | %d{HH:mm:ss.SSS} | %-20.20thread | %-25.25logger{25} | %-5p | %m%n</pattern>
         </encoder>
@@ -19,12 +28,31 @@
         <appender-ref ref="FILE" />
     </appender>
 
-    <appender name="ASYNCCONSOLE" class="ch.qos.logback.classic.AsyncAppender">
-        <appender-ref ref="CONSOLE" />
-    </appender>
+    <!-- ASYNCCONSOLE appender'ı BİLEREK YOK. Buraya kadar tanımlıydı ama
+         hiçbir yerden referans verilmiyordu (master'da da öyleydi); aşağıdaki
+         gerekçe senkron konsolu seçtiği için, tam o adı taşıyan kullanılmayan
+         bir appender'ı dosyada bırakmak "hazır duruyor, root'a bunu bağlayayım"
+         daveti olurdu. Gerekçeyi yazıp aracı bırakmak, gerekçeyi sessizce geri
+         alınabilir kılıyor. Geri eklemek isteyen önce aşağıyı okusun. -->
 
+    <!-- KONSOL EKLENDİ (koco-deploy#17). Önceden root'ta YALNIZ ASYNCFILE
+         vardı: router'ın bütün günlüğü konteyner içindeki
+         /app/logs/application.log'a gidiyor, stdout'a hiç düşmüyordu. Canlı
+         arıza sırasında `flyctl logs` çıktısında yalnız `s.compiler.*`
+         satırları görünmesinin sebebi buydu: compiler-server'ın kendi
+         logback'i ASYNCCONSOLE kullanıyor, router'ınki kullanmıyordu.
+         "No suitable compiler available" satırları aslında yazılıyordu;
+         kimsenin bakmadığı bir dosyaya.
+
+         SENKRON (ASYNCCONSOLE değil) bilerek: AsyncAppender kuyruğu dolmaya
+         başlayınca discardingThreshold ile TRACE/DEBUG/INFO olaylarını atıyor.
+         Bu günlüğün tek işi arıza ANINDA kanıt bırakmak, yani tam olarak
+         kuyruğun dolduğu anda; INFO satırlarının (örn. "Compiler X is now
+         ready") baskı altında düşmesi işe yaramaz kılardı. Dosya tarafı
+         async kalıyor, orada hacim yüksek ve kayıp önemsiz. -->
     <root level="DEBUG">
         <appender-ref ref="ASYNCFILE" />
+        <appender-ref ref="CONSOLE" />
     </root>
 
     <logger name="akka" level="INFO" />
