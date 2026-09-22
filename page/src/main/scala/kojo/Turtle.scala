@@ -215,6 +215,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       üçgenleriÇiz(boyamaYolu, bitti = false) // büyümekte olan şekil
       boyamaYolu.endFill()
     }
+    else {
+      // Alan yoksa üçgenleme de yok, yani bekleyen rapor bu yayınla gelemez.
+      // İmi burada düşürmek durum makinesini kapatıyor: onu yalnız
+      // `üçgenlemeBitti` ile `unut` temizleseydi, boş bir yayından sonra im
+      // taze bir birikimde asılı kalırdı -- zararsız ama açıklanamaz
+      // (#142 incelemesi §2).
+      şekilBirikimi.raporBekliyor = false
+    }
     PixiUyum.tazele(boyamaYolu)
   }
 
@@ -635,7 +643,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       // gelebildiği ve niye üçünün de sayılması gerektiği `komutGelebilir`de
       // yazılı (#140 incelemesi §1). Canlandırma o yolların yalnız biri, ve
       // en sık olanı: boşalma orada kare başına 1.63 kez oluyor.
-      if (!kojoWorld.komutGelebilir) ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi)
+      if (!kojoWorld.komutGelebilir)
+        ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi, kojoWorld.boyaBekliyorMu(this))
       // Zincir burada kopuyor; bundan sonraki ilk komut pompayı yeniden başlatır.
       pompa.kuyrukBoşaldı()
     }
