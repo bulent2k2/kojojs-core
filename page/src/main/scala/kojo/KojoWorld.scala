@@ -878,8 +878,11 @@ class KojoWorldImpl extends KojoWorld {
   private var kalpAtışıBekleniyor = false
 
   /**
-   * TANI (sınama dikişi, `yayınSayısı` gibi): koşu sayısı, dilimi 10 ms'den
-   * fazla aşan koşu sayısı, en uzun koşu. Pompanın sözü "tek bir koşu
+   * TANI (sınama dikişi, `yayınSayısı` gibi): koşu sayısı, dilimi 8 ms'den
+   * fazla aşan koşu sayısı, en uzun koşu. Pay 8, 10 değil (#145 incelemesi
+   * §4): 8 + 10 = 18 ms bir kare bütçesinin (16.7) üstündeydi, yani her
+   * koşuda 17 ms harcayıp her karede bir vsync kaçıran bir pompa savı
+   * geçerdi; 8 + 8 = 16 karenin altında kalıyor ve GC payı yine var. Pompanın sözü "tek bir koşu
    * dilimi aşmaz -- bir komutun kendi süresi kadar pay hariç"; kare aralığı
    * ise tarayıcının işi. Tam takımda yük altında ölçüldü: 102-166 ms'lik
    * kare boşlukları sırasında en uzun koşu 8-14 ms, ve 14 ms'lik koşunun
@@ -898,6 +901,21 @@ class KojoWorldImpl extends KojoWorld {
       window.requestAnimationFrame { _ => kalpAtışıBekleniyor = false; harcananMs = 0 }
     }
 
+  /**
+   * BİR İŞ PATLARSA ötekiler mahsur kalmıyor (#145 incelemesi §1). Kuyruk
+   * artık paylaşılan DURUM: A'nın geri çağrımındaki bir hata (çoğu zaman
+   * öğrencinin betiği) B'nin bekleyen işini de askıya alırdı -- ölçüldü, üç
+   * iş, ortadaki fırlatınca üçüncüsü bir sonraki `scheduleLater`a kadar
+   * kuyrukta bekliyordu, ve betik son komutunu vermişse o "sonraki" hiç
+   * gelmiyor. Eski pompada paylaşılan kuyruk yoktu, bu kip de yoktu.
+   *
+   * Her iş kendi try'ında: fırlatan işin ardından döngü sürüyor. Hata
+   * YUTULMUYOR -- ilki koşu bitince (ya da kare teslimiyle çıkarken)
+   * yeniden fırlatılıyor, yani çağırana eskisi gibi ulaşıyor (üst düzeyde
+   * öğrencinin betiğine, kare içindeyse window.onerror'a); sonrakiler
+   * konsola. Fırlatan komutun kendi kaplumbağası eskisi gibi donuyor
+   * (pompasını yeniden zamanlayamadı); ötekiler değil.
+   */
   private def pompayıSürdür(): Unit = {
     if (pompaDönüyor) return
     val koşuBaşı = window.performance.now()
@@ -905,14 +923,24 @@ class KojoWorldImpl extends KojoWorld {
     if (harcananMs >= DilimMs) { kareyeTeslim(); return } // bütçe zaten dolu
     pompaDönüyor = true
     var sayaç = 0
+    var ilkHata: Throwable = null
     try {
-      while (bekleyenİşler.nonEmpty) {
+      var sürüyor = true
+      while (sürüyor && bekleyenİşler.nonEmpty) {
         sayaç += 1
         // Saat her komutta değil sekizde bir okunuyor; ucuz ama bedava değil.
         if ((sayaç & 7) == 0 && harcananMs + (window.performance.now() - koşuBaşı) >= DilimMs) {
-          kareyeTeslim(); return // kuyruk duruyor, kare sürdürür
+          kareyeTeslim(); sürüyor = false // kuyruk duruyor, kare sürdürür
         }
-        bekleyenİşler.dequeue()()
+        else {
+          val iş = bekleyenİşler.dequeue()
+          try iş()
+          catch {
+            case t: Throwable =>
+              if (ilkHata == null) ilkHata = t
+              else js.Dynamic.global.console.error("komut pompası: bir iş daha fırlattı", t.toString)
+          }
+        }
       }
     }
     finally {
@@ -920,11 +948,12 @@ class KojoWorldImpl extends KojoWorld {
       sonKoşuBitişi = window.performance.now()
       val koşu = sonKoşuBitişi - koşuBaşı
       koşuSayısı += 1
-      if (koşu > DilimMs + 10) aşanKoşuSayısı += 1
+      if (koşu > DilimMs + 8) aşanKoşuSayısı += 1
       if (koşu > enUzunKoşuMs) enUzunKoşuMs = koşu
       harcananMs += koşu
       if (harcananMs > 0) kalpAtışıİste()
     }
+    if (ilkHata != null) throw ilkHata
   }
 
   def runLater(ms: Double)(fn: => Unit): Unit = {
