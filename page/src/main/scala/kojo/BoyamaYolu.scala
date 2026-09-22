@@ -91,6 +91,14 @@ trait Boyacı {
   private[kojo] def boyayıYayınla(): Unit
 
   /**
+   * Kare sınırında, yayınlar yapıldıktan sonra: kuyruğu boşalmış bir çizerin
+   * şekli durduysa biriken dolgu süresini bildir (#134/#143). Yalnız
+   * `KojoWorld.kuyrukBoşaldı` ile aday yazılan çizerlere soruluyor; kuyruğu
+   * olmayan çizer (sınama sahteleri) aday olmuyor, varsayılan boş.
+   */
+  private[kojo] def durmaDenetimi(): Unit = ()
+
+  /**
    * Bu çizerin dolgusunun indiği katman. Silme yolları (erasePictures,
    * removeLayer) sahneden çıkardıkları katmanın çizerini bunun üzerinden
    * bulup bekleyen boya sırasından düşürüyor -- yoksa silinmiş bir resmin

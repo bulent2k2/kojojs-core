@@ -212,19 +212,54 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
       boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
       PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
-      üçgenleriÇiz(boyamaYolu, bitti = false) // büyümekte olan şekil
+      // Şekil çokgen olarak bitmedi (bitti = false), ama BÜYÜMEYİ bırakmış
+      // olabilir: yayın kare sınırında olduğu için bu soru tam burada
+      // sorulabiliyor (bkz. şekilDurmuş).
+      üçgenleriÇiz(boyamaYolu, bitti = false, durdu = şekilDurmuş)
       boyamaYolu.endFill()
-    }
-    else {
-      // Alan yoksa üçgenleme de yok, yani bekleyen rapor bu yayınla gelemez.
-      // İmi burada düşürmek durum makinesini kapatıyor: onu yalnız
-      // `üçgenlemeBitti` ile `unut` temizleseydi, boş bir yayından sonra im
-      // taze bir birikimde asılı kalırdı -- zararsız ama açıklanamaz
-      // (#142 incelemesi §2).
-      şekilBirikimi.raporBekliyor = false
     }
     PixiUyum.tazele(boyamaYolu)
   }
+
+  /**
+   * Bu şekle bir daha nokta eklenmeyecek mi -- yani biriken dolgu süresi
+   * NİHAİ mi, kesin biçimde ("N ms sürdü (M nokta)") bildirilebilir mi?
+   *
+   * İki koşul: pompa boşta (kuyruk boşaldı, zamanlama zinciri koptu) VE
+   * dışarıdan komut gelemez (`KojoWorld.komutGelebilir`: canlandırma,
+   * zamanlayıcı, girdi işleyicisi). `Resim{}` çizerinde ikinci koşul yok:
+   * gövde `make()` içinde bir kez koşuyor, `çiz`/`sil` yeniden çizer ama
+   * nokta eklemez; yani resmin şekli kuyruğu boşalınca canlandırma içinde de
+   * bitmiştir (#143, 1. hipotez -- ölçüldü, `UcgenlemeResimTest`).
+   *
+   * NEDEN YAYIN ANINDA SORULUYOR, BOŞALMA ANINDA DEĞİL (#143'ün ölçümü):
+   * pompa (#131) düz bir `yinele { ileri; sağ }` döngüsünde her komutu
+   * kuyruğa girer girmez bitiriyor, yani kuyruk HER KOMUTTAN SONRA boşalıyor
+   * -- boşalma "betik bitti" demek değil, "bu komut bitti" demek. İlk sürüm
+   * boşalmada bir im kuruyor, sonraki yayın imi görünce kesin konuşuyordu.
+   * Bütçe dolup pompa şeklin ortasında kareye teslim edince o kare YARIM
+   * şekli yayınlıyor ve im oradaydı: 251 noktalık gül için "30 ms sürdü (21
+   * nokta)" -- #134'ün "(193 nokta)" kusurunun yeni pompadaki yolu
+   * (`UcgenlemeDilimTest`). Yayın ise HER ZAMAN kare sınırında
+   * (`flushRender` bir rAF; sınamalar kareyi elle veriyor): kullanıcının
+   * eşzamanlı betiği çoktan bitmiş, kuyruk hâlâ boşsa daha komut yalnız
+   * `komutGelebilir`in saydığı yollardan gelir. Kararı oraya taşımak imi
+   * ve boşalma anındaki bütün akıl yürütmeyi gereksiz kılıyor.
+   *
+   * `başladıMı` şart: giysi yüklenene dek pompa "boşta" ama hiç çalışmamış;
+   * o evrede yayın olmaz ama olsaydı da "durdu" sayılmamalıydı.
+   */
+  private def şekilDurmuş: Boolean =
+    pompa.başladıMı && pompa.boştaMı && (forPic || !kojoWorld.komutGelebilir)
+
+  /**
+   * Kare sınırında, bekleyen yayınlar yapıldıktan SONRA: şekil durmuşsa ve
+   * bir yayın yoktu (son komutlar nokta eklemedi -- `sağ`, `sync`, `görün`),
+   * biriken süreyi şimdi bildir. Yayın olduysa o zaten `durdu` ile konuştu
+   * ya da konuşmadı; `bildirildi` ikinci notu keser.
+   */
+  override private[kojo] def durmaDenetimi(): Unit =
+    if (şekilDurmuş) ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi)
 
   /**
    * Dolgu çokgenini NON_ZERO ile üçgenleyip PIXI'ye verir.
@@ -293,9 +328,14 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    *   (ad/interactive/lastMut/frame) ve pişirme herhangi bir DisplayObject'i
    *   dokuya çiziyor; mesh aynen pişerdi.
    *
-   * Yani buradaki döngü bir TASARIM BORCU, ölçülmüş bir tercih değil; kayıt #125.
+   * YANİ BU DÖNGÜ ÖLÇÜLMÜŞ BİR TERCİH (#125, "yapılmayacak" diye kapandı):
+   * mesh dilimin kendisinde 5-14 kat ucuz, ama dilim gülün ≤ %5-10'u --
+   * #131'den sonra ölçüldü, drawPolygon kurulumu + render 1000 noktada
+   * 7-13 ms / 131-141 ms, libtess %58. Uçtan uca kazanç ≤ %8, altı bağ ve
+   * üç sav karşılığında. Bir sonraki kaldıraç üçgenlemeyi hızlandırmak
+   * değil hiç üçgenlememek: stencil tamponuyla NON_ZERO dolgu, kayıt #147.
    */
-  private def üçgenleriÇiz(gr: PIXI.Graphics, bitti: Boolean): Unit = {
+  private def üçgenleriÇiz(gr: PIXI.Graphics, bitti: Boolean, durdu: Boolean = false): Unit = {
     if (!Üçgenleyici.kullanılabilir) {
       // Kütüphane sayfada yok. Çökmek yerine eski davranışa düşüyoruz: kendini
       // kesen yollar yanlış dolar ama öteki her şey yaşar. Konsola hata basıldı.
@@ -308,7 +348,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     val düz = boyamaÇokgeni.düzDizi
     val t0 = ÜçgenlemeUyarısı.saat()
     val ü = Üçgenleyici.nonzero(düz)
-    ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti)
+    ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti, durdu)
     var i = 0
     while (i + 5 < ü.length) {
       gr.drawPolygon(scala.scalajs.js.Array(ü(i), ü(i + 1), ü(i + 2), ü(i + 3), ü(i + 4), ü(i + 5)))
@@ -642,11 +682,13 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       // bildirilebilir (#134). Gelebiliyorsa susuyoruz; hangi üç yoldan
       // gelebildiği ve niye üçünün de sayılması gerektiği `komutGelebilir`de
       // yazılı (#140 incelemesi §1). Canlandırma o yolların yalnız biri, ve
-      // en sık olanı: boşalma orada kare başına 1.63 kez oluyor.
-      if (!kojoWorld.komutGelebilir)
-        ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi, kojoWorld.boyaBekliyorMu(this))
+      // en sık olanı: boşalma orada kare başına 1.63 kez oluyor. Resim{}
+      // çizeri için kapı yok: gövdesi bitti, canlandırma ona nokta eklemez.
+      // Karar BURADA verilmiyor, kare sınırında (bkz. şekilDurmuş): burası
+      // düz bir döngüde her komuttan sonra çalışıyor. Yalnız aday yazılıyor.
       // Zincir burada kopuyor; bundan sonraki ilk komut pompayı yeniden başlatır.
       pompa.kuyrukBoşaldı()
+      if (forPic || !kojoWorld.komutGelebilir) kojoWorld.kuyrukBoşaldı(this)
     }
     else {
       commandQ.dequeue() match {
