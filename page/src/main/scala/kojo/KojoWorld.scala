@@ -48,14 +48,19 @@ trait KojoWorld {
    */
   private[kojo] var yayınSayısı = 0L
 
-  /**
-   * Bu çizerin yayınlanmamış dolgusu var mı.
-   *
-   * Boşalma anında sorulan soru (#134): varsa elimizdeki nokta sayısı ve süre
-   * şeklin yalnız bir ÖNEKİNİ anlatıyor, ve o sayıyla kesin konuşmak canlıda
-   * yakalanan kusuru üretir ("251 noktalık gül için 17 ms sürdü (193 nokta)").
-   */
-  private[kojo] def boyaBekliyorMu(b: Boyacı): Boolean = bekleyenBoyacılar.contains(b)
+  // --- Kuyruğu boşalan çizerler (durma denetimi, #134/#143) ------------------
+  //
+  // "Kuyruk boşaldı" tek başına "betik bitti" demek değil: pompa (#131) düz
+  // bir döngüde her komutu girer girmez bitiriyor, kuyruk her komuttan sonra
+  // boşalıyor. Karar kare sınırında veriliyor (Turtle.şekilDurmuş); burada
+  // yalnız kimin sorulacağı tutuluyor. Aday olmak bir kare istiyor -- yoksa
+  // son komutları nokta eklemeyen bir betiğin (`sağ`, `sync`) notu, hiçbir
+  // yayın kare istemediği için hiç düşmezdi.
+  private val durmaAdayları = scala.collection.mutable.LinkedHashSet.empty[Boyacı]
+
+  /** Çizerin kuyruğu boşaldı: kare sınırında durma denetimine girsin. */
+  private[kojo] def kuyrukBoşaldı(b: Boyacı): Unit =
+    if (durmaAdayları.add(b)) render()
 
   /** Çizerin dolgusu bayatladı: sıraya al ve bir render iste. */
   private[kojo] def boyaKirlendi(b: Boyacı): Unit = {
@@ -75,7 +80,7 @@ trait KojoWorld {
    * `KojoWorldImpl.flushRender` bunu yapıyor. Sınamalarda, gerçek bir
    * render'ın gireceği yerde elle çağrılıyor.
    */
-  private[kojo] def boyalarıBoşalt(): Unit =
+  private[kojo] def boyalarıBoşalt(): Unit = {
     if (bekleyenBoyacılar.nonEmpty) {
       // Yayın sırasında yeniden kirlenme olabilir; önce kopyala ve boşalt ki
       // o kirlenme SONRAKİ kareye kalsın, burada sonsuz döngü olmasın.
@@ -83,6 +88,14 @@ trait KojoWorld {
       bekleyenBoyacılar.clear()
       sıra.foreach { b => yayınSayısı += 1; b.boyayıYayınla() }
     }
+    // Yayınlardan SONRA: yayını olan çizer kararı yayında verdi; olmayan
+    // burada veriyor (bkz. Turtle.durmaDenetimi).
+    if (durmaAdayları.nonEmpty) {
+      val adaylar = durmaAdayları.toList
+      durmaAdayları.clear()
+      adaylar.foreach(_.durmaDenetimi())
+    }
+  }
 
   /**
    * Sahneden ÇIKARILAN bir katmanın çizerini bekleyen sıradan düşür.
@@ -172,10 +185,10 @@ trait KojoWorld {
   /**
    * Komut kuyruğu boşaldıktan SONRA daha komut gelebilir mi.
    *
-   * `Turtle.queueHandler` kuyruk boşalınca buna bakıyor (#134): false ise
-   * betik bitmiştir, şekle bir daha nokta eklenmez, ve biriken dolgu süresi
-   * NİHAİDİR -- ancak o zaman "şu kadar sürdü (N nokta)" diye kesin
-   * konuşulabilir.
+   * `Turtle.şekilDurmuş` kare sınırında, kuyruk boşken buna bakıyor (#134):
+   * false ise betik bitmiştir, şekle bir daha nokta eklenmez, ve biriken
+   * dolgu süresi NİHAİDİR -- ancak o zaman "şu kadar sürdü (N nokta)" diye
+   * kesin konuşulabilir.
    *
    * ÜÇ KAYNAK, ve üçü de sayılmak zorunda:
    *

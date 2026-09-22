@@ -72,26 +72,10 @@ private[kojo] final class ŞekilBirikimi {
   /** En son yayında görülen nokta sayısı -- `şekilDurdu` bunu bildiriyor. */
   private[kojo] var sonNoktaSayısı = 0
 
-  /**
-   * Şekil durdu ama son yayını daha yapılmadı: not O YAYINI bekliyor.
-   *
-   * Ölçüldü (#134, canlı 4. deney): boşalma anı son yayından SONRA olabiliyor.
-   * 251 noktalı gülde not "17 ms sürdü (193 nokta)" dedi -- şeklin bir öneki,
-   * kesin cümleyle. Kuyruk iki kare arasında yüzlerce, #131'den beri
-   * binlerce komut işleyebiliyor: pompa bir karede 8 ms'ye kadar iş yapıp
-   * kareye teslim ediyor (`KojoWorld.DilimMs`), 250 noktalı gül (500 komut,
-   * kenar başına ileri+sağ) ~0.3 ms'de bitiyor. 193 eski pompada ölçüldü
-   * (100'lük partiler, 4.2 ms'lik setTimeout kelepçesi, karede ~400 komut);
-   * mekanizma yeni pompada da aynı, yalnız daha çok kenar açıkta kalır.
-   * Sonuç: boşalma anında son kenarlar henüz yayınlanmamış oluyor.
-   */
-  private[kojo] var raporBekliyor = false
-
   private[kojo] def unut(): Unit = {
     toplamMs = 0.0
     bildirildi = false
     sonNoktaSayısı = 0
-    raporBekliyor = false
   }
 }
 
@@ -145,7 +129,7 @@ object ÜçgenlemeUyarısı {
    * `ornekler/14-agir-dolgu.kojo`'nun 1000 noktalık gülü tam böyle -- yalnız
    * tamamlanmış şekle bakan bir uyarı, uyarılması gereken şekli susturuyordu.
    */
-  private[kojo] val erkenÇarpan = 3.0
+  private[kojo] var erkenÇarpan = 3.0 // var: sınama erken yolu kapatabilsin (UcgenlemeDilimTest)
 
   private var sonNotZamanı = Double.NegativeInfinity
   private var notSayısı = 0
@@ -164,17 +148,21 @@ object ÜçgenlemeUyarısı {
    *
    * Bütçeyi aşmadıysa hiçbir şey yapmıyor -- sıcak yolda tek bir
    * karşılaştırma.
+   *
+   * @param bitti çokgen tamamlandı (kalem kalkık taşınma / boya değişimi):
+   *              birikim bu yayınla kapanıyor.
+   * @param durdu çokgen tamamlanmadı ama şekle bir daha nokta gelmeyecek
+   *              (`Turtle.şekilDurmuş`, kare sınırında): sayı nihai, kesin
+   *              biçim. `bitti`den farkı birikimin kapanmaması -- şekil
+   *              teknik olarak açık, yeniden yayınlanabilir (`çiz`/`sil`).
+   *              Sıra önemli: `bittiSayılır` erkenÇarpan'dan ÖNCE bakılıyor,
+   *              yoksa toplam erken eşiği aşmışsa "şimdilik" biçimi basılır,
+   *              oysa şekil durmuş durumda (#134 canlı ölçüm).
    */
   private[kojo] def üçgenlemeBitti(
-      birikim: ŞekilBirikimi, süreMs: Double, noktaSayısı: Int, bitti: Boolean): Unit = {
+      birikim: ŞekilBirikimi, süreMs: Double, noktaSayısı: Int, bitti: Boolean, durdu: Boolean = false): Unit = {
     birikim.toplamMs += süreMs
     birikim.sonNoktaSayısı = noktaSayısı
-    // Bekleyen rapor varsa BU yayın şeklin sonuncusu: kuyruk çoktan boşalmıştı,
-    // yani şekil artık büyüyemez ve sayı nihai. Bu satır sırayı da belirliyor --
-    // önce bakılmazsa toplam erken eşiği aşmışsa erkenÇarpan araya girip
-    // "şimdilik" biçimini basar, oysa şekil durmuş durumda (#134 canlı ölçüm).
-    val durdu = birikim.raporBekliyor
-    birikim.raporBekliyor = false
     val bittiSayılır = bitti || durdu
     val toplam = birikim.toplamMs
     val konuşulabilir = toplam > bütçeMs && (bittiSayılır || toplam > erkenÇarpan * bütçeMs)
@@ -191,48 +179,40 @@ object ÜçgenlemeUyarısı {
   }
 
   /**
-   * Şekil BÜYÜMEYİ BIRAKTI: komut kuyruğu boşaldı ve canlandırma dönmüyor,
-   * yani betik bitti ve bu şekle bir daha nokta eklenmeyecek.
+   * Şekil BÜYÜMEYİ BIRAKTI ve son yayını çoktan yapılmış: biriken süreyi
+   * son yayının nokta sayısıyla, kesin biçimde bildir.
    *
    * NEDEN AYRI BİR GİRİŞ. Bir şekli "bitmiş" sayan iki yol var
    * (`turtlePathMoveTo` ve `realSetFillPaint`), ve betiğin SON şekli çoğu
    * zaman ikisini de görmüyor. `erkenÇarpan` o boşluğun kaba vekiliydi:
    * bütçeyi aşan ama 50.1 ms'yi aşmayan her son şekil sessiz kalıyordu --
    * `ornekler/14-agir-dolgu.kojo`'nun 35 ms'lik gülü tam oraya düşüyordu
-   * (#133). Buradaki giriş o boşluğu kapatıyor.
+   * (#133). Durmuş şekil için iki giriş var: yayını bekleyen şekil
+   * `üçgenlemeBitti(durdu = true)` ile o yayında konuşuyor; yayını olmayan
+   * (son komutları nokta eklemedi) burada. Her ikisi de kare sınırında,
+   * `KojoWorld.boyalarıBoşalt`tan (bkz. Turtle.şekilDurmuş -- niye boşalma
+   * anında değil, ve #134'ün "(193 nokta)" kusurunun yeni pompadaki yolu).
    *
    * SAHNEYE DOKUNMUYOR, bilerek: `boyamayıİşle` gibi kalıcı düğüm YAZMIYOR,
    * yalnız biriken süreyi bildiriyor. `bitti` bugün iki ayrı soruyu birden
    * cevaplıyor -- "çokgen tamamlandı mı" (pahalı, sahne durumu) ve "daha
    * nokta gelecek mi" (yalnız rapor); burada yalnız ikincisi soruluyor.
-   *
-   * ÇAĞIRAN YER KRİTİK, ölçüldü (#134): kuyruk boşalması canlandırma
-   * döngüsünde kare başına 1.63 kez oluyor. Oraya kalıcı düğüm yazan bir
-   * kanca koymak #91/#109'da kapatılan sızıntıyı geri getirirdi. Çağıran
-   * `canlandırmaSürüyor` kapısının arkasında: ölçümde 49 boşalmanın 49'u da
-   * canlandırma içindeydi, yani hepsi susturuluyor.
+   * Ölçüldü (#134): kuyruk boşalması canlandırma döngüsünde kare başına
+   * 1.63 kez oluyor; oraya kalıcı düğüm yazan bir kanca #91/#109'da
+   * kapatılan sızıntıyı geri getirirdi.
    *
    * `erkenÇarpan` KALDIRILMADI: o hâlâ BÜYÜMEKTE olan çok ağır bir şekli
    * (örneğin 1000 noktalı gülü, daha bitmeden) haber veriyor. Buradaki
    * giriş yalnız durmuş şekli kapsıyor; ikisi ayrı durum.
    */
-  private[kojo] def şekilDurdu(birikim: ŞekilBirikimi, yayınBekliyor: Boolean): Unit =
-    if (!birikim.bildirildi) {
-      if (yayınBekliyor) {
-        // Elimizdeki sayılar şeklin yalnız bir ÖNEKİ. Şimdi konuşmak, canlıda
-        // yakalanan kusuru üretir: 251 noktalık gül için "17 ms sürdü (193
-        // nokta)". Bekleyen yayın zaten istenmiş durumda (`boyaKirlendi`
-        // render çağırıyor), o yüzden raporu ona bırakıyoruz.
-        birikim.raporBekliyor = true
-      }
-      else if (birikim.toplamMs > bütçeMs) {
-        val şimdi = saat()
-        if (şimdi - sonNotZamanı >= enAzAralıkMs) {
-          sonNotZamanı = şimdi
-          notSayısı += 1
-          birikim.bildirildi = true
-          paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
-        }
+  private[kojo] def şekilDurdu(birikim: ŞekilBirikimi): Unit =
+    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs) {
+      val şimdi = saat()
+      if (şimdi - sonNotZamanı >= enAzAralıkMs) {
+        sonNotZamanı = şimdi
+        notSayısı += 1
+        birikim.bildirildi = true
+        paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
       }
     }
 
