@@ -77,12 +77,13 @@ private[kojo] final class ŞekilBirikimi {
    *
    * Ölçüldü (#134, canlı 4. deney): boşalma anı son yayından SONRA olabiliyor.
    * 251 noktalı gülde not "17 ms sürdü (193 nokta)" dedi -- şeklin bir öneki,
-   * kesin cümleyle. Kuyruk iki kare arasında yüzlerce komut işleyebiliyor:
-   * `scheduleLater` 99 komutu EŞZAMANLI koşturup 100.'de `setTimeout(0)`
-   * yapıyor (`MaxBurst`), yani ~4.2 ms'lik kelepçe komut başına değil
-   * 100'lük PARTİ başına. Bir karede (16.7 ms) dört parti, yani ~400 komut
-   * geçebiliyor -- 250 noktalı gül zaten 500 komut (kenar başına ileri+sağ).
-   * Sonuç: boşalma anında son onlarca kenar henüz yayınlanmamış oluyor.
+   * kesin cümleyle. Kuyruk iki kare arasında yüzlerce, #131'den beri
+   * binlerce komut işleyebiliyor: pompa bir karede 8 ms'ye kadar iş yapıp
+   * kareye teslim ediyor (`KojoWorld.DilimMs`), 250 noktalı gül (500 komut,
+   * kenar başına ileri+sağ) ~0.3 ms'de bitiyor. 193 eski pompada ölçüldü
+   * (100'lük partiler, 4.2 ms'lik setTimeout kelepçesi, karede ~400 komut);
+   * mekanizma yeni pompada da aynı, yalnız daha çok kenar açıkta kalır.
+   * Sonuç: boşalma anında son kenarlar henüz yayınlanmamış oluyor.
    */
   private[kojo] var raporBekliyor = false
 
@@ -126,10 +127,10 @@ object ÜçgenlemeUyarısı {
     else () => window.performance.now()
 
   /**
-   * Bir ŞEKLİN dolgusu, o şekil bitmeden birkaç kez yayınlanıyor: `scheduleLater`
-   * ilk 100 komutu eşzamanlı koşturup sonrasını erteliyor (KojoWorld.MaxBurst),
-   * arada `requestAnimationFrame` devreye girip BÜYÜYEN çokgeni yeniden
-   * üçgenliyor. Ölçüldü (gerçek tarayıcı, #125): 250 noktalık bir gül için not
+   * Bir ŞEKLİN dolgusu, o şekil bitmeden birkaç kez yayınlanabiliyor: pompa bir
+   * karede en çok bir dilim iş yapıp kareye teslim ediyor (KojoWorld.DilimMs,
+   * #131; eskiden 100 komutta bir setTimeout), her karede `requestAnimationFrame`
+   * BÜYÜYEN çokgeni yeniden üçgenliyor. Ölçüldü (gerçek tarayıcı, #125): 250 noktalık bir gül için not
    * "146 nokta" diyordu -- kullanıcının betiğinde olmayan bir sayı.
    *
    * O yüzden ölçüm ŞEKİL BAŞINA birikiyor ve not şekil başına EN ÇOK BİR KEZ

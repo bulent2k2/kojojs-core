@@ -795,17 +795,165 @@ class KojoWorldImpl extends KojoWorld {
     render()
   }
 
-  val MaxBurst = 100
-  var burstCount = 0
+  /**
+   * Komut pompası: bir kareye kaç ms komut işi sığdırılıyor.
+   *
+   * Sınamalar tarayabilsin diye `var` (#131 ölçüt 2: değer ölçümle seçildi,
+   * tablo `KuyrukPompasiTest`te). Birim SAYI DEĞİL SÜRE, bilerek: eski
+   * `MaxBurst = 100` "100 komutta bir nefes" diyordu ama bir komutun bedeli
+   * sabit değil; tepkisellik komut sayısıyla değil bloklanan süreyle ölçülür.
+   */
+  private[kojo] var DilimMs = 8.0
+  private var pompaDönüyor = false
+  private var kareBekleniyor = false
+  private val bekleyenİşler = scala.collection.mutable.Queue.empty[() => Unit]
+
+  /**
+   * TRAMPOLİN (#131). İş doğrudan çağrılmıyor: kuyruğa giriyor, ve en dıştaki
+   * çağrı bir `while` ile boşaltıyor. İç içe gelen `scheduleLater` (bir
+   * komutun içinden, ör. `realSync`in kullanıcı geri çağrımından başka bir
+   * kaplumbağaya komut) yalnız kuyruğa ekliyor, yığın büyümüyor. Eskiden iş
+   * doğrudan çağrılıyor, `queueHandler` bir komut işleyip yine buraya
+   * geliyordu -- karşılıklı özyineleme, derinlik = MaxBurst; 750 çalışıyor,
+   * 1000 kırılıyordu. İlk iş yine EŞZAMANLI koşuyor: kuyruk boşken verilen
+   * komut, eskisi gibi, kullanıcının çağrı yığınının içinde biter. Bunun
+   * bir sonucu: düz bir `yinele { ileri; sağ }` döngüsünde pompa her komutu
+   * kuyruğa girer girmez bitirdiği için HER KOMUT KENDİ KOŞUSU olur (ölçüldü:
+   * 400k komut, 391k koşu, koşu başına ~1.7 µs). Bütçe koşular arası
+   * biriktiğinden bu dilimi delmiyor -- bütçe dolunca komut kuyruğa girer,
+   * kare sürdürür.
+   *
+   * KUYRUK tek yuva değil, bilerek: bir komutun içinden iki ayrı zamanlama
+   * gelebiliyor (kullanıcı geri çağrımı başka kaplumbağayı uyandırır, sonra
+   * `realSync` kendi pompasını yeniden zamanlar). Tek yuva ikincisini ezerdi
+   * ve o pompa `boşta = false`ta takılı kalıp KALICI donardı -- `sıraya`nın
+   * notundaki kusurun ta kendisi.
+   *
+   * Görünür tek fark: eskiden iç içe gelen iş HEMEN (özyinelemeyle) koşuyordu,
+   * şimdi içinde bulunduğu komut bitince. Yani bir `konumuOku` geri çağrımı
+   * içinde başka kaplumbağaya `ileri` deyip aynı geri çağrımda onun konumunu
+   * okuyan kod artık eski konumu görür. O davranış zaten güvenilmezdi:
+   * sayaç tam sınırdaysa bugün de ertelenirdi.
+   */
   def scheduleLater(fn: => Unit): Unit = {
-    burstCount += 1
-    if (burstCount < MaxBurst) {
-      fn
+    bekleyenİşler.enqueue(() => fn)
+    if (!pompaDönüyor && !kareBekleniyor) pompayıSürdür()
+  }
+
+  /**
+   * NEFES = SONRAKİ KARE (#131'in asıl kaldıracı). Eskiden nefes
+   * `setTimeout(0)` ile alınıyordu ve tarayıcı iç içe zamanlayıcıyı 4 ms'ye
+   * kenetliyor: hoplama başına ölçülen 4.2 ms, 250 noktalı gülde 5 hoplama =
+   * ~20 ms, gülün %80'i -- üstelik o 4 ms'de kare de gelmiyordu (nefes
+   * kısaydı). Kenetlenmeyen makro görev (MessageChannel) denendi ve
+   * ELENDİ: hoplama 0 ms ama rAF aç kalıyor -- ölçüldü, kare aralığı 190
+   * ms'ye çıktı ve güller boyanmadan siliniyordu. Nefesin sebebi zaten kare
+   * (çizim, girdi); o yüzden dilim dolunca doğrudan bir sonraki kareye
+   * teslim ediliyor. Kare gizli sekmede gelmez; `canlandır` ve `durakla` da
+   * öyle, tutarlı.
+   */
+  private def kareyeTeslim(): Unit = {
+    kareBekleniyor = true
+    window.requestAnimationFrame { _ => kareBekleniyor = false; harcananMs = 0; pompayıSürdür() }
+  }
+
+  /**
+   * BÜTÇE KARELER ARASI BİRİKİYOR, koşu başına değil. İlk sürüm dilim saatini
+   * her koşuda sıfırlıyordu ve bir sınama bunu boşa çıkardı: gülleri Future
+   * zinciriyle süren kod her gülü 2 ms'lik ayrı bir koşu yapıyor, devamı
+   * mikro görev, arada olay döngüsüne hiç dönülmüyor -- 394 ms boyunca sıfır
+   * kare, ve hiçbir koşu tek başına 8 ms'ye ulaşmadığı için pompa hiç teslim
+   * etmiyordu. Doğru soru "bu koşu ne kadar sürdü" değil, "son kareden beri
+   * ne kadar harcandı".
+   *
+   * Sıfırlama iki yoldan: (1) kalp atışı -- pompa iş yaptıysa bir rAF
+   * isteniyor, o gelince sayaç sıfır (kare oldu); (2) iki koşu arasında
+   * 2 ms'den uzun boşluk -- mikro görev zincirinde boşluk ~0.01 ms, gerçek
+   * bir görev sınırından geçildiyse olay döngüsü zaten nefes almıştır.
+   * İkincisi olmasa canlandır'ın kare başındaki koşusu, kalp atışı henüz
+   * gelmemişse önceki karenin harcamasını devralırdı.
+   */
+  private var harcananMs = 0.0
+  private var sonKoşuBitişi = 0.0
+  private var kalpAtışıBekleniyor = false
+
+  /**
+   * TANI (sınama dikişi, `yayınSayısı` gibi): koşu sayısı, dilimi 8 ms'den
+   * fazla aşan koşu sayısı, en uzun koşu. Pay 8, 10 değil (#145 incelemesi
+   * §4): 8 + 10 = 18 ms bir kare bütçesinin (16.7) üstündeydi, yani her
+   * koşuda 17 ms harcayıp her karede bir vsync kaçıran bir pompa savı
+   * geçerdi; 8 + 8 = 16 karenin altında kalıyor ve GC payı yine var. Pompanın sözü "tek bir koşu
+   * dilimi aşmaz -- bir komutun kendi süresi kadar pay hariç"; kare aralığı
+   * ise tarayıcının işi. Tam takımda yük altında ölçüldü: 102-166 ms'lik
+   * kare boşlukları sırasında en uzun koşu 8-14 ms, ve 14 ms'lik koşunun
+   * içinde tek bir `Forward` 14 ms sürmüştü -- sıradan bir komutun
+   * yapamayacağı şey, koşunun ortasına düşen bir GC durması. Bu yüzden sav
+   * en uzun koşuya değil AŞAN KOŞU SAYISINA bakıyor: tek durma geçer, dilimi
+   * yok sayan pompa her koşuda aşar.
+   */
+  private[kojo] var koşuSayısı = 0
+  private[kojo] var aşanKoşuSayısı = 0
+  private[kojo] var enUzunKoşuMs = 0.0
+
+  private def kalpAtışıİste(): Unit =
+    if (!kalpAtışıBekleniyor) {
+      kalpAtışıBekleniyor = true
+      window.requestAnimationFrame { _ => kalpAtışıBekleniyor = false; harcananMs = 0 }
     }
-    else {
-      window.setTimeout(() => fn, 0)
-      burstCount = 0
+
+  /**
+   * BİR İŞ PATLARSA ötekiler mahsur kalmıyor (#145 incelemesi §1). Kuyruk
+   * artık paylaşılan DURUM: A'nın geri çağrımındaki bir hata (çoğu zaman
+   * öğrencinin betiği) B'nin bekleyen işini de askıya alırdı -- ölçüldü, üç
+   * iş, ortadaki fırlatınca üçüncüsü bir sonraki `scheduleLater`a kadar
+   * kuyrukta bekliyordu, ve betik son komutunu vermişse o "sonraki" hiç
+   * gelmiyor. Eski pompada paylaşılan kuyruk yoktu, bu kip de yoktu.
+   *
+   * Her iş kendi try'ında: fırlatan işin ardından döngü sürüyor. Hata
+   * YUTULMUYOR -- ilki koşu bitince (ya da kare teslimiyle çıkarken)
+   * yeniden fırlatılıyor, yani çağırana eskisi gibi ulaşıyor (üst düzeyde
+   * öğrencinin betiğine, kare içindeyse window.onerror'a); sonrakiler
+   * konsola. Fırlatan komutun kendi kaplumbağası eskisi gibi donuyor
+   * (pompasını yeniden zamanlayamadı); ötekiler değil.
+   */
+  private def pompayıSürdür(): Unit = {
+    if (pompaDönüyor) return
+    val koşuBaşı = window.performance.now()
+    if (koşuBaşı - sonKoşuBitişi > 2.0) harcananMs = 0 // görev sınırından geçildi
+    if (harcananMs >= DilimMs) { kareyeTeslim(); return } // bütçe zaten dolu
+    pompaDönüyor = true
+    var sayaç = 0
+    var ilkHata: Throwable = null
+    try {
+      var sürüyor = true
+      while (sürüyor && bekleyenİşler.nonEmpty) {
+        sayaç += 1
+        // Saat her komutta değil sekizde bir okunuyor; ucuz ama bedava değil.
+        if ((sayaç & 7) == 0 && harcananMs + (window.performance.now() - koşuBaşı) >= DilimMs) {
+          kareyeTeslim(); sürüyor = false // kuyruk duruyor, kare sürdürür
+        }
+        else {
+          val iş = bekleyenİşler.dequeue()
+          try iş()
+          catch {
+            case t: Throwable =>
+              if (ilkHata == null) ilkHata = t
+              else js.Dynamic.global.console.error("komut pompası: bir iş daha fırlattı", t.toString)
+          }
+        }
+      }
     }
+    finally {
+      pompaDönüyor = false
+      sonKoşuBitişi = window.performance.now()
+      val koşu = sonKoşuBitişi - koşuBaşı
+      koşuSayısı += 1
+      if (koşu > DilimMs + 8) aşanKoşuSayısı += 1
+      if (koşu > enUzunKoşuMs) enUzunKoşuMs = koşu
+      harcananMs += koşu
+      if (harcananMs > 0) kalpAtışıİste()
+    }
+    if (ilkHata != null) throw ilkHata
   }
 
   def runLater(ms: Double)(fn: => Unit): Unit = {
