@@ -129,7 +129,7 @@ object ÜçgenlemeUyarısı {
    * `ornekler/14-agir-dolgu.kojo`'nun 1000 noktalık gülü tam böyle -- yalnız
    * tamamlanmış şekle bakan bir uyarı, uyarılması gereken şekli susturuyordu.
    */
-  private[kojo] val erkenÇarpan = 3.0
+  private[kojo] var erkenÇarpan = 3.0 // var: sınama erken yolu kapatabilsin (UcgenlemeDilimTest)
 
   private var sonNotZamanı = Double.NegativeInfinity
   private var notSayısı = 0
