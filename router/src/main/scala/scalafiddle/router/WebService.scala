@@ -362,9 +362,24 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
           // Anahtar istemiyor: içeriği zaten açık depoların commit'leri.
           // nginx beyaz listesinde YOK, yani dışarı kapalı (bkz. /durum'un
           // yanındaki karar kaydı).
+          // KIRPILMIŞ: nginx beyaz listesine `location = /bilgi` girdiğinde
+          // dışarı çıkan gövde bu. İç kimlikler ve kapasite sayısı /bilgi/tam'da.
           complete {
-            HttpResponse(entity = HttpEntity(`application/json`, write(Bilgi.simdiki).getBytes("UTF-8")))
+            HttpResponse(entity = HttpEntity(`application/json`, write(Bilgi.genel).getBytes("UTF-8")))
               .withHeaders(`Cache-Control`(`no-cache`))
+          }
+        } ~ path("bilgi" / "tam") {
+          // Tam hâl: /durum ile aynı sınıf, aynı korumayla. nginx'teki `=`
+          // tam eşleşme bu yolu zaten dışarı çıkarmıyor, ama o koruma BAŞKA
+          // BİR DEPODA duruyor -- oraya bir gün yakalayıcı bir location
+          // girerse burada anahtar kalsın.
+          parameter("secret".?) { verilen =>
+            if (!verilen.contains(Config.secret)) complete(HttpResponse(StatusCodes.Forbidden))
+            else
+              complete {
+                HttpResponse(entity = HttpEntity(`application/json`, write(Bilgi.simdiki).getBytes("UTF-8")))
+                  .withHeaders(`Cache-Control`(`no-cache`))
+              }
           }
         } ~ path("compile") {
           handleRejections(CorsDirectives.corsRejectionHandler) {
