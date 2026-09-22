@@ -72,10 +72,21 @@ private[kojo] final class ŞekilBirikimi {
   /** En son yayında görülen nokta sayısı -- `şekilDurdu` bunu bildiriyor. */
   private[kojo] var sonNoktaSayısı = 0
 
+  /**
+   * Şekil durdu ama son yayını daha yapılmadı: not O YAYINI bekliyor.
+   *
+   * Ölçüldü (#134, canlı 4. deney): boşalma anı son yayından SONRA olabiliyor.
+   * 251 noktalı gülde not "17 ms sürdü (193 nokta)" dedi -- şeklin bir öneki,
+   * kesin cümleyle. Kuyruk kare sınırından hızlı boşalıyor (komut hoplaması
+   * ~4.2 ms, kare 16.7 ms), yani son onlarca kenar henüz yayınlanmamış oluyor.
+   */
+  private[kojo] var raporBekliyor = false
+
   private[kojo] def unut(): Unit = {
     toplamMs = 0.0
     bildirildi = false
     sonNoktaSayısı = 0
+    raporBekliyor = false
   }
 }
 
@@ -153,15 +164,22 @@ object ÜçgenlemeUyarısı {
       birikim: ŞekilBirikimi, süreMs: Double, noktaSayısı: Int, bitti: Boolean): Unit = {
     birikim.toplamMs += süreMs
     birikim.sonNoktaSayısı = noktaSayısı
+    // Bekleyen rapor varsa BU yayın şeklin sonuncusu: kuyruk çoktan boşalmıştı,
+    // yani şekil artık büyüyemez ve sayı nihai. Bu satır sırayı da belirliyor --
+    // önce bakılmazsa toplam erken eşiği aşmışsa erkenÇarpan araya girip
+    // "şimdilik" biçimini basar, oysa şekil durmuş durumda (#134 canlı ölçüm).
+    val durdu = birikim.raporBekliyor
+    birikim.raporBekliyor = false
+    val bittiSayılır = bitti || durdu
     val toplam = birikim.toplamMs
-    val konuşulabilir = toplam > bütçeMs && (bitti || toplam > erkenÇarpan * bütçeMs)
+    val konuşulabilir = toplam > bütçeMs && (bittiSayılır || toplam > erkenÇarpan * bütçeMs)
     if (!birikim.bildirildi && konuşulabilir) {
       val şimdi = saat()
       if (şimdi - sonNotZamanı >= enAzAralıkMs) {
         sonNotZamanı = şimdi
         notSayısı += 1
         birikim.bildirildi = true
-        paneleYaz(metin(toplam, noktaSayısı, bitti))
+        paneleYaz(metin(toplam, noktaSayısı, bittiSayılır))
       }
     }
     if (bitti) birikim.unut()
@@ -193,14 +211,23 @@ object ÜçgenlemeUyarısı {
    * (örneğin 1000 noktalı gülü, daha bitmeden) haber veriyor. Buradaki
    * giriş yalnız durmuş şekli kapsıyor; ikisi ayrı durum.
    */
-  private[kojo] def şekilDurdu(birikim: ŞekilBirikimi): Unit =
-    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs) {
-      val şimdi = saat()
-      if (şimdi - sonNotZamanı >= enAzAralıkMs) {
-        sonNotZamanı = şimdi
-        notSayısı += 1
-        birikim.bildirildi = true
-        paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
+  private[kojo] def şekilDurdu(birikim: ŞekilBirikimi, yayınBekliyor: Boolean): Unit =
+    if (!birikim.bildirildi) {
+      if (yayınBekliyor) {
+        // Elimizdeki sayılar şeklin yalnız bir ÖNEKİ. Şimdi konuşmak, canlıda
+        // yakalanan kusuru üretir: 251 noktalık gül için "17 ms sürdü (193
+        // nokta)". Bekleyen yayın zaten istenmiş durumda (`boyaKirlendi`
+        // render çağırıyor), o yüzden raporu ona bırakıyoruz.
+        birikim.raporBekliyor = true
+      }
+      else if (birikim.toplamMs > bütçeMs) {
+        val şimdi = saat()
+        if (şimdi - sonNotZamanı >= enAzAralıkMs) {
+          sonNotZamanı = şimdi
+          notSayısı += 1
+          birikim.bildirildi = true
+          paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
+        }
       }
     }
 

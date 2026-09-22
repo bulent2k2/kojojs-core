@@ -48,6 +48,15 @@ trait KojoWorld {
    */
   private[kojo] var yayınSayısı = 0L
 
+  /**
+   * Bu çizerin yayınlanmamış dolgusu var mı.
+   *
+   * Boşalma anında sorulan soru (#134): varsa elimizdeki nokta sayısı ve süre
+   * şeklin yalnız bir ÖNEKİNİ anlatıyor, ve o sayıyla kesin konuşmak canlıda
+   * yakalanan kusuru üretir ("251 noktalık gül için 17 ms sürdü (193 nokta)").
+   */
+  private[kojo] def boyaBekliyorMu(b: Boyacı): Boolean = bekleyenBoyacılar.contains(b)
+
   /** Çizerin dolgusu bayatladı: sıraya al ve bir render iste. */
   private[kojo] def boyaKirlendi(b: Boyacı): Unit = {
     // Silinmiş bir resmin çizeri sıraya GERİ GİRMESİN. Katmanı sıradan bir kez

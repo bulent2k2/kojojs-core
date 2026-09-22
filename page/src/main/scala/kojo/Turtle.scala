@@ -635,7 +635,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       // gelebildiği ve niye üçünün de sayılması gerektiği `komutGelebilir`de
       // yazılı (#140 incelemesi §1). Canlandırma o yolların yalnız biri, ve
       // en sık olanı: boşalma orada kare başına 1.63 kez oluyor.
-      if (!kojoWorld.komutGelebilir) ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi)
+      if (!kojoWorld.komutGelebilir)
+        ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi, kojoWorld.boyaBekliyorMu(this))
       // Zincir burada kopuyor; bundan sonraki ilk komut pompayı yeniden başlatır.
       pompa.kuyrukBoşaldı()
     }
