@@ -77,8 +77,12 @@ private[kojo] final class ŞekilBirikimi {
    *
    * Ölçüldü (#134, canlı 4. deney): boşalma anı son yayından SONRA olabiliyor.
    * 251 noktalı gülde not "17 ms sürdü (193 nokta)" dedi -- şeklin bir öneki,
-   * kesin cümleyle. Kuyruk kare sınırından hızlı boşalıyor (komut hoplaması
-   * ~4.2 ms, kare 16.7 ms), yani son onlarca kenar henüz yayınlanmamış oluyor.
+   * kesin cümleyle. Kuyruk iki kare arasında yüzlerce komut işleyebiliyor:
+   * `scheduleLater` 99 komutu EŞZAMANLI koşturup 100.'de `setTimeout(0)`
+   * yapıyor (`MaxBurst`), yani ~4.2 ms'lik kelepçe komut başına değil
+   * 100'lük PARTİ başına. Bir karede (16.7 ms) dört parti, yani ~400 komut
+   * geçebiliyor -- 250 noktalı gül zaten 500 komut (kenar başına ileri+sağ).
+   * Sonuç: boşalma anında son onlarca kenar henüz yayınlanmamış oluyor.
    */
   private[kojo] var raporBekliyor = false
 
