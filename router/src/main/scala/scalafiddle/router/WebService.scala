@@ -321,6 +321,51 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
               }
             }
           }
+        } ~ path("saglik") {
+          // KAPASİTE SAĞLIK UCU -- /durum'dan farkı, cevabın DURUM KODUNDA
+          // olması. Fly'ın HTTP denetimi gövdeyi ayrıştırmıyor, yalnız koda
+          // bakıyor; /durum ise kapasite 0 olsa bile 200 döndüğü için bir
+          // denetim onunla "kapasite eksik"i göremiyor (koco-deploy#17, 6. madde).
+          //
+          // ANAHTAR İSTEMİYOR ve GÖVDESİZ, bilerek: denetimi kuran taraf
+          // (koco-deploy/fly.toml) AÇIK bir depo, oraya anahtar yazılamaz.
+          // Gövdesiz olduğu için sızdırdığı bilgi "bozuk mu değil mi"den
+          // ibaret; sayılar isteyen /durum'a gitsin, o anahtar istiyor.
+          //
+          // ÖLÇÜT `registered`, `ready` DEĞİL: meşru olarak derleme yapan bir
+          // derleyici kaybedilmiş sayılmaz. Aranan şey "süreç öldü ve geri
+          // gelmedi", yani kaydın kendisinin eksilmesi.
+          //
+          // enAz öntanımlı 1: eşiksiz çağrı "hiç derleyici yok mu" sorar.
+          // Kurulum kendi sayısını versin (ör. /saglik?enAz=2).
+          parameter("enAz".as[Int].?) { enAz =>
+            complete {
+              ask(compilerManager, GetStatus).mapTo[RouterStatus].map { status =>
+                if (status.registered < enAz.getOrElse(1))
+                  HttpResponse(StatusCodes.ServiceUnavailable)
+                else
+                  HttpResponse(StatusCodes.OK)
+              }
+            }
+          }
+        } ~ path("bilgi") {
+          // Sunucunun HANGİ ağaçtan kurulduğunu söyler. "Canlıda ne var?"
+          // sorusu bugün ancak build.sh günlüğüne ya da yerel klonlara
+          // bakılarak cevaplanıyor; imajın kendisi söylemiyordu.
+          //
+          // Fly'ın vNN sürüm numarası BURADA YOK ve olamaz: o numara yayım
+          // anında atanıyor, imaj ise ondan önce kuruluyor. Eşlemesi dışarıdan
+          // kuruluyor -- `flyctl releases` çıktısındaki imaj, buradaki
+          // flyImaj ile aynı. Uydurulmuş bir vNN yazmaktansa imaj kimliği
+          // veriliyor.
+          //
+          // Anahtar istemiyor: içeriği zaten açık depoların commit'leri.
+          // nginx beyaz listesinde YOK, yani dışarı kapalı (bkz. /durum'un
+          // yanındaki karar kaydı).
+          complete {
+            HttpResponse(entity = HttpEntity(`application/json`, write(Bilgi.simdiki).getBytes("UTF-8")))
+              .withHeaders(`Cache-Control`(`no-cache`))
+          }
         } ~ path("compile") {
           handleRejections(CorsDirectives.corsRejectionHandler) {
             CorsDirectives.cors(corsSettings) {

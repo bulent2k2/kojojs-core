@@ -31,6 +31,16 @@ object Config {
 
   val corsOrigins = config.getStringList("corsOrigins").asScala.toSeq
 
+  /** Derleme zamanı damgası; koco-deploy/build.sh yazıyor, start.sh
+    * KOCO_SURUM_* olarak geçiriyor. Damgasız kurulumda hepsi boş. */
+  object surum {
+    private val s = config.getConfig("surum")
+    val core   = s.getString("core")
+    val dev    = s.getString("dev")
+    val editor = s.getString("editor")
+    val tarih  = s.getString("tarih")
+  }
+
   object compiler {
     val c    = config.getConfig("compiler")
     val host = c.getString("host")
