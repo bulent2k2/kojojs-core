@@ -430,25 +430,52 @@ class KojoWorldImpl extends KojoWorld {
   // (geometry.managedGeometries / managedBuffers) okuyor -- sorun #91'in
   // ölçüsü o sayaçlar.
   private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
-  // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; sayfa adresinde
-  // `dolgu=libtess` ile elle kapatılabilir (canlıda geri dönüş).
+  // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; elle kapatılabilir
+  // (canlıda geri dönüş: tarayıcı konsolunda `localStorage.kojoDolgu =
+  // "libtess"`, bkz. libtessİstendi). Elle kapalıysa panele bir satır: ayar
+  // yenilemede duruyor ve hiçbir iz bırakmıyor -- #147 §7'nin "hep stencil"
+  // karışıklığı tam bu sessizlikten çıktı.
+  private val elleLibtess = libtessİstendi
   stencilDolgu = PixiUyum.beşVeÜstü && {
     val gl = renderer.asInstanceOf[js.Dynamic].gl
     !js.isUndefined(gl) && gl != null && gl.getContextAttributes().stencil.asInstanceOf[Boolean]
-  } && !libtessİstendi
+  } && !elleLibtess
+  if (elleLibtess)
+    ÜçgenlemeUyarısı.paneleYaz(
+      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda: delete localStorage.kojoDolgu")
 
   /**
-   * Adreste `dolgu=libtess` var mı? Tuval editörün AYNI KÖKENLİ çerçevesinde
-   * koşuyor (resultframe; editör çerçeveye sorguyu taşımıyor), o yüzden
-   * kendi adresi yanında üst pencerenin adresine de bakılıyor -- çapraz
-   * köken (gömülü sayfa) atarsa sessizce hayır.
+   * Eski yol elle istendi mi? İki kanal:
+   *
+   *  1. `localStorage.kojoDolgu = "libtess"` (tarayıcı konsolunda; silmek
+   *     için `delete localStorage.kojoDolgu`). GÜVENİLİR kanal bu: tuval
+   *     editörün aynı kökenli çerçevesinde koşuyor, depo ortak, ve ayar
+   *     sayfa yenilenince de duruyor.
+   *  2. Adreste `dolgu=libtess`. Editörün yönlendiricisi (`AppRouter`,
+   *     `notFound -> Redirect.Replace`) sorgulu adresi kök sayfaya çevirip
+   *     sorguyu DÜŞÜRÜYOR -- çoğu zaman çerçeve kurulmadan önce; canlıda
+   *     ölçüldü (#147 §7): parametre "hep stencil" verdi. Kanal duruyor
+   *     (yalın sayfa, sınama) ama editörde ona güvenilmez.
+   *
+   * Depo yalnız KENDİ penceresinden okunuyor: localStorage köken başına,
+   * aynı köken aynı depo, çapraz/opak köken ikisinde de patlıyor -- üst
+   * pencerenin deposunun bu pencereninkinden farklı cevap verebileceği bir
+   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu ise üst pencereden de
+   * okunuyor: çerçevenin kendi adresi `/resultframe?theme=light`. try/catch
+   * süs değil: `allow-same-origin` olmayan bir çerçevede kendi deposuna
+   * erişim de SecurityError atıyor.
    */
   private def libtessİstendi: Boolean = {
+    def depo(w: js.Dynamic): Boolean =
+      try w.localStorage.getItem("kojoDolgu").asInstanceOf[String] == "libtess"
+      catch { case _: Throwable => false }
     def sorgu(w: js.Dynamic): Boolean =
       try w.location.search.asInstanceOf[String].contains("dolgu=libtess")
       catch { case _: Throwable => false }
     val kendi = js.Dynamic.global.window
-    sorgu(kendi) || ((kendi.parent.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]) && sorgu(kendi.parent))
+    val üst = kendi.parent
+    val üstBaşka = üst.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]
+    depo(kendi) || sorgu(kendi) || (üstBaşka && sorgu(üst))
   }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).

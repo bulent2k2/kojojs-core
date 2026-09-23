@@ -243,7 +243,8 @@ object ÜçgenlemeUyarısı {
    * düşer. DOM sözleşmesi DuraklamaUyarısı ile aynı -- id="output", kendi
    * div'imizi ekliyoruz.
    */
-  private def paneleYaz(metin: String): Unit = {
+  /** private[kojo]: KojoWorldImpl elle geri dönüş satırını aynı panele yazıyor. */
+  private[kojo] def paneleYaz(metin: String): Unit = {
     val panel = if (js.typeOf(js.Dynamic.global.document) == "undefined") null else document.getElementById("output")
     if (panel == null) {
       js.Dynamic.global.console.warn(metin)
