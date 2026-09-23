@@ -88,7 +88,7 @@ object Utils {
 // kütüphane dosyasını geri koymaktan ibaret oluyor.
 //
 // Tarayıcıda ÖLÇÜLEREK saptandı (pixi 4.8.9 / 5.3.12); v5'te de aynı çalıştığı
-// için burada YER ALMAYAN şeyler: PIXI.loaders.Loader/Resource, PIXI.loader,
+// için burada YER ALMAYAN şeyler: PIXI.loaders.Loader/Resource,
 // PIXI.interaction (v5 uyumluluk kabukları duruyor), autoDetectRenderer'ın
 // seçenek nesnesi biçimi, RenderTexture.create(w, h), renderer.render'ın
 // konumlu biçimi, SHAPES sabitleri, Texture.from, setTransform, getBounds.
@@ -107,6 +107,30 @@ object PixiUyum {
   }
 
   private def dyn(o: Any): js.Dynamic = o.asInstanceOf[js.Dynamic]
+
+  /**
+   * Varlıkları yükleyen PAYLAŞILAN Loader örneği.
+   *
+   * v4'te `PIXI.loader`, v5'te `PIXI.Loader.shared`. v5 eski adı da
+   * sürdürüyor ama her okuyuşta konsola uyarı basıyor:
+   *   "PIXI.loader instance has moved to PIXI.Loader.shared
+   *    Deprecated since v5.0.0"
+   * Uyarı doğrudan çocuğun tarayıcı konsoluna çıkıyor.
+   *
+   * ÖLÇÜLDÜ (başsız Chrome, iki kütüphane dosyasıyla da):
+   *   5.3.12 -> PIXI.Loader.shared var, PIXI.loader ile AYNI NESNE
+   *             (=== doğru), ve yeni ad okunduğunda uyarı ÇIKMIYOR
+   *   4.8.9  -> PIXI.Loader YOK (undefined)
+   * Yani yeni ada körlemesine geçmek v4'ü kırardı; seçim buradan yapılıyor.
+   *
+   * `PIXI.loaders.Loader` TÜR olarak kullanılmaya devam ediyor (imzalarda) --
+   * tür konumundan çalışma anında erişim doğmuyor, dolayısıyla `PIXI.loaders`
+   * uyumluluk kabuğu da uyandırılmıyor.
+   */
+  lazy val paylaşılanYükleyici: pixiscalajs.PIXI.loaders.Loader = {
+    val y = if (beşVeÜstü) g.PIXI.Loader.shared else g.PIXI.loader
+    y.asInstanceOf[pixiscalajs.PIXI.loaders.Loader]
+  }
 
   /**
    * Çizim parçaları: v4'te Graphics'in kendisinde, v5'te geometry'sinde.

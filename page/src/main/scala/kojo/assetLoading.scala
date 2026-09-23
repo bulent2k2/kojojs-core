@@ -3,12 +3,14 @@ package kojo
 import kojo.doodle.Color
 import kojo.syntax.Builtins
 import pixiscalajs.PIXI
-import pixiscalajs.PIXI.Pixi
 
 import scala.collection.mutable
 
 object AssetLoader {
-  private val loader = Pixi.loader
+  // Pixi.loader DEĞİL: v5'te o ad her okunuşta konsola deprecation uyarısı
+  // bastırıyor. Uyum katmanı v5'te PIXI.Loader.shared'ı, v4'te PIXI.loader'ı
+  // veriyor; ölçüldü, v5'te ikisi aynı nesne (bkz. PixiUyum).
+  private val loader = PixiUyum.paylaşılanYükleyici
   case class QEntry(name: String, url: String, doneFn: (PIXI.loaders.Loader, Any) => Unit)
 
   val queue = mutable.Queue.empty[QEntry]
