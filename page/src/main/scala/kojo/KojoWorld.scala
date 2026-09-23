@@ -435,7 +435,21 @@ class KojoWorldImpl extends KojoWorld {
   stencilDolgu = PixiUyum.beşVeÜstü && {
     val gl = renderer.asInstanceOf[js.Dynamic].gl
     !js.isUndefined(gl) && gl != null && gl.getContextAttributes().stencil.asInstanceOf[Boolean]
-  } && !window.location.search.contains("dolgu=libtess")
+  } && !libtessİstendi
+
+  /**
+   * Adreste `dolgu=libtess` var mı? Tuval editörün AYNI KÖKENLİ çerçevesinde
+   * koşuyor (resultframe; editör çerçeveye sorguyu taşımıyor), o yüzden
+   * kendi adresi yanında üst pencerenin adresine de bakılıyor -- çapraz
+   * köken (gömülü sayfa) atarsa sessizce hayır.
+   */
+  private def libtessİstendi: Boolean = {
+    def sorgu(w: js.Dynamic): Boolean =
+      try w.location.search.asInstanceOf[String].contains("dolgu=libtess")
+      catch { case _: Throwable => false }
+    val kendi = js.Dynamic.global.window
+    sorgu(kendi) || ((kendi.parent.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]) && sorgu(kendi.parent))
+  }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
   private[kojo] val stage = new PIXI.Container()
