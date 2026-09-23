@@ -438,17 +438,32 @@ class KojoWorldImpl extends KojoWorld {
   } && !libtessİstendi
 
   /**
-   * Adreste `dolgu=libtess` var mı? Tuval editörün AYNI KÖKENLİ çerçevesinde
-   * koşuyor (resultframe; editör çerçeveye sorguyu taşımıyor), o yüzden
-   * kendi adresi yanında üst pencerenin adresine de bakılıyor -- çapraz
-   * köken (gömülü sayfa) atarsa sessizce hayır.
+   * Eski yol elle istendi mi? İki kanal:
+   *
+   *  1. `localStorage.kojoDolgu = "libtess"` (tarayıcı konsolunda; silmek
+   *     için `delete localStorage.kojoDolgu`). GÜVENİLİR kanal bu: tuval
+   *     editörün aynı kökenli çerçevesinde koşuyor, depo ortak, ve ayar
+   *     sayfa yenilenince de duruyor.
+   *  2. Adreste `dolgu=libtess`. Editörün yönlendiricisi (`AppRouter`,
+   *     `notFound -> Redirect.Replace`) sorgulu adresi kök sayfaya çevirip
+   *     sorguyu DÜŞÜRÜYOR -- çoğu zaman çerçeve kurulmadan önce; canlıda
+   *     ölçüldü (#147 §7): parametre "hep stencil" verdi. Kanal duruyor
+   *     (yalın sayfa, sınama) ama editörde ona güvenilmez.
+   *
+   * Kendi penceresi yanında üst pencereye de bakılıyor; çapraz köken atarsa
+   * sessizce hayır.
    */
   private def libtessİstendi: Boolean = {
+    def depo(w: js.Dynamic): Boolean =
+      try w.localStorage.getItem("kojoDolgu").asInstanceOf[String] == "libtess"
+      catch { case _: Throwable => false }
     def sorgu(w: js.Dynamic): Boolean =
       try w.location.search.asInstanceOf[String].contains("dolgu=libtess")
       catch { case _: Throwable => false }
     val kendi = js.Dynamic.global.window
-    sorgu(kendi) || ((kendi.parent.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]) && sorgu(kendi.parent))
+    val üst = kendi.parent
+    val üstBaşka = üst.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]
+    depo(kendi) || sorgu(kendi) || (üstBaşka && (depo(üst) || sorgu(üst)))
   }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
