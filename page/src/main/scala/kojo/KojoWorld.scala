@@ -430,12 +430,19 @@ class KojoWorldImpl extends KojoWorld {
   // (geometry.managedGeometries / managedBuffers) okuyor -- sorun #91'in
   // ölçüsü o sayaçlar.
   private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
-  // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; sayfa adresinde
-  // `dolgu=libtess` ile elle kapatılabilir (canlıda geri dönüş).
+  // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; elle kapatılabilir
+  // (canlıda geri dönüş: tarayıcı konsolunda `localStorage.kojoDolgu =
+  // "libtess"`, bkz. libtessİstendi). Elle kapalıysa panele bir satır: ayar
+  // yenilemede duruyor ve hiçbir iz bırakmıyor -- #147 §7'nin "hep stencil"
+  // karışıklığı tam bu sessizlikten çıktı.
+  private val elleLibtess = libtessİstendi
   stencilDolgu = PixiUyum.beşVeÜstü && {
     val gl = renderer.asInstanceOf[js.Dynamic].gl
     !js.isUndefined(gl) && gl != null && gl.getContextAttributes().stencil.asInstanceOf[Boolean]
-  } && !libtessİstendi
+  } && !elleLibtess
+  if (elleLibtess)
+    ÜçgenlemeUyarısı.paneleYaz(
+      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda: delete localStorage.kojoDolgu")
 
   /**
    * Eski yol elle istendi mi? İki kanal:
@@ -450,8 +457,13 @@ class KojoWorldImpl extends KojoWorld {
    *     ölçüldü (#147 §7): parametre "hep stencil" verdi. Kanal duruyor
    *     (yalın sayfa, sınama) ama editörde ona güvenilmez.
    *
-   * Kendi penceresi yanında üst pencereye de bakılıyor; çapraz köken atarsa
-   * sessizce hayır.
+   * Depo yalnız KENDİ penceresinden okunuyor: localStorage köken başına,
+   * aynı köken aynı depo, çapraz/opak köken ikisinde de patlıyor -- üst
+   * pencerenin deposunun bu pencereninkinden farklı cevap verebileceği bir
+   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu ise üst pencereden de
+   * okunuyor: çerçevenin kendi adresi `/resultframe?theme=light`. try/catch
+   * süs değil: `allow-same-origin` olmayan bir çerçevede kendi deposuna
+   * erişim de SecurityError atıyor.
    */
   private def libtessİstendi: Boolean = {
     def depo(w: js.Dynamic): Boolean =
@@ -463,7 +475,7 @@ class KojoWorldImpl extends KojoWorld {
     val kendi = js.Dynamic.global.window
     val üst = kendi.parent
     val üstBaşka = üst.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]
-    depo(kendi) || sorgu(kendi) || (üstBaşka && (depo(üst) || sorgu(üst)))
+    depo(kendi) || sorgu(kendi) || (üstBaşka && sorgu(üst))
   }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
