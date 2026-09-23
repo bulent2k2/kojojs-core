@@ -162,7 +162,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
         if (stencilMi(düz)) {
           val s = new StencilDolgu()
           s.name = "Turtle Fill"
-          stencilKur(s, düz, bitti = true, durdu = false)
+          stencilKur(s, düz)
           s
         }
         else {
@@ -192,16 +192,22 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     kojoWorld.stencilDolgu && düz.length / 2 > StencilDolgu.Eşik
 
   /**
-   * Stencil yolunda "dolgu hesabı" tamponların kurulması; süre yine
-   * ÜçgenlemeUyarısı'na gidiyor ki şekil başına muhasebe (nokta sayısı,
-   * bitti/durdu, sil() sıfırlaması) iki yolda da aynı kalsın. Pratikte bütçeyi
-   * hiç aşmıyor (0.1-0.8 ms), yani not bu yoldan düşmüyor -- kendini kesen
-   * dolgu artık pahalı değil, not da onun için vardı.
+   * Stencil yolunda "dolgu hesabı" yalnız tamponların kurulması, O(n), ve
+   * ÜçgenlemeUyarısı'na GİTMİYOR. İlk sürüm süreyi oraya da yazıyordu
+   * ("muhasebe iki yolda aynı kalsın" diye) ve canlıda yanıldı (#147 §7,
+   * 40 000 noktalı gül): kurulum yayın başına ucuz ama büyüyen şekil her
+   * karede baştan kuruluyor, toplam 40k noktada 190 ms'ye çıkıyor ve not
+   * "karesele yakın büyüyor, noktayı yarıya indir" diye konuşuyordu --
+   * stencil'de yanlış olan tam o cümle. Not üçgenlemenin bedeli içindi;
+   * üçgenleme yoksa not da yok. Şeklin Eşik'in altındaki evresi libtess'te
+   * geçmiş olabilir; o evrenin birikimi burada UNUTULUYOR, yoksa kuyruk
+   * boşalma yolu (şekilDurdu) onu eski nokta sayısıyla, kesin biçimde
+   * bildirirdi (sahte saatle görüldü: "30 ms sürdü (21 nokta)", 251 noktalı
+   * gül için). sil() sıfırlaması aynen.
    */
-  private def stencilKur(düğüm: StencilDolgu, düz: Array[Double], bitti: Boolean, durdu: Boolean): Unit = {
-    val t0 = ÜçgenlemeUyarısı.saat()
+  private def stencilKur(düğüm: StencilDolgu, düz: Array[Double]): Unit = {
+    şekilBirikimi.unut()
     düğüm.kur(düz, fillBoya)(() => kojoWorld.render())
-    ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti, durdu)
   }
 
   /** Şekil bitti: o ana dek biriken kalem izi olduğu yerde donuyor, üstüne
@@ -265,7 +271,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       // olabilir: yayın kare sınırında olduğu için bu soru tam burada
       // sorulabiliyor (bkz. şekilDurmuş).
       val durdu = şekilDurmuş
-      if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz, bitti = false, durdu)
+      if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz)
       else {
         boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
         PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
