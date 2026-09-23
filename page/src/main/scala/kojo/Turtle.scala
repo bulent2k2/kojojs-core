@@ -58,8 +58,12 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   // bir drawPolygon olarak yayınlanıyor -- onu render kesemiyor.
   // `boyamaYolu` yalnız O ANDA çizilmekte olan şekli gösteriyor ve her köşede
   // yeniden yayınlanıyor; tamamlanan şekiller ise ŞEKİL BAŞINA kendi
-  // Graphics'ine yazılıyor (bkz. çizimParçaları).
+  // Graphics'ine ya da StencilDolgu'suna yazılıyor (bkz. dolguParçaları).
   private[kojo] val boyamaYolu = new PIXI.Graphics()
+  // Büyümekte olan şeklin STENCIL düğümü (#147): şekil Eşik'i aşınca dolgu
+  // Graphics'e değil buraya yayınlanıyor; öteki o sırada boş. İkisi de
+  // katmanda, aynı yerde (bkz. kalemYolunuDondur).
+  private[kojo] val boyamaYoluStencil = new StencilDolgu()
   private val boyamaÇokgeni = new BoyamaYolu
 
   // ŞEKİL BAŞINA DÜĞÜM (sorun #86). Eskiden tamamlanmış dolguların TAMAMI tek
@@ -92,11 +96,23 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   // `kalemKalınlığı(8) * kalemRengi(yeşil) -> Resim{dolgulu kare}` mavi karenin
   // içinden kalın yeşil bir köşegen geçirdi.
   private[kojo] val kalemParçaları = ArrayBuffer[PIXI.Graphics]()
-  private[kojo] val dolguParçaları = ArrayBuffer[PIXI.Graphics]()
-  /** Dolgu biçemi için hepsi: kalem izleri de dolgu taşıyabiliyor (nokta()
-    * daireleri, açık boyama). */
-  private[kojo] def çizimParçaları: Seq[PIXI.Graphics] =
-    kalemParçaları.toSeq ++ dolguParçaları.toSeq
+  // Dolgu parçaları İKİ CİNS (#147): Eşik'i aşan şekil `StencilDolgu`,
+  // gerisi Graphics (libtess). İkisi de Container; ayrım eşleme ile.
+  private[kojo] val dolguParçaları = ArrayBuffer[PIXI.Container]()
+
+  /**
+   * Dolgu biçemini BÜTÜN parçalara uygular (TurtlePicture'ın dönüştürücüleri,
+   * #86): kalem izleri de dolgu taşıyabiliyor (nokta() daireleri, açık
+   * boyama), onlar Graphics; dolgu parçaları iki cins.
+   */
+  private[kojo] def dolgularıBoya(boya: Boya)(tazeleyici: () => Unit): Unit = {
+    kalemParçaları.foreach(g => PixiUyum.boyayıKurBoya(g, boya)(tazeleyici))
+    dolguParçaları.foreach {
+      case s: StencilDolgu  => s.boyayıDeğiştir(boya)(tazeleyici)
+      case g: PIXI.Graphics => PixiUyum.boyayıKurBoya(g, boya)(tazeleyici)
+      case _                =>
+    }
+  }
   private[kojo] val turtlePathPoints = ArrayBuffer[(Double, Double)]()
   var prevMoveTo: Option[Point] = None
   // PIXI 5'te yol, çizimler arasında boşaltılabildiğinden (bkz.
@@ -139,21 +155,53 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   /** O anki çokgen bittiyse kalıcı katmana yaz -- sonraki clear() onu silmesin. */
   private def boyamayıİşle(): Unit = {
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
-      val dolgu = new PIXI.Graphics()
-      dolgu.name = "Turtle Fill"
-      dolgu.lineStyle(0, 0, 0)
-      PixiUyum.boyamayaBaşla(dolgu, fillBoya)(() => kojoWorld.render())
+      val düz = boyamaÇokgeni.düzDizi
       // bitti = true: KALICI düğüm, yani şekil tamamlandı -- not gerçek nokta
       // sayısını söyleyebilir (bkz. ÜçgenlemeUyarısı, #125).
-      üçgenleriÇiz(dolgu, bitti = true)
-      dolgu.endFill()
-      PixiUyum.tazele(dolgu)
+      val dolgu: PIXI.Container =
+        if (stencilMi(düz)) {
+          val s = new StencilDolgu()
+          s.name = "Turtle Fill"
+          stencilKur(s, düz, bitti = true, durdu = false)
+          s
+        }
+        else {
+          val g = new PIXI.Graphics()
+          g.name = "Turtle Fill"
+          g.lineStyle(0, 0, 0)
+          PixiUyum.boyamayaBaşla(g, fillBoya)(() => kojoWorld.render())
+          üçgenleriÇiz(g, düz, bitti = true)
+          g.endFill()
+          PixiUyum.tazele(g)
+          g
+        }
       // Dolgu, O ŞEKLİN kalem izinin hemen ALTINA: kenarlık kendi dolgusunun
       // üstünde kalsın, ama sonraki şeklin dolgusu bu kenarlığı örtebilsin.
       turtleLayer.addChildAt(dolgu, turtleLayer.getChildIndex(turtlePath))
       dolguParçaları += dolgu
       kalemYolunuDondur()
     }
+  }
+
+  /**
+   * Bu şekil stencil'e mi gidiyor (#147)? Dünya stencil çizebiliyor VE nokta
+   * sayısı eşiği aşıyor. Küçük şekiller libtess + Graphics'te kalıyor:
+   * gerekçe ve ölçüm StencilDolgu'nun belgesinde.
+   */
+  private def stencilMi(düz: Array[Double]): Boolean =
+    kojoWorld.stencilDolgu && düz.length / 2 > StencilDolgu.Eşik
+
+  /**
+   * Stencil yolunda "dolgu hesabı" tamponların kurulması; süre yine
+   * ÜçgenlemeUyarısı'na gidiyor ki şekil başına muhasebe (nokta sayısı,
+   * bitti/durdu, sil() sıfırlaması) iki yolda da aynı kalsın. Pratikte bütçeyi
+   * hiç aşmıyor (0.1-0.8 ms), yani not bu yoldan düşmüyor -- kendini kesen
+   * dolgu artık pahalı değil, not da onun için vardı.
+   */
+  private def stencilKur(düğüm: StencilDolgu, düz: Array[Double], bitti: Boolean, durdu: Boolean): Unit = {
+    val t0 = ÜçgenlemeUyarısı.saat()
+    düğüm.kur(düz, fillBoya)(() => kojoWorld.render())
+    ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti, durdu)
   }
 
   /** Şekil bitti: o ana dek biriken kalem izi olduğu yerde donuyor, üstüne
@@ -165,6 +213,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtlePath.name = "Turtle Path"
     kalemParçaları += turtlePath
     turtleLayer.addChild(boyamaYolu)
+    turtleLayer.addChild(boyamaYoluStencil)
     turtleLayer.addChild(turtlePath)
     if (!forPic && turtleImage != null) turtleLayer.addChild(turtleImage)
     // Yeni çizer biçemsiz doğuyor; KALEMİ geri koyuyoruz -- dolguyu DEĞİL.
@@ -209,14 +258,20 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private[kojo] def boyayıYayınla(): Unit = {
     boyamaYolu.clear()
+    boyamaYoluStencil.temizle()
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
-      boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
-      PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
+      val düz = boyamaÇokgeni.düzDizi
       // Şekil çokgen olarak bitmedi (bitti = false), ama BÜYÜMEYİ bırakmış
       // olabilir: yayın kare sınırında olduğu için bu soru tam burada
       // sorulabiliyor (bkz. şekilDurmuş).
-      üçgenleriÇiz(boyamaYolu, bitti = false, durdu = şekilDurmuş)
-      boyamaYolu.endFill()
+      val durdu = şekilDurmuş
+      if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz, bitti = false, durdu)
+      else {
+        boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
+        PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
+        üçgenleriÇiz(boyamaYolu, düz, bitti = false, durdu)
+        boyamaYolu.endFill()
+      }
     }
     PixiUyum.tazele(boyamaYolu)
   }
@@ -328,6 +383,11 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    *   (ad/interactive/lastMut/frame) ve pişirme herhangi bir DisplayObject'i
    *   dokuya çiziyor; mesh aynen pişerdi.
    *
+   * #147'DEN SONRA BU YOL YALNIZ KÜÇÜK ŞEKİLLER İÇİN (nokta sayısı <=
+   * StencilDolgu.Eşik) ve stencil çizemeyen dünyalar için (PIXI 4,
+   * stencil'siz bağlam, TestKojoWorld). Büyük ve kesişen şekil -- libtess'in
+   * pahalı olduğu tek yer -- StencilDolgu'ya gidiyor, hiç üçgenlenmiyor.
+   *
    * YANİ BU DÖNGÜ ÖLÇÜLMÜŞ BİR TERCİH (#125, "yapılmayacak" diye kapandı):
    * mesh dilimin kendisinde 5-14 kat ucuz, ama dilim gülün ≤ %5-10'u --
    * #131'den sonra ölçüldü, drawPolygon kurulumu + render 1000 noktada
@@ -335,17 +395,16 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    * üç sav karşılığında. Bir sonraki kaldıraç üçgenlemeyi hızlandırmak
    * değil hiç üçgenlememek: stencil tamponuyla NON_ZERO dolgu, kayıt #147.
    */
-  private def üçgenleriÇiz(gr: PIXI.Graphics, bitti: Boolean, durdu: Boolean = false): Unit = {
+  private def üçgenleriÇiz(gr: PIXI.Graphics, düz: Array[Double], bitti: Boolean, durdu: Boolean = false): Unit = {
     if (!Üçgenleyici.kullanılabilir) {
       // Kütüphane sayfada yok. Çökmek yerine eski davranışa düşüyoruz: kendini
       // kesen yollar yanlış dolar ama öteki her şey yaşar. Konsola hata basıldı.
-      gr.drawPolygon(scala.scalajs.js.Array(boyamaÇokgeni.düzDizi: _*))
+      gr.drawPolygon(scala.scalajs.js.Array(düz: _*))
       return
     }
     // Süre ÖLÇÜLÜYOR: pahalı dolguyu kullanıcıya bildirmek için (#68). Nokta
     // sayısına bakmak yetmiyor -- kesişmeyen 4000 nokta 6 ms, kesişen 1000
     // nokta 95 ms. Bedeli iki performance.now(); bkz. ÜçgenlemeUyarısı.
-    val düz = boyamaÇokgeni.düzDizi
     val t0 = ÜçgenlemeUyarısı.saat()
     val ü = Üçgenleyici.nonzero(düz)
     ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti, durdu)
@@ -411,6 +470,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
     boyamaYolu.name = "Turtle Fill (in progress)"
     turtleLayer.addChild(boyamaYolu)
+    boyamaYoluStencil.name = "Turtle Fill (in progress, stencil)"
+    turtleLayer.addChild(boyamaYoluStencil)
     turtlePath.name = "Turtle Path"
     turtleLayer.addChild(turtlePath)
     if (kalemParçaları.isEmpty) kalemParçaları += turtlePath
@@ -1049,7 +1110,11 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // ve CANLI yol (dışarıdan TurtlePicture'ın tuttuğu turtlePath) bilerek
     // atlanıyor.
     (kalemParçaları ++ dolguParçaları).foreach { g =>
-      if (g ne turtlePath) { turtleLayer.removeChild(g); g.destroy() }
+      if (g ne turtlePath) {
+        turtleLayer.removeChild(g)
+        g match { case s: StencilDolgu => s.bırak(); case _ => }
+        g.destroy()
+      }
     }
     kalemParçaları.clear()
     dolguParçaları.clear()
@@ -1057,6 +1122,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtlePath.clear()
     turtlePathPoints.clear()
     boyamaYolu.clear()
+    boyamaYoluStencil.temizle()
     boyamaÇokgeni.temizle()
     şekilBirikimi.unut() // yarım şeklin birikimi sonrakine taşınmasın
     kojoWorld.bekleyenBoyayıUnut(this) // KENDİ yolunu sildi; ötekilerinki dursun

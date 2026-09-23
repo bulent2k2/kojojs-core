@@ -118,19 +118,20 @@ class TurtlePicture private[kojo] (fn: Turtle => Unit)(implicit val kojoWorld: K
   // (nokta() daireleri, açık boyama). KALEM biçemi yalnız kalem parçalarına:
   // dolgu düğümleri çizgisiz doğuyor ve onlara kalem yazmak üçgenleme
   // dikişini görünür kılıyor (bkz. Turtle.kalemParçaları).
-  private def dolguParçaları = turtle.çizimParçaları
+  // Dolgu parçaları iki cins (#147: Graphics ve StencilDolgu); dağıtım
+  // Turtle.dolgularıBoya'da.
   private def kalemParçaları = turtle.kalemParçaları
 
   def setFillColor(c: Color): Unit = {
     ready.foreach { u =>
-      dolguParçaları.foreach(g => PixiUyum.boyayıKur(g, c.toRGBDouble, c.alpha.get))
+      turtle.dolgularıBoya(DüzBoya(c)) { () => kojoWorld.render() }
       kojoWorld.render()
     }
   }
 
   override def setFillPaint(b: Boya): Unit = {
     ready.foreach { u =>
-      dolguParçaları.foreach(g => PixiUyum.boyayıKurBoya(g, b) { () => kojoWorld.render() })
+      turtle.dolgularıBoya(b) { () => kojoWorld.render() }
       kojoWorld.render()
     }
   }

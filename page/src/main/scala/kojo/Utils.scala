@@ -243,7 +243,14 @@ object PixiUyum {
 
     def sor(n: js.Dynamic, küresel: js.Dynamic, pay: Double): Boolean = {
       var bulundu = false
-      if (js.typeOf(n.containsPoint) == "function") {
+      // Stencil dolgusu (#147): geometrisi yok, üçgeni yok; sarım sayısını
+      // kendisi hesaplıyor (StencilDolgu.içindeMi). Görünmez dolgu çevirme
+      // dansı ona gerekmiyor -- dolgusu görünür değilse zaten çizilmiyor.
+      if (n.kojoStencilDolgu.asInstanceOf[js.UndefOr[Boolean]].contains(true)) {
+        val yerel = n.toLocal(küresel)
+        bulundu = n.içindeMi(yerel.x, yerel.y).asInstanceOf[Boolean]
+      }
+      else if (js.typeOf(n.containsPoint) == "function") {
         val gd =
           if (beşVeÜstü) {
             val geo = n.geometry
@@ -452,7 +459,7 @@ object PixiUyum {
    * "error" kapanışı (ya da tersi) önbellekteki BaseTexture üstünde sonsuza
    * dek kalıp gr ile tazeleyici'yi tutuyordu.
    */
-  private def yüklemeyiBekle(bt: js.Dynamic)(oldu: () => Unit, olmadı: String => Unit): Unit = {
+  private[kojo] def yüklemeyiBekle(bt: js.Dynamic)(oldu: () => Unit, olmadı: String => Unit): Unit = {
     val kaynak = bt.resource
     val dosya = {
       val u = kaynak.url
@@ -698,7 +705,11 @@ object PixiUyum {
   def glKaynaklarınıBırak(düğüm: Any): Unit =
     if (beşVeÜstü && düğüm != null) {
       val d = dyn(düğüm)
-      if (js.typeOf(d.finishPoly) == "function") {
+      // Stencil dolgusu (#147) kendi geometrilerini ve gradyan dokusunu
+      // kendisi bırakıyor; `finishPoly` kapısından geçmez, o yüzden ayrı dal
+      // -- #125'in "sessizce atlar" uyarısı tam bu satır için yazılmıştı.
+      if (d.kojoStencilDolgu.asInstanceOf[js.UndefOr[Boolean]].contains(true)) d.bırak()
+      else if (js.typeOf(d.finishPoly) == "function") {
         val geo = d.geometry
         if (!js.isUndefined(geo) && geo != null) {
           gradyanDokularınıBırak(geo)
