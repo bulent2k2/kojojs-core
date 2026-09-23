@@ -112,10 +112,19 @@ object PixiUyum {
    * Varlıkları yükleyen PAYLAŞILAN Loader örneği.
    *
    * v4'te `PIXI.loader`, v5'te `PIXI.Loader.shared`. v5 eski adı da
-   * sürdürüyor ama her okuyuşta konsola uyarı basıyor:
+   * sürdürüyor ama okununca konsola uyarı basıyor:
    *   "PIXI.loader instance has moved to PIXI.Loader.shared
    *    Deprecated since v5.0.0"
    * Uyarı doğrudan çocuğun tarayıcı konsoluna çıkıyor.
+   *
+   * SAYFA BAŞINA BİR KEZ, her okuyuşta değil: PIXI'nin `deprecation()`
+   * kapısı iletiyi `warnings[message]` ile eliyor. Ölçüldü: eski ad 1 kez
+   * okununca 1 kayıt, 3 kez okununca yine 1. Yani bedel gürültü değil,
+   * açılış başına duran tek bir satır.
+   *
+   * `console.warn` DEĞİL `console.groupCollapsed` ile basılıyor (yığın izi
+   * ayrıca warn'a gidiyor). Kancayla arayan biri warn'a bakıp bulamayabilir
+   * -- ölçerken tam bu tuzağa düşüldü, o yüzden burada yazıyor.
    *
    * ÖLÇÜLDÜ (başsız Chrome, iki kütüphane dosyasıyla da):
    *   5.3.12 -> PIXI.Loader.shared var, PIXI.loader ile AYNI NESNE
