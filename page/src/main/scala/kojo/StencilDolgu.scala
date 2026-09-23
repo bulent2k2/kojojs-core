@@ -61,9 +61,18 @@ import pixiscalajs.PIXI
  * boyutluyor: `_calculateBounds` olmadan süzgeç altında hiçbir şey
  * çizilmiyordu (ölçüldü, boyalı 0).
  *
- * BİLİNEN SINIRLAR: sarım 8 bit (|sarım| = 256 olan piksel boş kalır --
- * `sağ(1)` ile aynı yönde 256 tur atan yol); PIXI maskeleriyle aynı tamponu
- * paylaşır (iKojo maske kullanmıyor); kenarlar MSAA'ya bağlı.
+ * BİLİNEN SINIRLAR: sarım 8 bit -- |sarım| = 256 olan piksel boş kalır
+ * (INCR_WRAP sıfıra döner). ERİŞİM KOŞULU yalnız `sağ(1)` ile 256 tur atan
+ * yol değil, sarım sayısı 256'ya ulaşan HER şekil: örneklerin `gül(nokta,
+ * kat, ...)` işlevinde kat = 256. Ölçüldü (#153 incelemesi, ayırıcı imza):
+ * 1000 x 255 %0.07 ve 1000 x 257 %0.12 fark (kenar), 1000 x 256 %56 (koca
+ * bölge boş), 512 (≡ 0 mod 256) %1.7 -- StencilDolguTest'te çivili. Örneklerin
+ * ölçeği (kat = 7) ve canlı ölçüm (4000 x 7) uzağında; kullanıcıya sessiz
+ * bir çizim hatası olarak görünür, uyarı yok. PIXI maskeleriyle aynı tamponu
+ * paylaşır (iKojo maske kullanmıyor); kenarlar MSAA'ya bağlı. Sarım yönü:
+ * sahne Y'yi çeviriyor (ön/arka yüz takla atar, sarım negatiflenir), NOTEQUAL 0
+ * simetrik olduğu için fark etmiyor; `durum.culling = false` şart, açılırsa
+ * arkayüzler düşer ve iptal hiç çalışmaz.
  */
 class StencilDolgu extends PIXI.Container {
   import StencilDolgu._
