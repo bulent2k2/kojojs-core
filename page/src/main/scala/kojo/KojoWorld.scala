@@ -48,6 +48,15 @@ trait KojoWorld {
    */
   private[kojo] var yayınSayısı = 0L
 
+  /**
+   * Bu dünya stencil dolgu çizebilir mi (#147): PIXI 5 ve stencil'li bir
+   * WebGL bağlamı. false ise bütün dolgular libtess + Graphics'te kalıyor --
+   * PIXI 4, stencil'siz bağlam, tuval çizici, ve sınama dünyası
+   * (TestKojoWorld: çizicisi yok). KojoWorldImpl çizici kurulunca bağlamdan
+   * okuyor; sınamalar elle çevirebilir.
+   */
+  private[kojo] var stencilDolgu = false
+
   // --- Kuyruğu boşalan çizerler (durma denetimi, #134/#143) ------------------
   //
   // "Kuyruk boşaldı" tek başına "betik bitti" demek değil: pompa (#131) düz
@@ -421,6 +430,26 @@ class KojoWorldImpl extends KojoWorld {
   // (geometry.managedGeometries / managedBuffers) okuyor -- sorun #91'in
   // ölçüsü o sayaçlar.
   private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
+  // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; sayfa adresinde
+  // `dolgu=libtess` ile elle kapatılabilir (canlıda geri dönüş).
+  stencilDolgu = PixiUyum.beşVeÜstü && {
+    val gl = renderer.asInstanceOf[js.Dynamic].gl
+    !js.isUndefined(gl) && gl != null && gl.getContextAttributes().stencil.asInstanceOf[Boolean]
+  } && !libtessİstendi
+
+  /**
+   * Adreste `dolgu=libtess` var mı? Tuval editörün AYNI KÖKENLİ çerçevesinde
+   * koşuyor (resultframe; editör çerçeveye sorguyu taşımıyor), o yüzden
+   * kendi adresi yanında üst pencerenin adresine de bakılıyor -- çapraz
+   * köken (gömülü sayfa) atarsa sessizce hayır.
+   */
+  private def libtessİstendi: Boolean = {
+    def sorgu(w: js.Dynamic): Boolean =
+      try w.location.search.asInstanceOf[String].contains("dolgu=libtess")
+      catch { case _: Throwable => false }
+    val kendi = js.Dynamic.global.window
+    sorgu(kendi) || ((kendi.parent.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]) && sorgu(kendi.parent))
+  }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
   private[kojo] val stage = new PIXI.Container()
