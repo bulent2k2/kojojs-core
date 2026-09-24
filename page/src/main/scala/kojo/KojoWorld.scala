@@ -23,6 +23,28 @@ trait KojoWorld {
   def runLater(ms: Double)(fn: => Unit): Unit
   def render(): Unit
 
+  /**
+   * Dolgu notunun durumu (saat, sayaç, zaman kapısı), DÜNYA BAŞINA (#149).
+   * Canlıda tek dünya var, davranış aynı; sınamada her dünya kendi
+   * durumunu taşıyor -- bkz. ÜçgenlemeRaporu.
+   */
+  private[kojo] lazy val üçgenlemeRaporu: ÜçgenlemeRaporu = new ÜçgenlemeRaporu()
+
+  /**
+   * Dünyayı KAPAT (#149): bundan sonra rapor susar, bekleyen boyalar ve durma
+   * adayları düşer. KojoWorldImpl ayrıca pompayı, çizimi ve canlandırmayı
+   * durduruyor. Canlıda çağrılmıyor (sayfa tek dünya taşıyor, sayfayla ölüyor);
+   * sınama fikstürleri bir sonraki dünyayı kurmadan önce ve takım sonunda
+   * çağırıyor -- yoksa bir takımın dünyası (giysisi geç yüklenen kaplumbağa,
+   * rAF döngüsü) sonraki takımın sırasında koşmaya devam ediyordu.
+   * İdempotent.
+   */
+  private[kojo] def kapat(): Unit = {
+    üçgenlemeRaporu.sustur()
+    bekleyenBoyacılar.clear()
+    durmaAdayları.clear()
+  }
+
   // --- Bekleyen dolgular (tembel üçgenleme) ---------------------------------
   //
   // Kaplumbağa her kenarda dolgu çokgeninin TAMAMINI yeniden yayınlıyordu.
@@ -905,8 +927,29 @@ class KojoWorldImpl extends KojoWorld {
    * sayaç tam sınırdaysa bugün de ertelenirdi.
    */
   def scheduleLater(fn: => Unit): Unit = {
+    if (kapandı) return // kapanmış dünya komut kabul etmiyor (#149)
     bekleyenİşler.enqueue(() => fn)
     if (!pompaDönüyor && !kareBekleniyor) pompayıSürdür()
+  }
+
+  private var kapandı = false
+
+  /**
+   * #149: temel sınıfınkine ek olarak pompayı (kuyruk boşalıyor, yeni komut
+   * alınmıyor), çizimi (bekleyen rAF iptal) ve canlandırmayı durduruyor.
+   * Zamanlanmış rAF geri çağrıları yine gelebilir; hepsi `kapandı`ya bakıp
+   * hiçbir şey yapmadan dönüyor (setup ve canlandırma dahil: koruma geri
+   * çağrının başında, kullanıcının fn'i kapanmış dünyada koşmuyor).
+   * Sökülmeyenler: pencere ve sahne dinleyicileri (resize, tuş, tekerlek,
+   * pointer) ve PIXI uygulaması -- kapanmış dünya çöpe gitmiyor, WebGL
+   * bağlamı açık kalıyor. Aşağı akış korunduğu için zararsız.
+   */
+  override private[kojo] def kapat(): Unit = {
+    super.kapat()
+    kapandı = true
+    bekleyenİşler.clear()
+    stopAnimation()
+    if (renderPending) { renderPending = false; window.cancelAnimationFrame(renderHandle) }
   }
 
   /**
@@ -923,7 +966,7 @@ class KojoWorldImpl extends KojoWorld {
    */
   private def kareyeTeslim(): Unit = {
     kareBekleniyor = true
-    window.requestAnimationFrame { _ => kareBekleniyor = false; harcananMs = 0; pompayıSürdür() }
+    window.requestAnimationFrame { _ => kareBekleniyor = false; harcananMs = 0; if (!kapandı) pompayıSürdür() }
   }
 
   /**
@@ -986,7 +1029,7 @@ class KojoWorldImpl extends KojoWorld {
    * (pompasını yeniden zamanlayamadı); ötekiler değil.
    */
   private def pompayıSürdür(): Unit = {
-    if (pompaDönüyor) return
+    if (pompaDönüyor || kapandı) return
     val koşuBaşı = window.performance.now()
     if (koşuBaşı - sonKoşuBitişi > 2.0) harcananMs = 0 // görev sınırından geçildi
     if (harcananMs >= DilimMs) { kareyeTeslim(); return } // bütçe zaten dolu
@@ -1026,7 +1069,7 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def runLater(ms: Double)(fn: => Unit): Unit = {
-    window.setTimeout(() => fn, ms)
+    window.setTimeout(() => if (!kapandı) fn, ms)
   }
 
   // PERFORMANS: render() her resim değişiminde çağrılıyor (taşı/döndür/boya/çiz
@@ -1047,7 +1090,7 @@ class KojoWorldImpl extends KojoWorld {
   private var renderPending = false
   private var renderHandle = 0
   def render(): Unit = {
-    if (!renderPending) {
+    if (!renderPending && !kapandı) {
       renderPending = true
       renderHandle = window.requestAnimationFrame(_ => flushRender())
     }
@@ -1262,22 +1305,27 @@ class KojoWorldImpl extends KojoWorld {
   // aralıktan bağımsız beslensin. rAF'ın verdiği zaman damgası yerine
   // System.currentTimeMillis kullanıyoruz (frameDeltaTime de öyle yapıyor).
   private def animateHelper(fn: => Unit, lastRunMs: Double): Unit = {
+    // Koruma geri çağrının BAŞINDA: kapat()'tan önce zamanlanmış kare fn'i
+    // kapanmış dünyada koşturmasın (#149). `return` değil `if`: lambdadaki
+    // return yerel olmayan dönüştür, rAF'ta yakalanmamış istisna olur.
     window.requestAnimationFrame { _ =>
-      var nextLast = lastRunMs
-      if (notAssetLoading) {
-        // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
-        val now = System.currentTimeMillis().toDouble
-        val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs - kareToleransıMs
-        if (due) {
-          nextLast = now
-          frameCount += 1
-          fn
-          maybeBake()
-          flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+      if (!kapandı) {
+        var nextLast = lastRunMs
+        if (notAssetLoading) {
+          // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
+          val now = System.currentTimeMillis().toDouble
+          val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs - kareToleransıMs
+          if (due) {
+            nextLast = now
+            frameCount += 1
+            fn
+            maybeBake()
+            flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+          }
         }
-      }
-      if (animating) {
-        animateHelper(fn, nextLast)
+        if (animating) {
+          animateHelper(fn, nextLast)
+        }
       }
     }
   }
@@ -1290,8 +1338,10 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def setup(fn: => Unit): Unit = {
+    // Varlık beklerken kapanan dünya: döngü biter, fn hiç koşmaz (#149).
     window.requestAnimationFrame { _ =>
-      if (notAssetLoading) {
+      if (kapandı) ()
+      else if (notAssetLoading) {
         fn
       }
       else {
@@ -1309,6 +1359,9 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def timer(ms: Long)(fn: => Unit): Unit = {
+    // kapat()'taki stopAnimation o anki aralıkları siliyor; kapandıktan sonra
+    // geç koşan bir geri çağrının kuracağı yeni aralık ise sonsuza dek dönerdi (#149).
+    if (kapandı) return
     prevFrameTime = -1
     val handle = window.setInterval({ () =>
       if (notAssetLoading) {

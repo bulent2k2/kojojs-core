@@ -79,6 +79,10 @@ private[kojo] final class ŞekilBirikimi {
   }
 }
 
+/**
+ * Sabitler, metin ve panel -- durumsuz (#149). Durum (saat, sayaç, zaman
+ * kapısı, erken çarpan) `ÜçgenlemeRaporu`nda, dünya başına.
+ */
 object ÜçgenlemeUyarısı {
 
   /** Bir karelik bütçe (60 kare/saniye). */
@@ -94,21 +98,113 @@ object ÜçgenlemeUyarısı {
    */
   private[kojo] val enAzAralıkMs = 2000.0
 
+  /** `ÜçgenlemeRaporu.erkenÇarpan`ın varsayılanı (gerekçesi orada). */
+  private[kojo] val varsayılanErkenÇarpan = 3.0
+
   /**
-   * Sınama saati değiştirebilsin diye ayrı.
-   *
-   * Varsayılanı `paneleYaz` ile AYNI özeni gösteriyor (tarayıcı yoksa
+   * Tarayıcı saati. `paneleYaz` ile AYNI özeni gösteriyor (tarayıcı yoksa
    * çökmüyor) -- üstelik burası SICAK yol: `Turtle.üçgenleriÇiz` her dolguda
    * iki kez çağırıyor. Tarayıcısız ortamda 0 dönmek doğru bozulma: süre hep 0
    * çıkar, eşik hiç aşılmaz, not da düşmez -- zaten yazacak panel yok.
    * Çözüm `lazy val`de bir kez yapılıyor, çağrı başına değil.
    */
-  private[kojo] var saat: () => Double = () => tarayıcıSaati()
-
-  private lazy val tarayıcıSaati: () => Double =
+  private[kojo] lazy val tarayıcıSaati: () => Double =
     if (js.typeOf(js.Dynamic.global.window) == "undefined" ||
         js.isUndefined(js.Dynamic.global.window.performance)) () => 0.0
     else () => window.performance.now()
+
+  /**
+   * Okunabilir olsun diye üç parça: NE oldu (sayılarla), NEDEN, NE YAPILABİLİR.
+   *
+   * Süre tam sayıya yuvarlanıyor -- ondalık burada bilgi taşımıyor ve ölçüm
+   * zaten koşudan koşuya oynuyor. BÜTÇE yuvarlanMIYOR: `bütçeMs.round` 17
+   * basıyordu, yani süresi (16.7, 17.5) arasına düşen bir dolgu için not
+   * "17 ms sürdü -- bir karelik bütçe 17 ms" diye okunuyordu; eşik aşıldığı
+   * için düşen bir not kendi gerekçesini yalanlıyordu. Dar bir bant ama tam
+   * da yavaş makinelerin bandı: orada süreler eşiğin hemen üstünde kümelenir.
+   */
+  private[kojo] def metin(süreMs: Double, noktaSayısı: Int, bitti: Boolean): String =
+    (if (bitti)
+       s"Not: bu şeklin dolgusunu hesaplamak ${süreMs.round} ms sürdü ($noktaSayısı nokta)"
+     else
+       s"Not: bu şeklin dolgusu şu ana dek ${süreMs.round} ms aldı " +
+         s"(şimdilik $noktaSayısı nokta; şekil büyüdükçe artacak)") +
+      s" -- bir karelik bütçe $bütçeMs ms. " +
+      "Kendini kesen şekillerde dolgu hesabı nokta sayısıyla karesele yakın " +
+      "büyüyor, yani nokta sayısını yarıya indirmek süreyi dörtte bire yakın " +
+      "düşürür. Canlandırma içindeyse daha az noktayla çizmeyi ya da " +
+      "boyamaRenginiKur çağırmayıp yalnız kalemle çizmeyi deneyebilirsin."
+
+  /**
+   * Çıktı paneline yazar; panel yoksa (tarayıcı dışı koşum, sınamalar) konsola
+   * düşer. DOM sözleşmesi DuraklamaUyarısı ile aynı -- id="output", kendi
+   * div'imizi ekliyoruz. private[kojo]: KojoWorldImpl elle geri dönüş
+   * satırını aynı panele yazıyor.
+   */
+  private[kojo] def paneleYaz(metin: String): Unit = {
+    val panel = if (js.typeOf(js.Dynamic.global.document) == "undefined") null else document.getElementById("output")
+    if (panel == null) {
+      js.Dynamic.global.console.warn(metin)
+    }
+    else {
+      val satır = document.createElement("div")
+      satır.appendChild(document.createTextNode(metin))
+      panel.appendChild(satır)
+      panel.scrollTop = panel.scrollHeight - panel.clientHeight
+    }
+  }
+}
+
+/**
+ * DÜNYA BAŞINA rapor durumu (#149): saat, sayaç, zaman kapısı, erken çarpan.
+ *
+ * NEDEN DÜNYA BAŞINA. Bu durum önce `object ÜçgenlemeUyarısı`nda TEKİLDİ ve
+ * sınamalar onu paylaşıyordu; aynı kökten üç ayrı olay çıktı (#124: sahte
+ * saatin takımlar arası sızması uyarıyı susturdu; #130: birikim küreseldi;
+ * #148: fikstür + erken eşik + takımlar arası artık -- ve #162'de dördüncüsü:
+ * sbt takımları aynı olay döngüsünde iç içe koşturunca bir takımın sahte
+ * saatiyle ötekinin pompadan geçen gülü not düşürdü). Her seferinde noktasal
+ * hafifletme (afterAll geri verme, hepsiniUnut, 300 ms bekleyiş, erken yolu
+ * kapatma, sıralı takımlar). Canlıda tek dünya var, davranış aynı; sınamada
+ * her dünya kendi saatini, sayacını ve kapısını taşıyor -- bir dünyanın
+ * kirletmesi ötekine ulaşamıyor.
+ *
+ * `susturuldu`: `KojoWorld.kapat` bunu koyuyor. Kapanmış bir dünyanın geç
+ * kalan işi (giysisi geç yüklenen kaplumbağa, bekleyen boya) paylaşılan
+ * panele yazmasın -- sayacı ve kapısı zaten ayrı, ama panel DOM'da tek.
+ */
+private[kojo] final class ÜçgenlemeRaporu {
+  import ÜçgenlemeUyarısı._
+
+  /** Sınama saati değiştirebilsin diye `var`; varsayılanı tarayıcı saati. */
+  private[kojo] var saat: () => Double = tarayıcıSaati
+
+  /**
+   * Şekil BİTMEDEN konuşma eşiği. Bitmeyi beklemek yetmiyor, çünkü bir şekil
+   * hiç bitmeyebilir: şekli tamamlayan tek şey kalem kalkık taşınma
+   * (`turtlePathMoveTo`) ya da boya değişimi (`realSetFillPaint`), ve betiğin
+   * SON şekli çoğu zaman ikisini de görmeden bitiyor.
+   * `ornekler/14-agir-dolgu.kojo`'nun 1000 noktalık gülü tam böyle -- yalnız
+   * tamamlanmış şekle bakan bir uyarı, uyarılması gereken şekli susturuyordu.
+   * `var`: sınama kendi dünyasında erken yolu kapatabilsin (UcgenlemeDilimTest).
+   */
+  private[kojo] var erkenÇarpan = varsayılanErkenÇarpan
+
+  private var sonNotZamanı = Double.NegativeInfinity
+  private var notSayısı = 0
+  private var susturuldu = false
+
+  /** Panele GERÇEKTEN kaç not düştü. Zaman kapısına takılanlar sayılmıyor. */
+  private[kojo] def düşenNotSayısı: Int = notSayısı
+
+  /** Zaman kapısını ve sayacı sıfırla (sınama içinde iki evreyi ayırmak için). */
+  private[kojo] def hepsiniUnut(): Unit = {
+    sonNotZamanı = Double.NegativeInfinity
+    notSayısı = 0
+  }
+
+  /** Kapanmış dünya: bundan sonra not yok (bkz. sınıf belgesi). */
+  private[kojo] def sustur(): Unit = susturuldu = true
 
   /**
    * Bir ŞEKLİN dolgusu, o şekil bitmeden birkaç kez yayınlanabiliyor: pompa bir
@@ -120,31 +216,6 @@ object ÜçgenlemeUyarısı {
    * O yüzden ölçüm ŞEKİL BAŞINA birikiyor ve not şekil başına EN ÇOK BİR KEZ
    * düşüyor. Kullanıcının ödediği bedel zaten toplam: yarım yayınlar da
    * gerçekten harcanmış süre.
-   */
-  /**
-   * Şekil BİTMEDEN konuşma eşiği. Bitmeyi beklemek yetmiyor, çünkü bir şekil
-   * hiç bitmeyebilir: şekli tamamlayan tek şey kalem kalkık taşınma
-   * (`turtlePathMoveTo`) ya da boya değişimi (`realSetFillPaint`), ve betiğin
-   * SON şekli çoğu zaman ikisini de görmeden bitiyor.
-   * `ornekler/14-agir-dolgu.kojo`'nun 1000 noktalık gülü tam böyle -- yalnız
-   * tamamlanmış şekle bakan bir uyarı, uyarılması gereken şekli susturuyordu.
-   */
-  private[kojo] var erkenÇarpan = 3.0 // var: sınama erken yolu kapatabilsin (UcgenlemeDilimTest)
-
-  private var sonNotZamanı = Double.NegativeInfinity
-  private var notSayısı = 0
-
-  /** Panele GERÇEKTEN kaç not düştü. Zaman kapısına takılanlar sayılmıyor. */
-  private[kojo] def düşenNotSayısı: Int = notSayısı
-
-  /** Yalnız sınamalar için: KÜRESEL durum (zaman kapısı ve sayaç). */
-  private[kojo] def hepsiniUnut(): Unit = {
-    sonNotZamanı = Double.NegativeInfinity
-    notSayısı = 0
-  }
-
-  /**
-   * Bir üçgenleme bitti: süresi ve nokta sayısı.
    *
    * Bütçeyi aşmadıysa hiçbir şey yapmıyor -- sıcak yolda tek bir
    * karşılaştırma.
@@ -166,15 +237,7 @@ object ÜçgenlemeUyarısı {
     val bittiSayılır = bitti || durdu
     val toplam = birikim.toplamMs
     val konuşulabilir = toplam > bütçeMs && (bittiSayılır || toplam > erkenÇarpan * bütçeMs)
-    if (!birikim.bildirildi && konuşulabilir) {
-      val şimdi = saat()
-      if (şimdi - sonNotZamanı >= enAzAralıkMs) {
-        sonNotZamanı = şimdi
-        notSayısı += 1
-        birikim.bildirildi = true
-        paneleYaz(metin(toplam, noktaSayısı, bittiSayılır))
-      }
-    }
+    if (!birikim.bildirildi && konuşulabilir) konuş(birikim, metin(toplam, noktaSayısı, bittiSayılır))
     if (bitti) birikim.unut()
   }
 
@@ -206,54 +269,18 @@ object ÜçgenlemeUyarısı {
    * giriş yalnız durmuş şekli kapsıyor; ikisi ayrı durum.
    */
   private[kojo] def şekilDurdu(birikim: ŞekilBirikimi): Unit =
-    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs) {
+    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs)
+      konuş(birikim, metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
+
+  /** Zaman kapısı + sayaç + panel; iki girişin ortak ucu. */
+  private def konuş(birikim: ŞekilBirikimi, satır: String): Unit =
+    if (!susturuldu) {
       val şimdi = saat()
       if (şimdi - sonNotZamanı >= enAzAralıkMs) {
         sonNotZamanı = şimdi
         notSayısı += 1
         birikim.bildirildi = true
-        paneleYaz(metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
+        paneleYaz(satır)
       }
     }
-
-  /**
-   * Okunabilir olsun diye üç parça: NE oldu (sayılarla), NEDEN, NE YAPILABİLİR.
-   *
-   * Süre tam sayıya yuvarlanıyor -- ondalık burada bilgi taşımıyor ve ölçüm
-   * zaten koşudan koşuya oynuyor. BÜTÇE yuvarlanMIYOR: `bütçeMs.round` 17
-   * basıyordu, yani süresi (16.7, 17.5) arasına düşen bir dolgu için not
-   * "17 ms sürdü -- bir karelik bütçe 17 ms" diye okunuyordu; eşik aşıldığı
-   * için düşen bir not kendi gerekçesini yalanlıyordu. Dar bir bant ama tam
-   * da yavaş makinelerin bandı: orada süreler eşiğin hemen üstünde kümelenir.
-   */
-  private[kojo] def metin(süreMs: Double, noktaSayısı: Int, bitti: Boolean): String =
-    (if (bitti)
-       s"Not: bu şeklin dolgusunu hesaplamak ${süreMs.round} ms sürdü ($noktaSayısı nokta)"
-     else
-       s"Not: bu şeklin dolgusu şu ana dek ${süreMs.round} ms aldı " +
-         s"(şimdilik $noktaSayısı nokta; şekil büyüdükçe artacak)") +
-      s" -- bir karelik bütçe $bütçeMs ms. " +
-      "Kendini kesen şekillerde dolgu hesabı nokta sayısıyla karesele yakın " +
-      "büyüyor, yani nokta sayısını yarıya indirmek süreyi dörtte bire yakın " +
-      "düşürür. Canlandırma içindeyse daha az noktayla çizmeyi ya da " +
-      "boyamaRenginiKur çağırmayıp yalnız kalemle çizmeyi deneyebilirsin."
-
-  /**
-   * Çıktı paneline yazar; panel yoksa (tarayıcı dışı koşum, sınamalar) konsola
-   * düşer. DOM sözleşmesi DuraklamaUyarısı ile aynı -- id="output", kendi
-   * div'imizi ekliyoruz.
-   */
-  /** private[kojo]: KojoWorldImpl elle geri dönüş satırını aynı panele yazıyor. */
-  private[kojo] def paneleYaz(metin: String): Unit = {
-    val panel = if (js.typeOf(js.Dynamic.global.document) == "undefined") null else document.getElementById("output")
-    if (panel == null) {
-      js.Dynamic.global.console.warn(metin)
-    }
-    else {
-      val satır = document.createElement("div")
-      satır.appendChild(document.createTextNode(metin))
-      panel.appendChild(satır)
-      panel.scrollTop = panel.scrollHeight - panel.clientHeight
-    }
-  }
 }
