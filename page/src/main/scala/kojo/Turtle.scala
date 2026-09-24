@@ -329,7 +329,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    * ya da konuşmadı; `bildirildi` ikinci notu keser.
    */
   override private[kojo] def durmaDenetimi(): Unit =
-    if (şekilDurmuş) ÜçgenlemeUyarısı.şekilDurdu(şekilBirikimi)
+    if (şekilDurmuş) kojoWorld.üçgenlemeRaporu.şekilDurdu(şekilBirikimi)
 
   /**
    * Dolgu çokgenini NON_ZERO ile üçgenleyip PIXI'ye verir.
@@ -420,9 +420,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // Süre ÖLÇÜLÜYOR: pahalı dolguyu kullanıcıya bildirmek için (#68). Nokta
     // sayısına bakmak yetmiyor -- kesişmeyen 4000 nokta 6 ms, kesişen 1000
     // nokta 95 ms. Bedeli iki performance.now(); bkz. ÜçgenlemeUyarısı.
-    val t0 = ÜçgenlemeUyarısı.saat()
+    val rapor = kojoWorld.üçgenlemeRaporu // dünya başına (#149)
+    val t0 = rapor.saat()
     val ü = Üçgenleyici.nonzero(düz)
-    ÜçgenlemeUyarısı.üçgenlemeBitti(şekilBirikimi, ÜçgenlemeUyarısı.saat() - t0, düz.length / 2, bitti, durdu)
+    rapor.üçgenlemeBitti(şekilBirikimi, rapor.saat() - t0, düz.length / 2, bitti, durdu)
     var i = 0
     while (i + 5 < ü.length) {
       gr.drawPolygon(scala.scalajs.js.Array(ü(i), ü(i + 1), ü(i + 2), ü(i + 3), ü(i + 4), ü(i + 5)))

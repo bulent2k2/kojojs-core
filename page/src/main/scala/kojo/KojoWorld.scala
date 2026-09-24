@@ -23,6 +23,28 @@ trait KojoWorld {
   def runLater(ms: Double)(fn: => Unit): Unit
   def render(): Unit
 
+  /**
+   * Dolgu notunun durumu (saat, sayaç, zaman kapısı), DÜNYA BAŞINA (#149).
+   * Canlıda tek dünya var, davranış aynı; sınamada her dünya kendi
+   * durumunu taşıyor -- bkz. ÜçgenlemeRaporu.
+   */
+  private[kojo] lazy val üçgenlemeRaporu: ÜçgenlemeRaporu = new ÜçgenlemeRaporu()
+
+  /**
+   * Dünyayı KAPAT (#149): bundan sonra rapor susar, bekleyen boyalar ve durma
+   * adayları düşer. KojoWorldImpl ayrıca pompayı, çizimi ve canlandırmayı
+   * durduruyor. Canlıda çağrılmıyor (sayfa tek dünya taşıyor, sayfayla ölüyor);
+   * sınama fikstürleri bir sonraki dünyayı kurmadan önce ve takım sonunda
+   * çağırıyor -- yoksa bir takımın dünyası (giysisi geç yüklenen kaplumbağa,
+   * rAF döngüsü) sonraki takımın sırasında koşmaya devam ediyordu.
+   * İdempotent.
+   */
+  private[kojo] def kapat(): Unit = {
+    üçgenlemeRaporu.sustur()
+    bekleyenBoyacılar.clear()
+    durmaAdayları.clear()
+  }
+
   // --- Bekleyen dolgular (tembel üçgenleme) ---------------------------------
   //
   // Kaplumbağa her kenarda dolgu çokgeninin TAMAMINI yeniden yayınlıyordu.
@@ -905,8 +927,25 @@ class KojoWorldImpl extends KojoWorld {
    * sayaç tam sınırdaysa bugün de ertelenirdi.
    */
   def scheduleLater(fn: => Unit): Unit = {
+    if (kapandı) return // kapanmış dünya komut kabul etmiyor (#149)
     bekleyenİşler.enqueue(() => fn)
     if (!pompaDönüyor && !kareBekleniyor) pompayıSürdür()
+  }
+
+  private var kapandı = false
+
+  /**
+   * #149: temel sınıfınkine ek olarak pompayı (kuyruk boşalıyor, yeni komut
+   * alınmıyor), çizimi (bekleyen rAF iptal) ve canlandırmayı durduruyor.
+   * Zamanlanmış rAF geri çağrıları yine gelebilir; hepsi `kapandı`ya bakıp
+   * hiçbir şey yapmadan dönüyor.
+   */
+  override private[kojo] def kapat(): Unit = {
+    super.kapat()
+    kapandı = true
+    bekleyenİşler.clear()
+    stopAnimation()
+    if (renderPending) { renderPending = false; window.cancelAnimationFrame(renderHandle) }
   }
 
   /**
@@ -923,7 +962,7 @@ class KojoWorldImpl extends KojoWorld {
    */
   private def kareyeTeslim(): Unit = {
     kareBekleniyor = true
-    window.requestAnimationFrame { _ => kareBekleniyor = false; harcananMs = 0; pompayıSürdür() }
+    window.requestAnimationFrame { _ => kareBekleniyor = false; harcananMs = 0; if (!kapandı) pompayıSürdür() }
   }
 
   /**
@@ -986,7 +1025,7 @@ class KojoWorldImpl extends KojoWorld {
    * (pompasını yeniden zamanlayamadı); ötekiler değil.
    */
   private def pompayıSürdür(): Unit = {
-    if (pompaDönüyor) return
+    if (pompaDönüyor || kapandı) return
     val koşuBaşı = window.performance.now()
     if (koşuBaşı - sonKoşuBitişi > 2.0) harcananMs = 0 // görev sınırından geçildi
     if (harcananMs >= DilimMs) { kareyeTeslim(); return } // bütçe zaten dolu
@@ -1026,7 +1065,7 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def runLater(ms: Double)(fn: => Unit): Unit = {
-    window.setTimeout(() => fn, ms)
+    window.setTimeout(() => if (!kapandı) fn, ms)
   }
 
   // PERFORMANS: render() her resim değişiminde çağrılıyor (taşı/döndür/boya/çiz
@@ -1047,7 +1086,7 @@ class KojoWorldImpl extends KojoWorld {
   private var renderPending = false
   private var renderHandle = 0
   def render(): Unit = {
-    if (!renderPending) {
+    if (!renderPending && !kapandı) {
       renderPending = true
       renderHandle = window.requestAnimationFrame(_ => flushRender())
     }
@@ -1276,7 +1315,7 @@ class KojoWorldImpl extends KojoWorld {
           flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
         }
       }
-      if (animating) {
+      if (animating && !kapandı) {
         animateHelper(fn, nextLast)
       }
     }
