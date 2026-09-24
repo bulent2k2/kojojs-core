@@ -203,12 +203,19 @@ class CompilerManager extends Actor with ActorLogging {
   }
 
   /**
-   * Yenilenme HİÇBİR ZAMAN kapasiteyi sıfırlamasın: aynı anda en çok bir
-   * derleyici yenileniyor, ve geride çalışır (Initializing olmayan) en az
+   * Yenilenme KAYITLI kapasiteyi hiçbir zaman sıfırlamasın: aynı anda en çok
+   * bir derleyici yenileniyor, ve geride çalışır (Initializing olmayan) en az
    * bir derleyici kalıyorsa. Koşul tutmazsa sıra bir sonraki cevaba kalır.
+   *
+   * KULLANILABİLİR kapasite ise kısa süre sıfıra inebilir, bilerek: geride
+   * kalan eş o an Compiling olabilir, kuyruk onun bitmesini ya da yenisinin
+   * gelmesini bekler. Eşin Ready olmasını şart koşmak sürekli yük altında
+   * yenilenmeyi süresiz erteleyebilirdi -- ki büyümenin en hızlı olduğu an o.
    */
-  def canRecycle(info: CompilerInfo): Boolean =
+  def canRecycle(info: CompilerInfo): Boolean = {
+    purgeRetiring() // süresi dolmuş bir girdi yenilenmeyi bir sonraki temizliğe kadar bloklamasın
     retiring.isEmpty && compilers.values.exists(c => c.id != info.id && c.state != CompilerState.Initializing)
+  }
 
   def processQueue(): Unit = {
     if (compilerQueue.nonEmpty) {
@@ -270,9 +277,13 @@ class CompilerManager extends Actor with ActorLogging {
                                       now)
       purgeRetiring()
       if (retiring.nonEmpty) {
+        // Hangi emeklinin yerine geldiği bilinemez (kayıt kimlik taşımıyor);
+        // en eski girdi düşülüyor. Sayım yine doğru: kayıtlı +1, bekleyen -1.
         val (old, _) = retiring.minBy(_._2)
         retiring -= old
-        log.info(s"Registered compiler $id for Scala $scalaVersion, replacing retired compiler $old")
+        log.info(
+          s"Registered compiler $id for Scala $scalaVersion, counted against retired compiler $old " +
+            s"(${retiring.size} still pending)")
       } else {
         log.debug(s"Registered compiler $id for Scala $scalaVersion")
       }
