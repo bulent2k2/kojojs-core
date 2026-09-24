@@ -47,6 +47,17 @@ object Config {
     val port = c.getInt("port")
   }
 
+  /** Derleyici sağlığı ayarları; açıklamaları reference.conf'ta. */
+  object compilerHealth {
+    private val h = config.getConfig("compilerHealth")
+    private def süre(ad: String) = FiniteDuration(h.getDuration(ad).toMillis, TimeUnit.MILLISECONDS)
+    val stallTimeout      = süre("stallTimeout")
+    val recycleAfter      = h.getInt("recycleAfter")
+    val restartGrace      = süre("restartGrace")
+    val checkInitialDelay = süre("checkInitialDelay")
+    val checkInterval     = süre("checkInterval")
+  }
+
   val version    = versionProps.getProperty("version")
   val aceVersion = versionProps.getProperty("aceVersion")
 

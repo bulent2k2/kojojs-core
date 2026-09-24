@@ -10,6 +10,19 @@ case object Ping extends CompilerMessage
 
 case object Pong extends CompilerMessage
 
+/**
+ * Router -> derleyici: SÜRECİ SONLANDIR (koco-deploy#17, 0. ve 1. madde).
+ *
+ * Bağlantıyı kapatmak yetmiyor: derleyici o durumda AYNI JVM içinde yeniden
+ * bağlanıyor (Manager, CompilerTerminated üzerine 5 sn sonra). Takılmanın
+ * sebebi JVM'in kendisiyse (bellek/GC baskısı, sonsuza dek dönen bir derleme
+ * iş parçacığı) aynı JVM aynı hâlde geri gelir. Retire alan derleyici süreci
+ * bitiriyor ve gözetmen (koco-deploy/derleyici-gozcusu.sh) TAZE bir JVM
+ * başlatıyor. Router bunu yalnız gözetmen olduğunu bildiği kurulumlarda
+ * yollar (fiddle.compilerHealth.recycleAfter > 0).
+ */
+case object Retire extends CompilerMessage
+
 case class UpdateLibraries(libs: Seq[ExtLib]) extends CompilerMessage
 
 object UpdateLibraries { implicit val rw: RW[UpdateLibraries] = macroRW }
@@ -60,5 +73,6 @@ object CompilerMessage {
   implicit val readyRw: RW[CompilerReady.type] = macroRW
   implicit val pingRw: RW[Ping.type]           = macroRW
   implicit val pongRw: RW[Pong.type]           = macroRW
+  implicit val retireRw: RW[Retire.type]       = macroRW
   implicit val rw: RW[CompilerMessage]         = macroRW
 }

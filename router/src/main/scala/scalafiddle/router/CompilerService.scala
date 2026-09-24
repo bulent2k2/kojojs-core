@@ -2,7 +2,7 @@ package scalafiddle.router
 
 import java.util.UUID
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
 import akka.http.scaladsl.model.ws.TextMessage
 import akka.stream.ActorMaterializer
 import scalafiddle.shared._
@@ -71,6 +71,13 @@ class CompilerService(out: ActorRef, manager: ActorRef, scalaVersion: String) ex
   override def postStop(): Unit = {
     log.info(s"CompilerService $id stopping")
     watchdog.cancel()
+    // Giden yarıyı (Source.actorRef) tamamla ki ws KAPANSIN. Eskiden
+    // kapanmıyordu: bu aktör durunca yalnız gelen yarı iptal oluyor, bağlantı
+    // yarı açık kalıyor, derleyici de ancak Pong'suz geçen bir dakikadan sonra
+    // (CompileActor.WatchPong) kopup yeniden bağlanıyordu. Router bir
+    // derleyiciyi bilerek düşürdüğünde (koco-deploy#17) bu 1-2 dk kapasite
+    // kaybı demekti; kapanış anında gidince derleyici 5 sn'de geri geliyor.
+    out ! Status.Success(())
     manager ! UnregisterCompiler(id)
     super.postStop()
   }

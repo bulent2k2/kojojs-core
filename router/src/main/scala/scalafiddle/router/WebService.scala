@@ -338,10 +338,15 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
           //
           // enAz öntanımlı 1: eşiksiz çağrı "hiç derleyici yok mu" sorar.
           // Kurulum kendi sayısını versin (ör. /saglik?enAz=2).
+          //
+          // `restarting` de sayılıyor: router'ın BİLEREK kapattığı (takılma ya
+          // da yenilenme, koco-deploy#17) bir derleyici, restartGrace süresince
+          // kayıp değil. Sayılmasaydı her planlı yenilenme, denetim o birkaç
+          // saniyeye denk geldiğinde makineyi yeniden başlatırdı.
           parameter("enAz".as[Int].?) { enAz =>
             complete {
               ask(compilerManager, GetStatus).mapTo[RouterStatus].map { status =>
-                if (status.registered < enAz.getOrElse(1))
+                if (status.registered + status.restarting < enAz.getOrElse(1))
                   HttpResponse(StatusCodes.ServiceUnavailable)
                 else
                   HttpResponse(StatusCodes.OK)
