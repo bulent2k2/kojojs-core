@@ -123,6 +123,11 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private def turtlePathMoveTo(x: Double, y: Double): Unit = {
     boyamayıİşle() // kalem kalkık taşınma çokgeni bitiriyor
     boyamaÇokgeni.taşındı(x, y)
+    // Çokgen sıfırlandı, stencil düğümü de sıfırlansın (#155'in sözleşmesi;
+    // core#43 incelemesi §1): kur'un uzantı sezgisi yalnız hızlı yol, güvenlik
+    // ağı değil -- aynı noktadan başlayıp aynı köşe sayısıyla kapanan ama
+    // ortası farklı iki şekli ayırt edemez.
+    boyamaYoluStencil.temizle()
     boyamayıKirlet()
     turtlePath.moveTo(x, y)
     sonYolX = x; sonYolY = y
@@ -861,6 +866,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // kesiyordu -- şeklin dolması yalnız gecikme 0 iken (bütün kenarlar tek
     // blokta) rastlantıyla çalışıyordu.
     boyamaÇokgeni.boyaKuruldu(turtleImage.position.x, turtleImage.position.y)
+    boyamaYoluStencil.temizle() // bkz. turtlePathMoveTo: çokgenle birlikte
     boyamayıKirlet()
     kojoWorld.scheduleLater(queueHandler)
   }
