@@ -26,45 +26,55 @@ import scala.collection.mutable.ArrayBuffer
  * koşuyor (PompaDurumu ile aynı kalıp).
  */
 class BoyamaYolu {
-  private val noktalar = ArrayBuffer.empty[(Double, Double)]
+  // DÜZ ve KAPASİTELİ (#155): x0, y0, x1, y1, ... ilk sürüm (Double, Double)
+  // ikililerini ArrayBuffer'da tutuyor ve `düzDizi` her yayında hepsini
+  // kutudan çıkarıp yeni diziye döküyordu -- büyüyen şekilde yayın başına
+  // O(n), şekil başına Σ önek; 40 000 noktalı gülde altı yayın için 7-34 ms
+  // (SwiftShader), yani stencil kurulumunun kendisi kadar. Şimdi ekleme O(1)
+  // amortize, `düzDizi` tek bir sayısal kopya.
+  private var xy: Array[Double] = new Array[Double](256)
+  private var sayı = 0 // nokta sayısı; xy'nin ilk 2 * sayı hücresi geçerli
+
+  private def ekle(x: Double, y: Double): Unit = {
+    if (2 * sayı + 2 > xy.length) {
+      val yeni = new Array[Double](xy.length * 2)
+      System.arraycopy(xy, 0, yeni, 0, 2 * sayı)
+      xy = yeni
+    }
+    xy(2 * sayı) = x; xy(2 * sayı + 1) = y; sayı += 1
+  }
 
   /** Boyama kurulduğunda çokgen sıfırdan başlıyor: eski kenarlar bu boyaya ait değil. */
-  def boyaKuruldu(x: Double, y: Double): Unit = {
-    noktalar.clear()
-    noktalar += ((x, y))
-  }
+  def boyaKuruldu(x: Double, y: Double): Unit = { sayı = 0; ekle(x, y) }
 
   /**
    * Kalem kalkık taşınma (moveTo / atla / zıpla): çokgen KIRILIR.
    * Masaüstü Kojo da öyle -- araya sıçrama giren bir şekil tek parça sayılmıyor.
    */
-  def taşındı(x: Double, y: Double): Unit = {
-    noktalar.clear()
-    noktalar += ((x, y))
-  }
+  def taşındı(x: Double, y: Double): Unit = { sayı = 0; ekle(x, y) }
 
-  /** Kalem inik çizgi (lineTo): çokgene bir köşe eklenir. */
-  def çizildi(x: Double, y: Double): Unit = {
-    if (noktalar.isEmpty) noktalar += ((x, y))
-    else if (noktalar.last != ((x, y))) noktalar += ((x, y))
-  }
+  /** Kalem inik çizgi (lineTo): çokgene bir köşe eklenir (ardışık aynı nokta eklenmez). */
+  def çizildi(x: Double, y: Double): Unit =
+    if (sayı == 0 || xy(2 * sayı - 2) != x || xy(2 * sayı - 1) != y) ekle(x, y)
 
   /** Tuval silindi. */
-  def temizle(): Unit = noktalar.clear()
+  def temizle(): Unit = sayı = 0
 
   /** Boyanacak bir alan var mı: en az üç köşe gerekiyor. */
-  def alanVarMı: Boolean = noktalar.size >= 3
+  def alanVarMı: Boolean = sayı >= 3
 
-  /** Çokgenin köşeleri (kopya değil -- yalnız okumak için). */
-  def köşeler: collection.Seq[(Double, Double)] = noktalar
-
-  /** PIXI'nin `drawPolygon`'ının istediği düz dizi: x0, y0, x1, y1, ... */
-  def düzDizi: Array[Double] = {
-    val a = new Array[Double](noktalar.size * 2)
+  /** Çokgenin köşeleri (kopya; sınamalar için). */
+  def köşeler: collection.Seq[(Double, Double)] = {
+    val b = ArrayBuffer.empty[(Double, Double)]
     var i = 0
-    noktalar.foreach { case (x, y) =>
-      a(i) = x; a(i + 1) = y; i += 2
-    }
+    while (i < sayı) { b += ((xy(2 * i), xy(2 * i + 1))); i += 1 }
+    b
+  }
+
+  /** PIXI'nin `drawPolygon`'ının istediği düz dizi: x0, y0, x1, y1, ... (kopya, tam boy). */
+  def düzDizi: Array[Double] = {
+    val a = new Array[Double](sayı * 2)
+    System.arraycopy(xy, 0, a, 0, sayı * 2)
     a
   }
 }
