@@ -22,6 +22,12 @@ case object RefreshLibraries
 
 case object CheckCompilers
 
+// Retire yollanan derleyicinin CompilerService'ini, derleyici kendi çıkıp
+// bağlantıyı kapatmadıysa (Retire'ı tanımayan eski bir derleyici) bir süre
+// sonra durdurur. Olağan yolda iş yapmaz: çıkan sürecin ws'i kapanınca
+// ActorFlow servisi zaten durdurmuş olur.
+case class DropCompiler(compilerService: ActorRef)
+
 // Dışarıdan durum sorgusu (WebService'in /durum ucu). Yalnız okur, hiçbir şeyi
 // değiştirmez. Alanlar İNGİLİZCE: bu uç işletmeciye bakıyor ve kodun kendi
 // sözlüğünü (CompilerState.Ready/Compiling/Initializing) yansıtması, günlük
@@ -33,7 +39,8 @@ case class CompilerStatus(id: String,
                           scalaVersion: String,
                           state: String,
                           lastActivitySeconds: Long,
-                          lastSeenSeconds: Long)
+                          lastSeenSeconds: Long,
+                          served: Int)
 
 object CompilerStatus { implicit val rw: ReadWriter[CompilerStatus] = macroRW }
 
@@ -43,6 +50,7 @@ case class RouterStatus(registered: Int,
                         initializing: Int,
                         queued: Int,
                         pending: Int,
+                        restarting: Int,
                         compilers: Seq[CompilerStatus])
 
 object RouterStatus { implicit val rw: ReadWriter[RouterStatus] = macroRW }
@@ -54,7 +62,16 @@ class CompilerManager extends Actor with ActorLogging {
   var compilerQueue      = mutable.Queue.empty[(CompilerRequest, ActorRef)]
   val compilationPending = mutable.Map.empty[String, ActorRef]
   var currentLibs        = Map.empty[String, Seq[ExtLib]]
-  var compilerTimer      = context.system.scheduler.schedule(5.minute, 1.minute, context.self, CheckCompilers)
+  var compilerTimer = context.system.scheduler
+    .schedule(Config.compilerHealth.checkInitialDelay, Config.compilerHealth.checkInterval, context.self, CheckCompilers)
+  // Router'ın BİLEREK kapattığı (takılma ya da yenilenme) ve yerine yenisi
+  // beklenen derleyiciler: id -> bekleme süresinin bittiği an. Yeni bir kayıt
+  // en eski girdiyi siler; süresi dolan girdi kendiliğinden düşer. Tek işlevi
+  // /saglik'e "bu eksik planlı, birazdan dolacak" demek (restarting).
+  val retiring           = mutable.Map.empty[String, Long]
+  val recycleAfter       = Config.compilerHealth.recycleAfter
+  // > 0: kurulum çıkan derleyiciyi yeniden başlatıyor (reference.conf).
+  val recycling          = recycleAfter > 0
   val dependencyRE       = """ *// \$FiddleDependency (.+)""".r
   val scalaVersionRE     = """ *// \$ScalaVersion (.+)""".r
   val defaultLibs =
@@ -161,6 +178,45 @@ class CompilerManager extends Actor with ActorLogging {
     }
   }
 
+  def purgeRetiring(): Unit = {
+    val t = now
+    retiring.filterInPlace { case (_, deadline) => deadline > t }
+  }
+
+  /**
+   * Derleyiciyi havuzdan çıkarır ve yerine yenisini bekler. Gözetmen varsa
+   * (recycling) Retire yollanır: süreç biter, gözetmen TAZE bir JVM başlatır.
+   * Yoksa yalnız bağlantı kesilir: Retire'ı kimsenin karşılamayacağı bir
+   * kurulumda derleyiciyi kalıcı olarak kaybetmektense aynı JVM'in yeniden
+   * bağlanması yeğ (yukarı akışın 120 sn ping kuralının yaptığı da bu).
+   */
+  def retire(info: CompilerInfo): Unit = {
+    compilers -= info.id
+    context.unwatch(info.compilerService)
+    retiring += info.id -> (now + Config.compilerHealth.restartGrace.toMillis)
+    if (recycling) {
+      info.compilerService ! Retire
+      context.system.scheduler.scheduleOnce(retireGrace, context.self, DropCompiler(info.compilerService))
+    } else {
+      context.stop(info.compilerService)
+    }
+  }
+
+  /**
+   * Yenilenme KAYITLI kapasiteyi hiçbir zaman sıfırlamasın: aynı anda en çok
+   * bir derleyici yenileniyor, ve geride çalışır (Initializing olmayan) en az
+   * bir derleyici kalıyorsa. Koşul tutmazsa sıra bir sonraki cevaba kalır.
+   *
+   * KULLANILABİLİR kapasite ise kısa süre sıfıra inebilir, bilerek: geride
+   * kalan eş o an Compiling olabilir, kuyruk onun bitmesini ya da yenisinin
+   * gelmesini bekler. Eşin Ready olmasını şart koşmak sürekli yük altında
+   * yenilenmeyi süresiz erteleyebilirdi -- ki büyümenin en hızlı olduğu an o.
+   */
+  def canRecycle(info: CompilerInfo): Boolean = {
+    purgeRetiring() // süresi dolmuş bir girdi yenilenmeyi bir sonraki temizliğe kadar bloklamasın
+    retiring.isEmpty && compilers.values.exists(c => c.id != info.id && c.state != CompilerState.Initializing)
+  }
+
   def processQueue(): Unit = {
     if (compilerQueue.nonEmpty) {
       val (req, sourceActor) = compilerQueue.dequeue()
@@ -219,7 +275,18 @@ class CompilerManager extends Actor with ActorLogging {
                                       "unknown",
                                       Set.empty,
                                       now)
-      log.debug(s"Registered compiler $id for Scala $scalaVersion")
+      purgeRetiring()
+      if (retiring.nonEmpty) {
+        // Hangi emeklinin yerine geldiği bilinemez (kayıt kimlik taşımıyor);
+        // en eski girdi düşülüyor. Sayım yine doğru: kayıtlı +1, bekleyen -1.
+        val (old, _) = retiring.minBy(_._2)
+        retiring -= old
+        log.info(
+          s"Registered compiler $id for Scala $scalaVersion, counted against retired compiler $old " +
+            s"(${retiring.size} still pending)")
+      } else {
+        log.debug(s"Registered compiler $id for Scala $scalaVersion")
+      }
       // send current libraries
       compilerService ! UpdateLibraries(currentLibs.getOrElse(scalaVersion, Nil))
       context.watch(compilerService)
@@ -265,7 +332,20 @@ class CompilerManager extends Actor with ActorLogging {
         case None =>
           log.error(s"No compilation pending for compiler $id")
       }
+      // Yenilenme (koco-deploy#17, 0. madde): N cevaptan sonra taze JVM.
+      compilers.get(id).foreach { info =>
+        val served = info.served + 1
+        if (recycling && served >= recycleAfter && canRecycle(info)) {
+          log.info(s"Compiler $id served $served requests, retiring it for a fresh JVM")
+          retire(info)
+        } else {
+          compilers.update(id, info.copy(served = served))
+        }
+      }
       processQueue()
+
+    case DropCompiler(compilerService) =>
+      context.stop(compilerService)
 
     case RefreshLibraries =>
       try {
@@ -290,12 +370,29 @@ class CompilerManager extends Actor with ActorLogging {
       }
 
     case CheckCompilers =>
-      compilers.foreach {
-        case (id, compiler) =>
-          if (now - compiler.lastSeen > 120 * 1000) {
-            log.error(s"Compiler service $id not seen in ${(now - compiler.lastSeen) / 1000} seconds, terminating compiler")
-            context.stop(compiler.compilerService)
-          }
+      purgeRetiring()
+      val stallTimeout = Config.compilerHealth.stallTimeout.toMillis
+      // toList: döngü içinde retire() haritadan siliyor
+      compilers.values.toList.foreach { compiler =>
+        val id = compiler.id
+        if (stallTimeout > 0 && compiler.state == CompilerState.Compiling && now - compiler.lastActivity > stallTimeout) {
+          // Takılma gözcüsü (koco-deploy#17, 1. madde). Ping gözcüsü (aşağıda)
+          // bu hâli göremiyor: derleme bir Future'da takılı kalırken aktör
+          // ping atmayı sürdürüyor. Ölçü lastActivity, yani Compiling'e
+          // girildiği an (processQueue).
+          log.error(
+            s"Compiler $id stuck compiling for ${(now - compiler.lastActivity) / 1000} seconds, retiring it" +
+              (if (recycling) " (Retire)" else " (disconnect)"))
+          // İstemcinin ask'i (WebService, 30 sn) büyük olasılıkla çoktan
+          // zaman aşımına uğradı; cevap o zaman ölü mektuba düşer, zararsız.
+          compilationPending
+            .remove(id)
+            .foreach(_ ! Left("Derleme çok uzun sürdü, derleyici yeniden başlatılıyor. Biraz sonra yine deneyin."))
+          retire(compiler)
+        } else if (now - compiler.lastSeen > 120 * 1000) {
+          log.error(s"Compiler service $id not seen in ${(now - compiler.lastSeen) / 1000} seconds, terminating compiler")
+          context.stop(compiler.compilerService)
+        }
       }
 
     case GetStatus =>
@@ -306,6 +403,7 @@ class CompilerManager extends Actor with ActorLogging {
         initializing = compilers.values.count(_.state == CompilerState.Initializing),
         queued = compilerQueue.size,
         pending = compilationPending.size,
+        restarting = { purgeRetiring(); retiring.size },
         compilers = compilers.values.toSeq.sortBy(_.id).map { c =>
           // lastActivity yalnız durum değişiminde yazılıyor (ping ona
           // DOKUNMUYOR), yani "ne zamandır bu durumda" ölçüsü budur.
@@ -318,7 +416,8 @@ class CompilerManager extends Actor with ActorLogging {
                          c.scalaVersion,
                          c.state.toString,
                          (now - c.lastActivity) / 1000,
-                         (now - c.lastSeen) / 1000)
+                         (now - c.lastSeen) / 1000,
+                         c.served)
         }
       )
 
@@ -335,6 +434,9 @@ class CompilerManager extends Actor with ActorLogging {
 object CompilerManager {
   def props = Props(new CompilerManager)
 
+  // Retire'dan sonra derleyicinin kendi çıkması için tanınan süre.
+  val retireGrace = 10.seconds
+
   case class CompilerInfo(id: String,
                           compilerService: ActorRef,
                           scalaVersion: String,
@@ -342,6 +444,7 @@ object CompilerManager {
                           lastActivity: Long,
                           lastClient: String,
                           lastLibs: Set[ExtLib],
-                          lastSeen: Long)
+                          lastSeen: Long,
+                          served: Int = 0)
 
 }

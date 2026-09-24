@@ -119,6 +119,25 @@ class CompileActor(out: ActorRef, manager: ActorRef) extends Actor with ActorLog
           case Pong =>
             lastPong = System.currentTimeMillis() / 1000
 
+          case Retire =>
+            // Router süreci bitirmemizi istiyor (bkz. shared Retire): ya takıldık
+            // ya da yenilenme sırası bize geldi. Yalnız bağlantıyı kapatmak
+            // aynı JVM'i geri getirirdi; çıkıyoruz ki gözetmen taze bir süreç
+            // başlatsın.
+            //
+            // Çıkış kodu 0 bilerek: bu PLANLI bir çıkış, çökme değil. Gözetmen
+            // (koco-deploy/derleyici-gozcusu.sh) bugün koda HİÇ bakmıyor --
+            // `kill -0` ile yokluyor, her ölümde yeniden başlatıyor. Biri onu
+            // ileride "yalnız hata kodunda başlat" diye değiştirirse Retire
+            // derleyiciyi kalıcı olarak kaybettirir; o sözleşme iki tarafta da.
+            //
+            // Satır logback'e değil doğrudan stdout'a: async
+            // appender çıkışta son satırı düşürebiliyor, oysa bu satır
+            // "neden öldü" sorusunun cevabı.
+            System.out.println("[compilerServer] router Retire gönderdi; süreç bitiriliyor (gözetmen yeniden başlatacak)")
+            System.out.flush()
+            System.exit(0)
+
           case other =>
             log.error(s"Unsupported compiler message $other")
         }
