@@ -938,7 +938,11 @@ class KojoWorldImpl extends KojoWorld {
    * #149: temel sınıfınkine ek olarak pompayı (kuyruk boşalıyor, yeni komut
    * alınmıyor), çizimi (bekleyen rAF iptal) ve canlandırmayı durduruyor.
    * Zamanlanmış rAF geri çağrıları yine gelebilir; hepsi `kapandı`ya bakıp
-   * hiçbir şey yapmadan dönüyor.
+   * hiçbir şey yapmadan dönüyor (setup ve canlandırma dahil: koruma geri
+   * çağrının başında, kullanıcının fn'i kapanmış dünyada koşmuyor).
+   * Sökülmeyenler: pencere ve sahne dinleyicileri (resize, tuş, tekerlek,
+   * pointer) ve PIXI uygulaması -- kapanmış dünya çöpe gitmiyor, WebGL
+   * bağlamı açık kalıyor. Aşağı akış korunduğu için zararsız.
    */
   override private[kojo] def kapat(): Unit = {
     super.kapat()
@@ -1301,22 +1305,27 @@ class KojoWorldImpl extends KojoWorld {
   // aralıktan bağımsız beslensin. rAF'ın verdiği zaman damgası yerine
   // System.currentTimeMillis kullanıyoruz (frameDeltaTime de öyle yapıyor).
   private def animateHelper(fn: => Unit, lastRunMs: Double): Unit = {
+    // Koruma geri çağrının BAŞINDA: kapat()'tan önce zamanlanmış kare fn'i
+    // kapanmış dünyada koşturmasın (#149). `return` değil `if`: lambdadaki
+    // return yerel olmayan dönüştür, rAF'ta yakalanmamış istisna olur.
     window.requestAnimationFrame { _ =>
-      var nextLast = lastRunMs
-      if (notAssetLoading) {
-        // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
-        val now = System.currentTimeMillis().toDouble
-        val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs - kareToleransıMs
-        if (due) {
-          nextLast = now
-          frameCount += 1
-          fn
-          maybeBake()
-          flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+      if (!kapandı) {
+        var nextLast = lastRunMs
+        if (notAssetLoading) {
+          // Kısıtlama etkinse (setRefreshRate) hedef aralık dolana kadar bu kareyi atla
+          val now = System.currentTimeMillis().toDouble
+          val due = refreshIntervalMs <= 0 || lastRunMs < 0 || (now - lastRunMs) >= refreshIntervalMs - kareToleransıMs
+          if (due) {
+            nextLast = now
+            frameCount += 1
+            fn
+            maybeBake()
+            flushRender() // bu karede birikeni hemen boşalt (bir kare gecikme olmasın)
+          }
         }
-      }
-      if (animating && !kapandı) {
-        animateHelper(fn, nextLast)
+        if (animating) {
+          animateHelper(fn, nextLast)
+        }
       }
     }
   }
@@ -1329,8 +1338,10 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def setup(fn: => Unit): Unit = {
+    // Varlık beklerken kapanan dünya: döngü biter, fn hiç koşmaz (#149).
     window.requestAnimationFrame { _ =>
-      if (notAssetLoading) {
+      if (kapandı) ()
+      else if (notAssetLoading) {
         fn
       }
       else {
