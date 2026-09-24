@@ -264,21 +264,25 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private[kojo] def boyayıYayınla(): Unit = {
     boyamaYolu.clear()
-    boyamaYoluStencil.temizle()
     if (fillBoya != null && boyamaÇokgeni.alanVarMı) {
       val düz = boyamaÇokgeni.düzDizi
       // Şekil çokgen olarak bitmedi (bitti = false), ama BÜYÜMEYİ bırakmış
       // olabilir: yayın kare sınırında olduğu için bu soru tam burada
       // sorulabiliyor (bkz. şekilDurmuş).
       val durdu = şekilDurmuş
+      // Stencil düğümü yayın öncesi TEMİZLENMİYOR (#155): `kur` yeni dizinin
+      // eskisinin uzantısı olup olmadığına kendisi bakıp yalnız kuyruğu
+      // ekliyor; temizlemek onu her yayında baştan kurmaya zorlardı.
       if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz)
       else {
+        boyamaYoluStencil.temizle()
         boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
         PixiUyum.boyamayaBaşla(boyamaYolu, fillBoya)(() => kojoWorld.render())
         üçgenleriÇiz(boyamaYolu, düz, bitti = false, durdu)
         boyamaYolu.endFill()
       }
     }
+    else boyamaYoluStencil.temizle()
     PixiUyum.tazele(boyamaYolu)
   }
 

@@ -92,8 +92,22 @@ class StencilDolgu extends PIXI.Container {
   private var kaplamaShader: js.Dynamic = null
   private var kaplamaDokulu = false
 
-  /** Boş: hiçbir şey çizmez (büyüyen şekil yayın arası). */
-  def temizle(): Unit = { boş = true; düz = Array.empty }
+  // Artımlı kurulum (#155): yelpaze KAPASİTELİ, `kurulu` kadar noktası
+  // geçerli; sınır kutusunun ham uçları koşarak tutuluyor (x0..y1 bir piksel
+  // taşırılmış türevleri). Sayaçlar sınama için: kaç nokta yelpazeye yazıldı
+  // (doğrusallık savı), kaç kez yeniden ayrıldı (O(log n) savı).
+  private var yelpaze: Float32Array = null
+  private var kurulu = 0
+  private var enKüçükX = 0.0; private var enKüçükY = 0.0; private var enBüyükX = 0.0; private var enBüyükY = 0.0
+  final private[kojo] var yüklenenNokta = 0
+  final private[kojo] var yenidenAyırma = 0
+
+  /**
+   * Boş: hiçbir şey çizmez (kalem kalkık taşınma, boya değişimi, sil()).
+   * Kapasiteli yelpaze DURUYOR (yeniden ayırma yok), ama bir sonraki `kur`
+   * baştan kurar: eski kuyruk yeni şekle sızmaz.
+   */
+  def temizle(): Unit = { boş = true; düz = Array.empty; kurulu = 0 }
 
   def noktaSayısı: Int = düz.length / 2
 
@@ -101,32 +115,62 @@ class StencilDolgu extends PIXI.Container {
   final private[kojo] def şimdikiBoya: Boya = boya
 
   /**
-   * Çokgeni ve boyayı kur. O(n); yeniden çağrılabilir (büyüyen şekil her
-   * yayında). Tamponlar `Buffer.update` ile yenileniyor, geometri yeniden
-   * ayrılmıyor.
+   * Çokgeni ve boyayı kur; yeniden çağrılabilir (büyüyen şekil her yayında).
+   *
+   * ARTIMLI (#155): büyüyen şekil yalnız KUYRUĞUNDAN büyüyor (kalem kalkık
+   * taşınma ve boya değişimi çokgeni sıfırlıyor, `temizle`), yani yeni dizi
+   * çoğu zaman eskisinin uzantısı. İlk sürüm her yayında bütün öneki baştan
+   * kuruyordu -- yayın başına doğrusal ama şekil başına süperdoğrusal,
+   * çünkü yayın sayısı da nokta sayısıyla büyüyor: 40 000 noktalı gülde
+   * 167 000 nokta-yüklemesi, kurulum ~111 ms (SwiftShader, #154 incelemesi
+   * §4). Ölçüldü ki bedelin %95'ten fazlası CPU tarafında (yelpaze dizisi +
+   * taze 960 KB'lık ayırmanın çöpü), GL yüklemesi 40 000'de 0.3-0.5 ms --
+   * o yüzden yalnız CPU tarafı artımlı, tampon yine `Buffer.update` ile
+   * bütünüyle yükleniyor (kısmi `bufferSubData` gerekmedi).
+   *
+   * UZANTI KARARI ucuz: yeni dizi eskisinden kısa değil VE ilk nokta VE eski
+   * son nokta aynı yerde. Şüphede baştan kur. Uzantıysa yalnız yeni noktalar
+   * için üçgen (p0, p_{i}, p_{i+1}) yazılır, sınır kutusu yalnız onlarla
+   * genişler; yelpaze kapasiteli ve geometrik büyüyor (yeniden ayırma
+   * O(log n), eski önek kopyalanıyor). Çizim `kurulu` kadar üçgenle sınırlı
+   * (bkz. _render), kapasitenin kuyruğu hiç çizilmiyor.
    */
   def kur(yeniDüz: Array[Double], yeniBoya: Boya)(tazeleyici: () => Unit): Unit = {
-    düz = yeniDüz
-    boş = düz.length < 6
-    if (boş) return
-    val n = düz.length / 2
-    val yelpaze = new Float32Array(6 * (n - 2))
-    var i = 1; var k = 0
+    val n = yeniDüz.length / 2
+    if (n < 3) { düz = yeniDüz; boş = true; kurulu = 0; return }
+    val uzantı = !boş && kurulu >= 3 && n >= kurulu &&
+      yeniDüz(0) == düz(0) && yeniDüz(1) == düz(1) &&
+      yeniDüz(2 * kurulu - 2) == düz(2 * kurulu - 2) && yeniDüz(2 * kurulu - 1) == düz(2 * kurulu - 1)
+    val başla = if (uzantı) kurulu else 0
+    düz = yeniDüz; boş = false
+    // Kapasite: en az 6 * (n - 2) float; ikiye katlayarak büyür, eski önek taşınır.
+    val gerekli = 6 * (n - 2)
+    if (yelpaze == null || yelpaze.length < gerekli) {
+      var kapasite = if (yelpaze == null) 6 * math.max(n - 2, 64) else yelpaze.length
+      while (kapasite < gerekli) kapasite *= 2
+      val yeni = new Float32Array(kapasite)
+      if (başla > 2) yeni.set(yelpaze.subarray(0, 6 * (başla - 2)))
+      yelpaze = yeni; yenidenAyırma += 1
+    }
+    val px = düz(0).toFloat; val py = düz(1).toFloat
+    var i = math.max(başla - 1, 1); var k = 6 * (i - 1)
     while (i < n - 1) {
-      yelpaze(k) = düz(0).toFloat; yelpaze(k + 1) = düz(1).toFloat
+      yelpaze(k) = px; yelpaze(k + 1) = py
       yelpaze(k + 2) = düz(2 * i).toFloat; yelpaze(k + 3) = düz(2 * i + 1).toFloat
       yelpaze(k + 4) = düz(2 * i + 2).toFloat; yelpaze(k + 5) = düz(2 * i + 3).toFloat
       i += 1; k += 6
     }
-    x0 = Double.MaxValue; y0 = Double.MaxValue; x1 = Double.MinValue; y1 = Double.MinValue
-    i = 0
+    if (başla == 0) { enKüçükX = Double.MaxValue; enKüçükY = Double.MaxValue; enBüyükX = Double.MinValue; enBüyükY = Double.MinValue }
+    i = başla
     while (i < n) {
       val x = düz(2 * i); val y = düz(2 * i + 1)
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+      if (x < enKüçükX) enKüçükX = x; if (x > enBüyükX) enBüyükX = x; if (y < enKüçükY) enKüçükY = y; if (y > enBüyükY) enBüyükY = y
       i += 1
     }
+    yüklenenNokta += n - başla
+    kurulu = n
     // Kaplama sınır kutusundan bir piksel taşıyor: kenar örnekleri.
-    x0 -= 1; y0 -= 1; x1 += 1; y1 += 1
+    x0 = enKüçükX - 1; y0 = enKüçükY - 1; x1 = enBüyükX + 1; y1 = enBüyükY + 1
     if (yelpazeGeo == null) {
       yelpazeGeo = js.Dynamic.newInstance(P.Geometry)()
       yelpazeGeo.addAttribute("aVertexPosition", yelpaze, 2)
@@ -135,6 +179,8 @@ class StencilDolgu extends PIXI.Container {
       kutuGeo.addAttribute("aUv", new Float32Array(12), 2)
     }
     else {
+      // Aynı dizi olsa da `update`: PIXI kirli imini böyle koyuyor; yeniden
+      // ayrıldıysa yeni diziyi de böyle öğreniyor.
       yelpazeGeo.getBuffer("aVertexPosition").update(yelpaze)
       kutuGeo.getBuffer("aVertexPosition").update(kutuDizisi())
     }
@@ -277,7 +323,8 @@ class StencilDolgu extends PIXI.Container {
     gl.stencilFunc(gl.ALWAYS, 0, 0xff)
     gl.stencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.INCR_WRAP)
     gl.stencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.DECR_WRAP)
-    renderer.geometry.draw(gl.TRIANGLES)
+    // Yalnız kurulu üçgenler: yelpaze kapasiteli, kuyruğu çöp (#155).
+    renderer.geometry.draw(gl.TRIANGLES, 3 * (kurulu - 2), 0)
     // 2. Kaplama: sarım != 0 boyanır, stencil sıfırlanır.
     gl.colorMask(true, true, true, true)
     gl.stencilFunc(gl.NOTEQUAL, 0, 0xff)
