@@ -1359,6 +1359,9 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def timer(ms: Long)(fn: => Unit): Unit = {
+    // kapat()'taki stopAnimation o anki aralıkları siliyor; kapandıktan sonra
+    // geç koşan bir geri çağrının kuracağı yeni aralık ise sonsuza dek dönerdi (#149).
+    if (kapandı) return
     prevFrameTime = -1
     val handle = window.setInterval({ () =>
       if (notAssetLoading) {
