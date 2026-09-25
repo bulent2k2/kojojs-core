@@ -469,23 +469,29 @@ class KojoWorldImpl extends KojoWorld {
   /**
    * Eski yol elle istendi mi? İki kanal:
    *
-   *  1. `localStorage.kojoDolgu = "libtess"` (tarayıcı konsolunda; silmek
-   *     için `delete localStorage.kojoDolgu`). GÜVENİLİR kanal bu: tuval
-   *     editörün aynı kökenli çerçevesinde koşuyor, depo ortak, ve ayar
-   *     sayfa yenilenince de duruyor.
-   *  2. Adreste `dolgu=libtess`. Editörün yönlendiricisi (`AppRouter`,
-   *     `notFound -> Redirect.Replace`) sorgulu adresi kök sayfaya çevirip
-   *     sorguyu DÜŞÜRÜYOR -- çoğu zaman çerçeve kurulmadan önce; canlıda
-   *     ölçüldü (#147 §7): parametre "hep stencil" verdi. Kanal duruyor
-   *     (yalın sayfa, sınama) ama editörde ona güvenilmez.
+   *  1. Adreste `dolgu=libtess`. Editörde GÜVENİLİR kanal bu: kullanıcı
+   *     konsolda `localStorage.kojoDolgu = "libtess"` yazıyor (silmek için
+   *     `delete localStorage.kojoDolgu`), editör kendi deposundan okuyup
+   *     sonuç çerçevesinin KENDİ adresine `&dolgu=libtess` ekliyor
+   *     (kojojs-editor `FiddleEditor.resultFrameSrc`, #45). Ayar editörün
+   *     deposunda durduğu için sayfa yenilenince de kalıyor. Editörün üst
+   *     adresine yazılan `?dolgu=libtess` ise işe yaramıyor: yönlendirici
+   *     (`AppRouter`, `notFound -> Redirect.Replace`) sorguyu düşürüyor
+   *     (#147 §7, canlıda ölçüldü).
+   *  2. Bu pencerenin `localStorage`'ı. Editörde artık HİÇ okunamıyor: sonuç
+   *     çerçevesi opak kökende (kojojs-editor#45, sandbox'ta
+   *     allow-same-origin yok), erişim SecurityError atıyor. Kanal yalın
+   *     sayfa ve sınamalar için duruyor.
    *
    * Depo yalnız KENDİ penceresinden okunuyor: localStorage köken başına,
    * aynı köken aynı depo, çapraz/opak köken ikisinde de patlıyor -- üst
    * pencerenin deposunun bu pencereninkinden farklı cevap verebileceği bir
-   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu ise üst pencereden de
-   * okunuyor: çerçevenin kendi adresi `/resultframe?theme=light`. try/catch
-   * süs değil: `allow-same-origin` olmayan bir çerçevede kendi deposuna
-   * erişim de SecurityError atıyor.
+   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu önce KENDİ adresten
+   * okunuyor (editörde `/resultframe?theme=light&dolgu=libtess`), sonra
+   * aynı kökenli bir üst pencereden (yalın sayfa); opak çerçeveden üst
+   * pencerenin adresine erişim de patlıyor. try/catch süs değil:
+   * `allow-same-origin` olmayan bir çerçevede kendi deposuna erişim de
+   * SecurityError atıyor.
    */
   private def libtessİstendi: Boolean = {
     def depo(w: js.Dynamic): Boolean =
