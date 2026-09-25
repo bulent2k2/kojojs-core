@@ -464,7 +464,7 @@ class KojoWorldImpl extends KojoWorld {
   } && !elleLibtess
   if (elleLibtess)
     ÜçgenlemeUyarısı.paneleYaz(
-      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda: delete localStorage.kojoDolgu")
+      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda (üst sayfa bağlamında): delete localStorage.kojoDolgu, sonra sayfayı yenileyin")
 
   /**
    * Eski yol elle istendi mi? İki kanal:
