@@ -433,6 +433,26 @@ object BakePolicy {
   def shouldDisableAfterUnbake(streak: Int): Boolean = streak >= maxUnbakeStreak
 }
 
+object KojoWorld {
+
+  /**
+   * Eski dolgu yolu elle açıkken panele yazılan satır, seçeneğin geldiği
+   * kanala göre (KojoWorldImpl.libtessKanalı). Kaldırma talimatı kanala bağlı:
+   * "depo" bu pencerenin localStorage'ı (yalın sayfa, sınamalar); "sorgu"
+   * adresteki dolgu=libtess -- editörde onu editör, kendi deposundaki
+   * kojoDolgu'dan ekliyor (kojojs-editor#45), yalın sayfada kullanıcı yazmış.
+   */
+  private[kojo] def libtessPanelMetni(kanal: String): String = kanal match {
+    case "depo" =>
+      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda: " +
+        "delete localStorage.kojoDolgu, sonra sayfayı yenileyin"
+    case _ =>
+      "Eski dolgu yolu (libtess) elle açık: adreste dolgu=libtess. Editörde kaldırmak için konsolda " +
+        "(üst sayfa bağlamında): delete localStorage.kojoDolgu, sonra sayfayı yenileyin; " +
+        "yalın sayfada adresten dolgu=libtess'i çıkarın"
+  }
+}
+
 class KojoWorldImpl extends KojoWorld {
   PIXI.Pixi
   private val fiddleContainer =
@@ -454,40 +474,44 @@ class KojoWorldImpl extends KojoWorld {
   private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
   // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; elle kapatılabilir
   // (canlıda geri dönüş: tarayıcı konsolunda `localStorage.kojoDolgu =
-  // "libtess"`, bkz. libtessİstendi). Elle kapalıysa panele bir satır: ayar
+  // "libtess"`, bkz. libtessKanalı). Elle kapalıysa panele bir satır: ayar
   // yenilemede duruyor ve hiçbir iz bırakmıyor -- #147 §7'nin "hep stencil"
   // karışıklığı tam bu sessizlikten çıktı.
-  private val elleLibtess = libtessİstendi
+  private val elleLibtess = libtessKanalı
   stencilDolgu = PixiUyum.beşVeÜstü && {
     val gl = renderer.asInstanceOf[js.Dynamic].gl
     !js.isUndefined(gl) && gl != null && gl.getContextAttributes().stencil.asInstanceOf[Boolean]
-  } && !elleLibtess
-  if (elleLibtess)
-    ÜçgenlemeUyarısı.paneleYaz(
-      "Eski dolgu yolu (libtess) elle açık: localStorage.kojoDolgu. Kaldırmak için konsolda: delete localStorage.kojoDolgu")
+  } && elleLibtess.isEmpty
+  elleLibtess.foreach(k => ÜçgenlemeUyarısı.paneleYaz(KojoWorld.libtessPanelMetni(k)))
 
   /**
    * Eski yol elle istendi mi? İki kanal:
    *
-   *  1. `localStorage.kojoDolgu = "libtess"` (tarayıcı konsolunda; silmek
-   *     için `delete localStorage.kojoDolgu`). GÜVENİLİR kanal bu: tuval
-   *     editörün aynı kökenli çerçevesinde koşuyor, depo ortak, ve ayar
-   *     sayfa yenilenince de duruyor.
-   *  2. Adreste `dolgu=libtess`. Editörün yönlendiricisi (`AppRouter`,
-   *     `notFound -> Redirect.Replace`) sorgulu adresi kök sayfaya çevirip
-   *     sorguyu DÜŞÜRÜYOR -- çoğu zaman çerçeve kurulmadan önce; canlıda
-   *     ölçüldü (#147 §7): parametre "hep stencil" verdi. Kanal duruyor
-   *     (yalın sayfa, sınama) ama editörde ona güvenilmez.
+   *  1. Adreste `dolgu=libtess`. Editörde GÜVENİLİR kanal bu: kullanıcı
+   *     konsolda `localStorage.kojoDolgu = "libtess"` yazıyor (silmek için
+   *     `delete localStorage.kojoDolgu`), editör kendi deposundan okuyup
+   *     sonuç çerçevesinin KENDİ adresine `&dolgu=libtess` ekliyor
+   *     (kojojs-editor `FiddleEditor.resultFrameSrc`, #45). Ayar editörün
+   *     deposunda durduğu için sayfa yenilenince de kalıyor. Editörün üst
+   *     adresine yazılan `?dolgu=libtess` ise işe yaramıyor: yönlendirici
+   *     (`AppRouter`, `notFound -> Redirect.Replace`) sorguyu düşürüyor
+   *     (#147 §7, canlıda ölçüldü).
+   *  2. Bu pencerenin `localStorage`'ı. Editörde artık HİÇ okunamıyor: sonuç
+   *     çerçevesi opak kökende (kojojs-editor#45, sandbox'ta
+   *     allow-same-origin yok), erişim SecurityError atıyor. Kanal yalın
+   *     sayfa ve sınamalar için duruyor.
    *
    * Depo yalnız KENDİ penceresinden okunuyor: localStorage köken başına,
    * aynı köken aynı depo, çapraz/opak köken ikisinde de patlıyor -- üst
    * pencerenin deposunun bu pencereninkinden farklı cevap verebileceği bir
-   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu ise üst pencereden de
-   * okunuyor: çerçevenin kendi adresi `/resultframe?theme=light`. try/catch
-   * süs değil: `allow-same-origin` olmayan bir çerçevede kendi deposuna
-   * erişim de SecurityError atıyor.
+   * yapılandırma yok (#154 incelemesi ölçtü). Sorgu önce KENDİ adresten
+   * okunuyor (editörde `/resultframe?theme=light&dolgu=libtess`), sonra
+   * aynı kökenli bir üst pencereden (yalın sayfa); opak çerçeveden üst
+   * pencerenin adresine erişim de patlıyor. try/catch süs değil:
+   * `allow-same-origin` olmayan bir çerçevede kendi deposuna erişim de
+   * SecurityError atıyor.
    */
-  private def libtessİstendi: Boolean = {
+  private def libtessKanalı: Option[String] = {
     def depo(w: js.Dynamic): Boolean =
       try w.localStorage.getItem("kojoDolgu").asInstanceOf[String] == "libtess"
       catch { case _: Throwable => false }
@@ -497,7 +521,9 @@ class KojoWorldImpl extends KojoWorld {
     val kendi = js.Dynamic.global.window
     val üst = kendi.parent
     val üstBaşka = üst.asInstanceOf[js.Any] ne kendi.asInstanceOf[js.Any]
-    depo(kendi) || sorgu(kendi) || (üstBaşka && sorgu(üst))
+    if (depo(kendi)) Some("depo")
+    else if (sorgu(kendi) || (üstBaşka && sorgu(üst))) Some("sorgu")
+    else None
   }
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
