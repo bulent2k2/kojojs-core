@@ -283,6 +283,13 @@ object PixiUyum {
         val yerel = n.toLocal(küresel)
         bulundu = n.içindeMi(yerel.x, yerel.y).asInstanceOf[Boolean]
       }
+      // Sprite (imge, yazı): Graphics geometrisi yok, aşağıdaki yoklama onu
+      // hiç görmüyordu -- fareyeTıklayınca bağlanmış bir imge ya da yazı hiç
+      // isabet almıyordu. PIXI'nin kendi dikdörtgen yoklaması yeterli.
+      else if (n.isSprite.asInstanceOf[js.UndefOr[Boolean]].contains(true) ||
+               (!js.isUndefined(n.texture) && js.typeOf(n.containsPoint) == "function")) {
+        bulundu = n.containsPoint(küresel).asInstanceOf[Boolean]
+      }
       else if (js.typeOf(n.containsPoint) == "function") {
         val gd =
           if (beşVeÜstü) {
