@@ -3,7 +3,7 @@ package kojo
 import java.util.Random
 import com.vividsolutions.jts.geom.Coordinate
 import kojo.doodle.Color
-import org.scalajs.dom.raw.{KeyboardEvent, UIEvent}
+import org.scalajs.dom.raw.{Event, KeyboardEvent, UIEvent}
 import org.scalajs.dom.{WheelEvent, document, html, window}
 import pixiscalajs.PIXI
 import pixiscalajs.PIXI.{Point, Rectangle, RendererOptions}
@@ -33,7 +33,7 @@ trait KojoWorld {
   /**
    * Dünyayı KAPAT (#149): bundan sonra rapor susar, bekleyen boyalar ve durma
    * adayları düşer. KojoWorldImpl ayrıca pompayı, çizimi ve canlandırmayı
-   * durduruyor. Canlıda çağrılmıyor (sayfa tek dünya taşıyor, sayfayla ölüyor);
+   * durduruyor, dinleyicileri söküyor ve çiziciyi bırakıyor (#166). Canlıda çağrılmıyor (sayfa tek dünya taşıyor, sayfayla ölüyor);
    * sınama fikstürleri bir sonraki dünyayı kurmadan önce ve takım sonunda
    * çağırıyor -- yoksa bir takımın dünyası (giysisi geç yüklenen kaplumbağa,
    * rAF döngüsü) sonraki takımın sırasında koşmaya devam ediyordu.
@@ -546,7 +546,23 @@ class KojoWorldImpl extends KojoWorld {
   private val interaction = renderer.plugins.interaction
   // private[kojo]: KaynakSizintisiTest sahnedeki çocuk sayısını sayıyor (#91).
   private[kojo] val stage = new PIXI.Container()
-  window.addEventListener("resize", resize)
+
+  /**
+   * Pencereye takılan dinleyiciler, `kapat`'ta sökülmek üzere (#166). Kapanış
+   * `this`'i tuttuğu için takılı kalan tek bir dinleyici bile kapanmış dünyayı
+   * (çizici, sahne ağacı, dokular) bellekte tutuyor. `removeEventListener`
+   * aynı işlev nesnesini istiyor; `keyDown(_)` her yazılışta yeni bir işlev
+   * ürettiği için tutamaç burada saklanıyor.
+   */
+  private val pencereDinleyicileri = scala.collection.mutable.ArrayBuffer.empty[(String, js.Function1[Event, _])]
+  private def penceredeDinle[E <: Event](tür: String, f: js.Function1[E, Unit]): Unit = {
+    val g = f.asInstanceOf[js.Function1[Event, _]]
+    window.addEventListener(tür, g, false)
+    pencereDinleyicileri += ((tür, g))
+  }
+  private var sıfırlaİşlevi: js.Function0[Unit] = null
+
+  penceredeDinle("resize", (e: UIEvent) => resize(e))
   init()
 
   def init() {
@@ -578,6 +594,7 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   def size(w: Double, h: Double): Unit = {
+    if (kapandı) return // çizici bırakıldı (#166)
     canvasWidth = w
     canvasHeight = h
     screenWidth = canvasWidth
@@ -747,7 +764,7 @@ class KojoWorldImpl extends KojoWorld {
 
   private var bakeDisabled = false
   private def maybeBake(): Unit = {
-    if (bakeDisabled) return
+    if (bakeDisabled || kapandı) return
     try maybeBakeUnsafe()
     catch {
       case t: Throwable =>
@@ -984,16 +1001,43 @@ class KojoWorldImpl extends KojoWorld {
    * Zamanlanmış rAF geri çağrıları yine gelebilir; hepsi `kapandı`ya bakıp
    * hiçbir şey yapmadan dönüyor (setup ve canlandırma dahil: koruma geri
    * çağrının başında, kullanıcının fn'i kapanmış dünyada koşmuyor).
-   * Sökülmeyenler: pencere ve sahne dinleyicileri (resize, tuş, tekerlek,
-   * pointer) ve PIXI uygulaması -- kapanmış dünya çöpe gitmiyor, WebGL
-   * bağlamı açık kalıyor. Aşağı akış korunduğu için zararsız.
+   *
+   * #166: pencere dinleyicileri (resize, tuş, tekerlek, kullanıcının
+   * `onKeyPress`/`onKeyRelease`'i) ve sahne dinleyicileri sökülüyor,
+   * `kocoResetView` bu dünyayı gösteriyorsa siliniyor, çizici bırakılıyor.
+   * `renderer.destroy(true)` tuvali sayfadan söküyor, `interaction`
+   * eklentisini (DOM dinleyicileri, PIXI ticker'ı) bırakıyor; WebGL
+   * bağlamı `WEBGL_lose_context` ile düşürülüyor. Tarayıcı etkin bağlam sayısını
+   * sınırlıyor, aşılınca en eskiyi düşürüyor; bırakmadan kurulan her dünya
+   * açık kalan bir dünyanın bağlamını tehdit ediyordu. Çiziciye dokunan
+   * yollar (`size`, artalan, pişirme) kapanmış dünyada hiçbir şey yapmıyor.
+   * Sökülmeyen: paylaşılan yükleyicinin dokuları (başka dünyalar da
+   * kullanıyor).
    */
   override private[kojo] def kapat(): Unit = {
+    if (kapandı) return
     super.kapat()
     kapandı = true
     bekleyenİşler.clear()
     stopAnimation()
     if (renderPending) { renderPending = false; window.cancelAnimationFrame(renderHandle) }
+    pencereDinleyicileri.foreach { case (tür, f) => window.removeEventListener(tür, f, false) }
+    pencereDinleyicileri.clear()
+    stage.asInstanceOf[js.Dynamic].removeAllListeners()
+    val pencere = window.asInstanceOf[js.Dynamic]
+    if (sıfırlaİşlevi != null && (pencere.kocoResetView.asInstanceOf[js.Any] eq sıfırlaİşlevi))
+      js.special.delete(pencere, "kocoResetView")
+    sıfırlaİşlevi = null
+    resetBake() // pişmiş dokunun framebuffer'ı çizici ölmeden bırakılsın
+    val gl = renderer.asInstanceOf[js.Dynamic].gl
+    renderer.destroy(true)
+    // PIXI 5.3 bağlamı yalnız WebGL1'de düşürüyor: `WEBGL_lose_context`'i
+    // WebGL2'de hiç almıyor (tarayıcıda ölçüldü: destroy sonrası
+    // isContextLost() false). Bağlamı burada düşürüyoruz.
+    if (!js.isUndefined(gl) && gl != null) {
+      val uzantı = gl.getExtension("WEBGL_lose_context")
+      if (uzantı != null) uzantı.loseContext()
+    }
   }
 
   /**
@@ -1277,6 +1321,7 @@ class KojoWorldImpl extends KojoWorld {
   }
 
   private def artalanaKoy(css: String): Unit = {
+    if (kapandı) return // tuval söküldü (#166)
     val biçem = renderer.view.asInstanceOf[html.Canvas].style
     biçem.background = css
   }
@@ -1661,8 +1706,8 @@ class KojoWorldImpl extends KojoWorld {
     // Editör çerçevesindeki "Ev" düğmesi buradan çağırır (iframe aynı-köken).
     // js.Dynamic.global'a değil, somut `window` nesnesine atıyoruz: katı-kipte
     // çıplak atama (global.foo=) "kocoResetView is not defined" atardı.
-    window.asInstanceOf[scala.scalajs.js.Dynamic]
-      .updateDynamic("kocoResetView")((() => resetView()): scala.scalajs.js.Function0[Unit])
+    sıfırlaİşlevi = () => resetView()
+    window.asInstanceOf[scala.scalajs.js.Dynamic].updateDynamic("kocoResetView")(sıfırlaİşlevi)
 
     def mouseWheel(e: WheelEvent): Unit = {
       if (zoomEnabled) {
@@ -1675,9 +1720,9 @@ class KojoWorldImpl extends KojoWorld {
         zoomXY(stage.scale.x * f, -stage.scale.y * f, merkezDünyaX, merkezDünyaY)
       }
     }
-    window.addEventListener("keydown", keyDown(_), false)
-    window.addEventListener("keyup", keyUp(_), false)
-    window.addEventListener("wheel", mouseWheel(_), false)
+    penceredeDinle("keydown", (e: KeyboardEvent) => keyDown(e))
+    penceredeDinle("keyup", (e: KeyboardEvent) => keyUp(e))
+    penceredeDinle("wheel", (e: WheelEvent) => mouseWheel(e))
 
     // Tuvali fareyle tutup çekerek kaydırma (pan).
     // Yalnız BOŞ tuvale (hitArea üzerinden hedef = stage) basınca başlar; bir
@@ -1771,7 +1816,7 @@ class KojoWorldImpl extends KojoWorld {
     def keyDown(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }
-    window.addEventListener("keydown", keyDown(_), false)
+    penceredeDinle("keydown", (e: KeyboardEvent) => keyDown(e))
   }
   def onKeyRelease(fn: Int => Unit): Unit = {
     girdiİşleyicisiKaydedildi()
@@ -1779,6 +1824,6 @@ class KojoWorldImpl extends KojoWorld {
     def keyUp(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }
-    window.addEventListener("keyup", keyUp(_), false)
+    penceredeDinle("keyup", (e: KeyboardEvent) => keyUp(e))
   }
 }
