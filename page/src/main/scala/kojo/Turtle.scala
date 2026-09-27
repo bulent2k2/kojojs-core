@@ -123,10 +123,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private def turtlePathMoveTo(x: Double, y: Double): Unit = {
     boyamayıİşle() // kalem kalkık taşınma çokgeni bitiriyor
     boyamaÇokgeni.taşındı(x, y)
-    // Çokgen sıfırlandı, stencil düğümü de sıfırlansın (#155'in sözleşmesi;
-    // core#43 incelemesi §1): kur'un uzantı sezgisi yalnız hızlı yol, güvenlik
-    // ağı değil -- aynı noktadan başlayıp aynı köşe sayısıyla kapanan ama
-    // ortası farklı iki şekli ayırt edemez.
+    // Çokgen sıfırlandı: canlı düğüm boş çizsin. Doğruluk için gerekmiyor
+    // (#163): taşındı kuşağı artırıyor, sonraki kur zaten baştan kuruyor.
     boyamaYoluStencil.temizle()
     boyamayıKirlet()
     turtlePath.moveTo(x, y)
@@ -167,7 +165,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
         if (stencilMi(düz)) {
           val s = new StencilDolgu()
           s.name = "Turtle Fill"
-          stencilKur(s, düz)
+          stencilKur(s, düz, StencilDolgu.YeniKuşak) // yeni düğüm, baştan
           s
         }
         else {
@@ -210,9 +208,9 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
    * bildirirdi (sahte saatle görüldü: "30 ms sürdü (21 nokta)", 251 noktalı
    * gül için). sil() sıfırlaması aynen.
    */
-  private def stencilKur(düğüm: StencilDolgu, düz: Array[Double]): Unit = {
+  private def stencilKur(düğüm: StencilDolgu, düz: Array[Double], kuşak: Int): Unit = {
     şekilBirikimi.unut()
-    düğüm.kur(düz, fillBoya)(() => kojoWorld.render())
+    düğüm.kur(düz, fillBoya, kuşak)(() => kojoWorld.render())
   }
 
   /** Şekil bitti: o ana dek biriken kalem izi olduğu yerde donuyor, üstüne
@@ -275,10 +273,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
       // olabilir: yayın kare sınırında olduğu için bu soru tam burada
       // sorulabiliyor (bkz. şekilDurmuş).
       val durdu = şekilDurmuş
-      // Stencil düğümü yayın öncesi TEMİZLENMİYOR (#155): `kur` yeni dizinin
-      // eskisinin uzantısı olup olmadığına kendisi bakıp yalnız kuyruğu
-      // ekliyor; temizlemek onu her yayında baştan kurmaya zorlardı.
-      if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz)
+      // Stencil düğümü yayın öncesi TEMİZLENMİYOR (#155): `kur` çokgenin
+      // kuşağı aynıysa (#163) yalnız kuyruğu ekliyor; temizlemek onu her
+      // yayında baştan kurmaya zorlardı.
+      if (stencilMi(düz)) stencilKur(boyamaYoluStencil, düz, boyamaÇokgeni.kuşak)
       else {
         boyamaYoluStencil.temizle()
         boyamaYolu.lineStyle(0, 0, 0) // kenarlığı kalem çiziyor, dolgunun kendi çizgisi olmasın
@@ -867,7 +865,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     // kesiyordu -- şeklin dolması yalnız gecikme 0 iken (bütün kenarlar tek
     // blokta) rastlantıyla çalışıyordu.
     boyamaÇokgeni.boyaKuruldu(turtleImage.position.x, turtleImage.position.y)
-    boyamaYoluStencil.temizle() // bkz. turtlePathMoveTo: çokgenle birlikte
+    boyamaYoluStencil.temizle() // boş çiz; kuşak boyaKuruldu'da arttı (#163)
     boyamayıKirlet()
     kojoWorld.scheduleLater(queueHandler)
   }

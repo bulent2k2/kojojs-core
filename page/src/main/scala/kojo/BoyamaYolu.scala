@@ -35,6 +35,17 @@ class BoyamaYolu {
   private var xy: Array[Double] = new Array[Double](256)
   private var sayı = 0 // nokta sayısı; xy'nin ilk 2 * sayı hücresi geçerli
 
+  /**
+   * KUŞAK (#163): çokgen her sıfırlandığında (boya kuruldu, kalem kalkık
+   * taşındı, temizlendi) artıyor, köşe eklenince artmıyor. Aynı kuşak içinde
+   * dizi yalnız KUYRUĞUNDAN büyüyor (`çizildi` yalnız ekliyor), yani aynı
+   * kuşaktaki her yayın bir öncekinin uzantısı -- kesin, koordinat
+   * karşılaştırması yok. `StencilDolgu.kur` artımlı kurulum kararını buna
+   * bakarak veriyor.
+   */
+  private var _kuşak = 0
+  def kuşak: Int = _kuşak
+
   private def ekle(x: Double, y: Double): Unit = {
     if (2 * sayı + 2 > xy.length) {
       val yeni = new Array[Double](xy.length * 2)
@@ -45,20 +56,20 @@ class BoyamaYolu {
   }
 
   /** Boyama kurulduğunda çokgen sıfırdan başlıyor: eski kenarlar bu boyaya ait değil. */
-  def boyaKuruldu(x: Double, y: Double): Unit = { sayı = 0; ekle(x, y) }
+  def boyaKuruldu(x: Double, y: Double): Unit = { sayı = 0; _kuşak += 1; ekle(x, y) }
 
   /**
    * Kalem kalkık taşınma (moveTo / atla / zıpla): çokgen KIRILIR.
    * Masaüstü Kojo da öyle -- araya sıçrama giren bir şekil tek parça sayılmıyor.
    */
-  def taşındı(x: Double, y: Double): Unit = { sayı = 0; ekle(x, y) }
+  def taşındı(x: Double, y: Double): Unit = { sayı = 0; _kuşak += 1; ekle(x, y) }
 
   /** Kalem inik çizgi (lineTo): çokgene bir köşe eklenir (ardışık aynı nokta eklenmez). */
   def çizildi(x: Double, y: Double): Unit =
     if (sayı == 0 || xy(2 * sayı - 2) != x || xy(2 * sayı - 1) != y) ekle(x, y)
 
   /** Tuval silindi. */
-  def temizle(): Unit = sayı = 0
+  def temizle(): Unit = { sayı = 0; _kuşak += 1 }
 
   /** Boyanacak bir alan var mı: en az üç köşe gerekiyor. */
   def alanVarMı: Boolean = sayı >= 3
@@ -71,7 +82,14 @@ class BoyamaYolu {
     b
   }
 
-  /** PIXI'nin `drawPolygon`'ının istediği düz dizi: x0, y0, x1, y1, ... (kopya, tam boy). */
+  /**
+   * PIXI'nin `drawPolygon`'ının istediği düz dizi: x0, y0, x1, y1, ... (kopya,
+   * tam boy). Kopya artık artımlı kurulumun dayanağı değil (#163: karar
+   * kuşakta), ama SAHİPLİK için duruyor: kalıcı düğüm (`boyamayıİşle`) ve
+   * Graphics yolu diziyi saklıyor, canlı düğümün `içindeMi`'si de onu
+   * okuyor. Canlı dizi verilseydi çokgen sıfırlanınca üstüne yazılan
+   * noktaları okurlardı.
+   */
   def düzDizi: Array[Double] = {
     val a = new Array[Double](sayı * 2)
     System.arraycopy(xy, 0, a, 0, sayı * 2)

@@ -98,6 +98,7 @@ class StencilDolgu extends PIXI.Container {
   // (doğrusallık savı), kaç kez yeniden ayrıldı (O(log n) savı).
   private var yelpaze: Float32Array = null
   private var kurulu = 0
+  private var kurulanKuşak = YeniKuşak
   private var enKüçükX = 0.0; private var enKüçükY = 0.0; private var enBüyükX = 0.0; private var enBüyükY = 0.0
   final private[kojo] var yüklenenNokta = 0
   final private[kojo] var yenidenAyırma = 0
@@ -128,19 +129,24 @@ class StencilDolgu extends PIXI.Container {
    * o yüzden yalnız CPU tarafı artımlı, tampon yine `Buffer.update` ile
    * bütünüyle yükleniyor (kısmi `bufferSubData` gerekmedi).
    *
-   * UZANTI KARARI ucuz: yeni dizi eskisinden kısa değil VE ilk nokta VE eski
-   * son nokta aynı yerde. Şüphede baştan kur. Uzantıysa yalnız yeni noktalar
-   * için üçgen (p0, p_{i}, p_{i+1}) yazılır, sınır kutusu yalnız onlarla
-   * genişler; yelpaze kapasiteli ve geometrik büyüyor (yeniden ayırma
-   * O(log n), eski önek kopyalanıyor). Çizim `kurulu` kadar üçgenle sınırlı
-   * (bkz. _render), kapasitenin kuyruğu hiç çizilmiyor.
+   * UZANTI KARARI çokgenin SAHİBİNDE (#163): `kuşak` (`BoyamaYolu.kuşak`)
+   * bir önceki kurulumunkiyle aynıysa ve dizi kısalmadıysa uzantı. Aynı kuşak
+   * içinde dizi yalnız kuyruğundan büyüdüğü için karar kesin. Eskiden
+   * sezgiyle veriliyordu (ilk nokta ve eski son nokta aynı mı); aynı uçlu,
+   * aynı köşe sayılı, ortası farklı iki şekli ayırt edemiyordu ve doğruluğu
+   * Turtle'daki `temizle` çağrılarına dayanıyordu. `kuşak` verilmezse
+   * (`YeniKuşak`, kalıcı düğüm ve sınamalar) her çağrı baştan kurar.
+   * Uzantıysa yalnız yeni noktalar için üçgen (p0, p_{i}, p_{i+1}) yazılır,
+   * sınır kutusu yalnız onlarla genişler; yelpaze kapasiteli ve geometrik
+   * büyüyor (yeniden ayırma O(log n), eski önek kopyalanıyor). Çizim `kurulu`
+   * kadar üçgenle sınırlı (bkz. _render), kapasitenin kuyruğu hiç çizilmiyor.
    */
-  def kur(yeniDüz: Array[Double], yeniBoya: Boya)(tazeleyici: () => Unit): Unit = {
+  def kur(yeniDüz: Array[Double], yeniBoya: Boya, kuşak: Int = YeniKuşak)(tazeleyici: () => Unit): Unit = {
     val n = yeniDüz.length / 2
+    val öncekiKuşak = kurulanKuşak
+    kurulanKuşak = kuşak
     if (n < 3) { düz = yeniDüz; boş = true; kurulu = 0; return }
-    val uzantı = !boş && kurulu >= 3 && n >= kurulu &&
-      yeniDüz(0) == düz(0) && yeniDüz(1) == düz(1) &&
-      yeniDüz(2 * kurulu - 2) == düz(2 * kurulu - 2) && yeniDüz(2 * kurulu - 1) == düz(2 * kurulu - 1)
+    val uzantı = !boş && kuşak != YeniKuşak && kuşak == öncekiKuşak && kurulu >= 3 && n >= kurulu
     val başla = if (uzantı) kurulu else 0
     düz = yeniDüz; boş = false
     // Kapasite: en az 6 * (n - 2) float; ikiye katlayarak büyür, eski önek taşınır.
@@ -346,6 +352,9 @@ object StencilDolgu {
    * Gerekçe ve ölçüm sınıfın belgesinde ("küçük şekiller buraya gelmiyor").
    */
   val Eşik = 64
+
+  /** `kur`un varsayılan kuşağı: "bu çağrı yeni bir çokgen", yani hep baştan kur. */
+  val YeniKuşak: Int = -1
 
   private val yelpazeVert =
     """attribute vec2 aVertexPosition;
