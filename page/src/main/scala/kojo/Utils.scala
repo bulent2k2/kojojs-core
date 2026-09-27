@@ -776,6 +776,8 @@ object PixiUyum {
    * doku geri yükleniyor. İmge Sprite'larına dokunulmuyor: onların dokusu
    * yükleyicinin önbelleğinde paylaşılıyor. Yazı, `updateText` işlevinden
    * tanınıyor.
+   * Gerçek kaplumbağanın `sil()`i yazılarını ayrıca `Turtle.realClear`da
+   * katmandan çıkarıp `destroy(true)` ediyor (orada kimse onlara tutunmuyor).
    *
    * GEOMETRİ VE GRADYAN DOKUSU: gradyan (`Boya`) dolgunun BaseTexture'ı ayrı
    * bir kaynak; onu da bırakıyoruz (bkz. gradyanDokularınıBırak, sorun #95).

@@ -1133,6 +1133,20 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
         g.destroy()
       }
     }
+    // Yazılar (realWriteText'in PIXI.Text'leri) da çıksın (#169): eskiden
+    // sil() onları katmanda bırakıyordu -- ekranda üst üste kalıyorlardı ve
+    // dokuları tutuluyordu. Ölçüldü (60 kare sil()+yaz): katmanda 60 yazı, doku
+    // sayacı 61. Bunlara da başka kimse tutunmuyor (yazı hiçbir yere
+    // döndürülmüyor), yani destroy(true): tuval ve doku birlikte gidiyor.
+    // Yazı, glKaynaklarınıBırak'taki gibi `updateText` işlevinden tanınıyor;
+    // kaplumbağa simgesi ve giysi Sprite'ları dokunulmadan kalıyor.
+    turtleLayer.children.toList.foreach { c =>
+      val d = c.asInstanceOf[js.Dynamic]
+      if (js.typeOf(d.updateText) == "function") {
+        turtleLayer.removeChild(c)
+        d.destroy(true)
+      }
+    }
     kalemParçaları.clear()
     dolguParçaları.clear()
     kalemParçaları += turtlePath
