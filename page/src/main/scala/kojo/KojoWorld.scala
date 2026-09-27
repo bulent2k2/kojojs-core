@@ -471,6 +471,7 @@ class KojoWorldImpl extends KojoWorld {
   // private[kojo]: KaynakSizintisiTest çizicinin kendi sayaçlarını
   // (geometry.managedGeometries / managedBuffers) okuyor -- sorun #91'in
   // ölçüsü o sayaçlar.
+  PixiUyum.ölçümTuvaliniKur // ilk yazı ölçülmeden önce (#169)
   private[kojo] val renderer = PIXI.Pixi.autoDetectRenderer(rendererOptions(canvasWidth, canvasHeight))
   // Stencil dolgu (#147): PIXI 5 VE stencil'li bağlam; elle kapatılabilir
   // (canlıda geri dönüş: tarayıcı konsolunda `localStorage.kojoDolgu =

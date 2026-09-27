@@ -96,6 +96,36 @@ object PixiUyum {
   import scala.scalajs.js
   import scala.scalajs.js.Dynamic.{global => g}
 
+  /**
+   * PIXI'nin yazı ölçüm tuvali `willReadFrequently` ile (sorun #169).
+   *
+   * `TextMetrics.measureFont` yazı tipinin yükseklik ölçülerini paylaşılan bir
+   * 2B tuvalde `getImageData` ile okuyor; PIXI 5.3.12 o tuvali bu seçenek
+   * olmadan kuruyor ve Chrome konsola "Multiple readback operations using
+   * getImageData are faster with the willReadFrequently attribute set to
+   * true" uyarısını basıyordu. Okuma yazı tipi başına BİR kez yapılıyor
+   * (sonuç `TextMetrics._fonts`ta önbellekte; ölçüldü: her karede yeni yazıyla
+   * 120 karede `measureFont` 120 kez, `getImageData` 1 kez çağrıldı), yani bu
+   * bir kare maliyeti değil, konsol gürültüsü. Tuval yalnız ölçüm için;
+   * yazılımsal (CPU) tuvale geçmesi bir şey kaybettirmiyor.
+   *
+   * Sayfa başına bir kez (lazy val), ilk yazı ölçülmeden önce: KojoWorldImpl
+   * kurulurken. PIXI'nin iç alanlarına dokunduğu için alanlar yoksa (başka bir
+   * PIXI sürümü, Node altındaki birim sınamaları) hiçbir şey yapmıyor.
+   */
+  lazy val ölçümTuvaliniKur: Unit =
+    if (js.typeOf(g.PIXI) != "undefined" && js.typeOf(g.PIXI.TextMetrics) != "undefined" &&
+      !js.isUndefined(g.PIXI.TextMetrics._context)) {
+      val tuval = g.document.createElement("canvas")
+      tuval.width = 10
+      tuval.height = 10
+      val bağlam = tuval.getContext("2d", js.Dynamic.literal(willReadFrequently = true))
+      if (!js.isUndefined(bağlam) && bağlam != null) {
+        g.PIXI.TextMetrics._canvas = tuval
+        g.PIXI.TextMetrics._context = bağlam
+      }
+    }
+
   /** PIXI 5 (ya da üstü) mü? PIXI.VERSION'ın baş sayısına bakıyoruz. */
   lazy val beşVeÜstü: Boolean = {
     // PIXI hiç yüklenmemiş olabilir (Node altındaki birim testleri böyle koşuyor);
@@ -736,6 +766,17 @@ object PixiUyum {
    * olup olmadığını deponun başka yerlerindeki ölçütle anlıyoruz: finishPoly
    * işlevi var mı.
    *
+   * YAZI (`PIXI.Text`, sorun #169): yazı resmi (`TextPic`) ve kaplumbağanın
+   * yazısı (`Turtle.realWriteText`) kendi tuvalini ve kendi dokusunu taşıyor;
+   * doku başka bir düğümle paylaşılmıyor. Silinince dokusu da `dispose()` ile
+   * bırakılıyor. Ölçüldü (her karede yeni yazı, 120 kare): bırakmadan doku
+   * sayacı 1'den 120'ye doğrusal çıkıyordu (PIXI'nin doku çöp toplayıcısı
+   * ancak 3600 kare boşta kalan dokuyu düşürüyor); kaplumbağa yazısında 117.
+   * `dispose()` tuvali (CanvasResource) bırakmıyor, yazı yeniden çizilince
+   * doku geri yükleniyor. İmge Sprite'larına dokunulmuyor: onların dokusu
+   * yükleyicinin önbelleğinde paylaşılıyor. Yazı, `updateText` işlevinden
+   * tanınıyor.
+   *
    * GEOMETRİ VE GRADYAN DOKUSU: gradyan (`Boya`) dolgunun BaseTexture'ı ayrı
    * bir kaynak; onu da bırakıyoruz (bkz. gradyanDokularınıBırak, sorun #95).
    * Eskiden yalnız geometri bırakılıyordu ve gradyan dolgulu aynı döngüde
@@ -749,6 +790,13 @@ object PixiUyum {
       // kendisi bırakıyor; `finishPoly` kapısından geçmez, o yüzden ayrı dal
       // -- #125'in "sessizce atlar" uyarısı tam bu satır için yazılmıştı.
       if (d.kojoStencilDolgu.asInstanceOf[js.UndefOr[Boolean]].contains(true)) d.bırak()
+      else if (js.typeOf(d.updateText) == "function") {
+        val doku = d.texture
+        if (!js.isUndefined(doku) && doku != null) {
+          val taban = doku.baseTexture
+          if (!js.isUndefined(taban) && taban != null && js.typeOf(taban.dispose) == "function") taban.dispose()
+        }
+      }
       else if (js.typeOf(d.finishPoly) == "function") {
         val geo = d.geometry
         if (!js.isUndefined(geo) && geo != null) {
