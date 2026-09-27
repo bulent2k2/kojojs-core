@@ -435,6 +435,20 @@ object BakePolicy {
 
 object KojoWorld {
 
+  /** Sonuç çerçevesinin editörden odak istediği ileti (#168); editör aynı dizgiyi bekliyor. */
+  val KlavyeOdağıİletisi = "klavyeOdagi"
+
+  /**
+   * Üst pencereye (editöre) bir dizgi iletisi yollar; çerçevede değilsek hiçbir
+   * şey yapmaz. `var`, çünkü sınamalar iletiyi yakalamak için değiştiriyor
+   * (sınama sayfası çerçevede değil). Hedef köken "*": çerçeve opak kökende,
+   * üst pencerenin kökenini adlandıramıyor; ileti de gizli bir şey taşımıyor.
+   */
+  private[kojo] var üstPencereyeYaz: String => Unit = { ileti =>
+    if (!(window.parent.asInstanceOf[js.Any] eq window.asInstanceOf[js.Any]))
+      window.parent.postMessage(ileti, "*")
+  }
+
   /**
    * Eski dolgu yolu elle açıkken panele yazılan satır, seçeneğin geldiği
    * kanala göre (KojoWorldImpl.libtessKanalı). Kaldırma talimatı kanala bağlı:
@@ -1709,7 +1723,32 @@ class KojoWorldImpl extends KojoWorld {
     stage.on("pointerupoutside", panUp(_))
   }
 
-  def isKeyPressed(keyCode: Int) = pressedKeys.contains(keyCode)
+  def isKeyPressed(keyCode: Int) = {
+    klavyeOdağıİste()
+    pressedKeys.contains(keyCode)
+  }
+
+  /**
+   * Klavyeyle ilgilenen program, sonuç çerçevesine odak istiyor (#168).
+   *
+   * Tuş dinleyicileri çerçevenin kendi `window`'unda; "Çalıştır"dan sonra odak
+   * editörün kod düzenleyicisinde kaldığı için tuşlar, tuvale bir kez
+   * tıklanana dek programa ulaşmıyordu. Çerçeve opak kökende
+   * (kojojs-editor#45), yani odağı kendisi alamıyor: üst pencereye
+   * "klavyeOdagi" iletisini yolluyor, editör de çerçeveye odak veriyor. Üst
+   * pencere alt çerçeveye köken fark etmeksizin odak verebiliyor.
+   *
+   * Yalnız tuş kullanan programda ve dünya başına bir kez: tuş kullanmayan bir
+   * program odağı düzenleyiciden çalmamalı. `isKeyPressed` her karede
+   * çağrılabildiği için bayrak şart. Çerçevede değilsek (yalın sayfa) ileti
+   * gitmiyor; orada tuşlar zaten sayfanın `window`'una geliyor.
+   */
+  private var klavyeOdağıİstendi = false
+  private def klavyeOdağıİste(): Unit =
+    if (!klavyeOdağıİstendi) {
+      klavyeOdağıİstendi = true
+      KojoWorld.üstPencereyeYaz(KojoWorld.KlavyeOdağıİletisi)
+    }
   def stagePosition = stage.position
   def positionOnStage(data: InteractionData) = data.getLocalPosition(stage)
   def isAMouseButtonPressed = interaction.mouse.buttons > 0
@@ -1720,6 +1759,7 @@ class KojoWorldImpl extends KojoWorld {
 
   def onKeyPress(fn: Int => Unit): Unit = {
     girdiİşleyicisiKaydedildi() // artık kuyruk boşalsa da betik bitmiş sayılmaz
+    klavyeOdağıİste()
     def keyDown(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }
@@ -1727,6 +1767,7 @@ class KojoWorldImpl extends KojoWorld {
   }
   def onKeyRelease(fn: Int => Unit): Unit = {
     girdiİşleyicisiKaydedildi()
+    klavyeOdağıİste()
     def keyUp(e: KeyboardEvent): Unit = {
       fn(e.keyCode)
     }
