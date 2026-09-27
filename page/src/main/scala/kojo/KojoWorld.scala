@@ -556,10 +556,13 @@ class KojoWorldImpl extends KojoWorld {
    */
   private val pencereDinleyicileri = scala.collection.mutable.ArrayBuffer.empty[(String, js.Function1[Event, _])]
   private def penceredeDinle[E <: Event](tür: String, f: js.Function1[E, Unit]): Unit = {
+    // Kapandıktan sonra takılan dinleyiciyi sökecek kimse yok (#176 incelemesi).
+    if (kapandı) return
     val g = f.asInstanceOf[js.Function1[Event, _]]
     window.addEventListener(tür, g, false)
     pencereDinleyicileri += ((tür, g))
   }
+  // init()'ten ÖNCE kalmalı: initEvents onu atıyor, sonra gelen `= null` ezerdi.
   private var sıfırlaİşlevi: js.Function0[Unit] = null
 
   penceredeDinle("resize", (e: UIEvent) => resize(e))
@@ -1011,8 +1014,11 @@ class KojoWorldImpl extends KojoWorld {
    * sınırlıyor, aşılınca en eskiyi düşürüyor; bırakmadan kurulan her dünya
    * açık kalan bir dünyanın bağlamını tehdit ediyordu. Çiziciye dokunan
    * yollar (`size`, artalan, pişirme) kapanmış dünyada hiçbir şey yapmıyor.
-   * Sökülmeyen: paylaşılan yükleyicinin dokuları (başka dünyalar da
-   * kullanıyor).
+   * Sökülmeyenler: paylaşılan yükleyicinin dokuları (başka dünyalar da
+   * kullanıyor) ve `AssetLoader.loadProgress` (sayfadaki İLK dünyaya bağlı
+   * kuruluyor, hiç sıfırlanmıyor; ilk dünya çöpe gidemiyor). Kapanmış dünyada
+   * `mouseXY` (0, 0), `isAMouseButtonPressed` false dönüyor; yeni pencere
+   * dinleyicisi takılmıyor.
    */
   override private[kojo] def kapat(): Unit = {
     if (kapandı) return
@@ -1804,11 +1810,12 @@ class KojoWorldImpl extends KojoWorld {
     }
   def stagePosition = stage.position
   def positionOnStage(data: InteractionData) = data.getLocalPosition(stage)
-  def isAMouseButtonPressed = interaction.mouse.buttons > 0
+  // Kapanmış dünyada `interaction.mouse` null (#176 incelemesi): patlamasın.
+  def isAMouseButtonPressed = !kapandı && interaction.mouse.buttons > 0
   def mouseMoveOnlyWhenInside(on: Boolean): Unit = {
     interaction.moveWhenInside = on
   }
-  def mouseXY = interaction.mouse.getLocalPosition(stage)
+  def mouseXY = if (kapandı) new Point(0, 0) else interaction.mouse.getLocalPosition(stage)
 
   def onKeyPress(fn: Int => Unit): Unit = {
     girdiİşleyicisiKaydedildi() // artık kuyruk boşalsa da betik bitmiş sayılmaz
