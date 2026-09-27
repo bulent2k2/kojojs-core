@@ -135,7 +135,10 @@ class StencilDolgu extends PIXI.Container {
    * sezgiyle veriliyordu (ilk nokta ve eski son nokta aynı mı); aynı uçlu,
    * aynı köşe sayılı, ortası farklı iki şekli ayırt edemiyordu ve doğruluğu
    * Turtle'daki `temizle` çağrılarına dayanıyordu. `kuşak` verilmezse
-   * (`YeniKuşak`, kalıcı düğüm ve sınamalar) her çağrı baştan kurar.
+   * (`YeniKuşak`, kalıcı düğüm ve sınamalar) her çağrı baştan kurar. Boya
+   * karara girmiyor: `kur` her çağrıda boyayı bütün düğüme uyguluyor, yani
+   * aynı kuşakta boya değişse de şekil ve boya doğru. Kuşak yalnız GEOMETRİ
+   * içindir; çokgeni sıfırlayan her yol onu artırmalı.
    * Uzantıysa yalnız yeni noktalar için üçgen (p0, p_{i}, p_{i+1}) yazılır,
    * sınır kutusu yalnız onlarla genişler; yelpaze kapasiteli ve geometrik
    * büyüyor (yeniden ayırma O(log n), eski önek kopyalanıyor). Çizim `kurulu`

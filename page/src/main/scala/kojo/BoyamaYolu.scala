@@ -85,10 +85,11 @@ class BoyamaYolu {
   /**
    * PIXI'nin `drawPolygon`'ının istediği düz dizi: x0, y0, x1, y1, ... (kopya,
    * tam boy). Kopya artık artımlı kurulumun dayanağı değil (#163: karar
-   * kuşakta), ama SAHİPLİK için duruyor: kalıcı düğüm (`boyamayıİşle`) ve
-   * Graphics yolu diziyi saklıyor, canlı düğümün `içindeMi`'si de onu
-   * okuyor. Canlı dizi verilseydi çokgen sıfırlanınca üstüne yazılan
-   * noktaları okurlardı.
+   * kuşakta), ama SAHİPLİK için duruyor: kalıcı düğüm (`boyamayıİşle`)
+   * diziyi saklıyor ve yaşadıkça `içindeMi`'de okuyor; canlı düğümün
+   * `içindeMi`'si de onu okuyor. Canlı dizi verilseydi çokgen sıfırlanınca
+   * üstüne yazılan noktaları okurlardı. (Graphics yolu diziyi saklamıyor:
+   * `üçgenleriÇiz` kendi dizilerini üretiyor.)
    */
   def düzDizi: Array[Double] = {
     val a = new Array[Double](sayı * 2)
