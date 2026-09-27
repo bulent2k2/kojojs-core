@@ -254,6 +254,9 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     }
   }
   def activateCanvas(): Unit = {
+    // Odağı açıkça isteyen komut; tuş dinleyen program gibi editörden de
+    // odak istiyor (#168). Kendi focus()'u yalnız bazı tarayıcılarda yetiyor.
+    kojoWorld.klavyeOdağıİste()
     kojoWorld.runLater(0) {
       window.focus()
     }

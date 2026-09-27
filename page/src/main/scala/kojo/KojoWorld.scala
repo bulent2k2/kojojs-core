@@ -260,6 +260,9 @@ trait KojoWorld {
    * işleyicilerinin tek boğazı).
    */
   private[kojo] def girdiİşleyicisiKaydedildi(): Unit
+
+  /** Program klavyeyle ilgileniyor; editörden çerçeveye odak iste (#168). Dünya başına bir kez. */
+  private[kojo] def klavyeOdağıİste(): Unit
   def setup(fn: => Unit): Unit
 
   def drawStage(fillc: Color)(implicit kojoWorld: KojoWorld)
@@ -1733,10 +1736,15 @@ class KojoWorldImpl extends KojoWorld {
    *
    * Tuş dinleyicileri çerçevenin kendi `window`'unda; "Çalıştır"dan sonra odak
    * editörün kod düzenleyicisinde kaldığı için tuşlar, tuvale bir kez
-   * tıklanana dek programa ulaşmıyordu. Çerçeve opak kökende
-   * (kojojs-editor#45), yani odağı kendisi alamıyor: üst pencereye
-   * "klavyeOdagi" iletisini yolluyor, editör de çerçeveye odak veriyor. Üst
-   * pencere alt çerçeveye köken fark etmeksizin odak verebiliyor.
+   * tıklanana dek programa ulaşmıyordu. Çerçeve üst pencereye "klavyeOdagi"
+   * iletisini yolluyor, editör de çerçeveye odak veriyor. Üst pencere alt
+   * çerçeveye köken fark etmeksizin odak verebiliyor.
+   *
+   * NEDEN İLETİ, çerçevenin kendi `window.focus()`'u değil: çerçeve opak
+   * kökende (kojojs-editor#45). Chromium'da kendi `focus()`'uyla da odağı
+   * alabiliyor (ölçüldü, #175 incelemesi), ama bu tarayıcıya bağlı: Firefox,
+   * Safari ya da ileride Chromium kullanıcı etkileşimi olmadan alt çerçevenin
+   * odak almasını kısıtlayabilir. Üst pencerenin verdiği odak kısıtlanmıyor.
    *
    * Yalnız tuş kullanan programda ve dünya başına bir kez: tuş kullanmayan bir
    * program odağı düzenleyiciden çalmamalı. `isKeyPressed` her karede
@@ -1744,7 +1752,7 @@ class KojoWorldImpl extends KojoWorld {
    * gitmiyor; orada tuşlar zaten sayfanın `window`'una geliyor.
    */
   private var klavyeOdağıİstendi = false
-  private def klavyeOdağıİste(): Unit =
+  private[kojo] def klavyeOdağıİste(): Unit =
     if (!klavyeOdağıİstendi) {
       klavyeOdağıİstendi = true
       KojoWorld.üstPencereyeYaz(KojoWorld.KlavyeOdağıİletisi)
