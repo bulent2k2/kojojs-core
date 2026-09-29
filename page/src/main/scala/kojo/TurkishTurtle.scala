@@ -52,6 +52,8 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // ResimYöntemleri'nin ihtiyaç duyduğu builtins erişimi
   protected def kb: syntax.Builtins = builtins
   protected implicit def kd: KojoWorld = kojoWorld
+  // notaÇal ile playNote aynı çalıcıyı (aynı zaman imlecini) paylaşır
+  override protected lazy val notaÇalar: NotaÇalar = builtins.notaÇalar
 
   // Tür takma adları kojo.tr trait'lerinde; Renk de RenkYöntemleri'nde.
   type Hız = Speed.Speed

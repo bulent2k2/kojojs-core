@@ -1,7 +1,5 @@
 package kojo.tr
 
-import scala.scalajs.js
-
 /**
  * Masaüstü Koco'nun ses adları (kojo: lite/i18n/tr/ses.scala, tr/muzik.scala,
  * trInit.scala notaÇal). İki bölüm:
@@ -10,9 +8,11 @@ import scala.scalajs.js
  *    kojojs-dev/medya altında, koco-deploy nginx'i `/media/`yi oraya bağlar.
  *    Çalma `sesMp3üÇal` / `müzikMp3üÇalDöngülü` (TurkishTurtle, howler).
  *  - `notaÇal(nota, süreMs, ses)`: masaüstünde MIDI (RealtimeNotePlayer); burada
- *    Web Audio osilatörü. `nota` MIDI perdesi (0-127; 69 = la 440 Hz), `ses` 0-127.
- *    `Çalgı` kodları MIDI program numaraları; burada dalga biçimine kabaca eşlenir
- *    (piyano ailesi üçgen, bas sinüs, gürültülü çalgılar kare/testere).
+ *    Web Audio osilatörü (kojo.NotaÇalar; İngilizcesi playNote). `nota` MIDI
+ *    perdesi (0-127; 69 = la 440 Hz), `ses` 0-127. Beklemez; arka arkaya
+ *    çağrılar masaüstündeki gibi sıraya girip ezgi olur. `Çalgı` kodları MIDI
+ *    program numaraları (İngilizcesi Instrument); burada dalga biçimine kabaca
+ *    eşlenir (piyano ailesi üçgen, bas sinüs, gürültülü çalgılar kare/testere).
  */
 trait SesYöntemleri extends TemelTürler {
   object Ses {
@@ -50,52 +50,27 @@ trait SesYöntemleri extends TemelTürler {
     val Tabanca = 127
   }
 
-  private var çalgıKodu: Sayı = 0
-  private var sesBağlamı: js.Dynamic = null
+  // Çalıcı (zaman imleci, AudioContext) Builtins'te: notaÇal ile playNote aynı
+  // imleci paylaşsın, karışık betikte de notalar sıraya girsin. TurkishTurtle
+  // bunu builtins.notaÇalar ile ezer; tek başına karıştıranlar (testler) kendi
+  // çalıcısını alır.
+  protected lazy val notaÇalar: kojo.NotaÇalar = new kojo.NotaÇalar
 
   /** MIDI perdesini frekansa çevirir (69 → 440 Hz). */
-  def notaFrekansı(nota: Sayı): Kesir = 440.0 * math.pow(2.0, (nota - 69) / 12.0)
+  def notaFrekansı(nota: Sayı): Kesir = kojo.NotaÇalar.frekans(nota)
 
   /** MIDI çalgı kodunu Web Audio dalga biçimine eşler (kaba yaklaşım). */
-  def çalgıDalgası(kod: Sayı): Yazı =
-    if (kod < 8) "triangle"            // piyanolar
-    else if (kod < 16) "sine"          // renkli vurmalılar (çelesta, ksilofon...)
-    else if (kod < 24) "square"        // orglar
-    else if (kod < 32) "sawtooth"      // gitarlar
-    else if (kod < 40) "sine"          // baslar
-    else if (kod < 56) "sawtooth"      // yaylılar, koro
-    else if (kod < 72) "square"        // nefesliler
-    else if (kod < 120) "triangle"     // sentez, etnik
-    else "sawtooth"                    // ses efektleri
+  def çalgıDalgası(kod: Sayı): Yazı = kojo.NotaÇalar.dalga(kod)
 
-  def notaÇalgısınıKur(çalgı: Sayı): Birim = { çalgıKodu = çalgı }
+  def notaÇalgısınıKur(çalgı: Sayı): Birim = {
+    require(çalgı >= 0 && çalgı <= 127, "çalgı 0 ile 127 arasında olmalı")
+    notaÇalar.çalgıyıKur(çalgı)
+  }
 
+  /** Beklemez: nota bir önceki notanın bittiği anda (ya da hemen) çalar. */
   def notaÇal(nota: Sayı, süreMiliSaniye: Sayı, ses: Sayı = 80): Birim = {
     require(nota >= 0 && nota <= 127, "nota 0 ile 127 arasında olmalı")
     require(ses >= 0 && ses <= 127, "ses 0 ile 127 arasında olmalı")
-    import js.Dynamic.{global => g}
-    val varMı = js.typeOf(g.AudioContext) != "undefined" || js.typeOf(g.webkitAudioContext) != "undefined"
-    if (varMı) {
-      if (sesBağlamı == null) {
-        val Ctx = if (js.typeOf(g.AudioContext) != "undefined") g.AudioContext else g.webkitAudioContext
-        sesBağlamı = js.Dynamic.newInstance(Ctx)()
-      }
-      val ctx = sesBağlamı
-      val osilatör = ctx.createOscillator()
-      val kazanç = ctx.createGain()
-      osilatör.`type` = çalgıDalgası(çalgıKodu)
-      osilatör.frequency.value = notaFrekansı(nota)
-      val şimdi = ctx.currentTime.asInstanceOf[Double]
-      val süre = süreMiliSaniye / 1000.0
-      // exponentialRamp sıfırdan başlayamaz (tanımsız); ses = 0 için ufak taban
-      val düzey = math.max(ses / 127.0 * 0.3, 1e-4) // hoparlörü patlatmadan
-      kazanç.gain.setValueAtTime(düzey, şimdi)
-      kazanç.gain.exponentialRampToValueAtTime(0.001, şimdi + süre)
-      osilatör.connect(kazanç)
-      kazanç.connect(ctx.destination)
-      osilatör.start(şimdi)
-      osilatör.stop(şimdi + süre)
-    }
-    // Web Audio yoksa (ör. Node testleri) sessizce geç
+    notaÇalar.çal(nota, süreMiliSaniye, ses)
   }
 }
