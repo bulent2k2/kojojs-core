@@ -504,14 +504,23 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtleImage.rotation = Utils.deg2radians(90)
   }
 
-  // private[kojo]: TurkishTurtle bunları `sync` ile kuyruğun doğru noktasında
-  // okuyor (konumuOku / yönüOku). Dışarıya AÇILMIYOR -- anlık bir okuma
-  // kuyruktaki komutlardan önceki değeri verirdi.
+  // private[kojo]: bunlar yalnız `sync` ile kuyruğun doğru noktasında okunuyor
+  // (readPosition / readHeading, Türkçesi konumuOku / yönüOku). Dışarıya
+  // AÇILMIYOR -- anlık bir okuma kuyruktaki komutlardan önceki değeri verirdi.
   private[kojo] def position = turtleImage.position
 
   private def headingRadians = turtleImage.rotation
 
   private[kojo] def heading = Utils.rad2degrees(headingRadians)
+
+  // Kopya veriliyor: turtleImage.position canlı nesne, kaplumbağa yürüdükçe değişir
+  def readPosition(fn: Point => Unit): Unit = sync(() => fn(new Point(position.x, position.y)))
+
+  // Ham `heading` dönüşleri biriktiriyor (dört kez sağa dönünce -270); 0-360'a indirgeniyor
+  def readHeading(fn: Double => Unit): Unit = sync { () =>
+    val ham = heading % 360
+    fn(if (ham < 0) ham + 360 else ham)
+  }
 
   private def loadTurtle(x: Double, y: Double, loader: PIXI.loaders.Loader): PIXI.Container = {
     val turtle = {

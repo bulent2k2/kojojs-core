@@ -2,7 +2,7 @@ package kojo
 
 import kojo.Speed.Speed
 import kojo.doodle.Color
-import pixiscalajs.PIXI.{Graphics, Polygon}
+import pixiscalajs.PIXI.{Graphics, Point, Polygon}
 
 trait TurtleAPI extends VertexShapeSupport {
   def forward(n: Double): Unit
@@ -47,6 +47,15 @@ trait TurtleAPI extends VertexShapeSupport {
   def hop(): Unit
   def back(): Unit
   def setSpeed(speed: Speed): Unit
+  /**
+   * Konumu ve yönü GERİ ÇAĞIRMAYLA okur (TR: konumuOku / yönüOku). iKojo'da
+   * kaplumbağa komutları kuyruğa girer; anlık bir okuma kuyruktaki komutlardan
+   * önceki değeri verirdi. İşlev, kendisinden önce verilen bütün komutlar
+   * bitince çalışır. Masaüstünde karşılıkları `position` ve `heading`.
+   */
+  def readPosition(fn: Point => Unit): Unit
+  /** Yön derece cinsinden, 0 ile 360 arasında. */
+  def readHeading(fn: Double => Unit): Unit
   def left(angle: Double, radius: Double): Unit
   def right(angle: Double, radius: Double): Unit
   def turn(angle: Double, radius: Double): Unit

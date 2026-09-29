@@ -10,6 +10,9 @@ class GlobalTurtleForPicture extends TurtleAPI {
   def turn(angle: Double): Unit = globalTurtle.turn(angle)
   def setAnimationDelay(delay: Long): Unit = globalTurtle.setAnimationDelay(delay)
   def setPenThickness(t: Double): Unit = globalTurtle.setPenThickness(t)
+  // globalTurtle çağrı anında soruluyor: Resim { ... } içinde resmin kaplumbağası
+  def readPosition(fn: pixiscalajs.PIXI.Point => Unit): Unit = globalTurtle.readPosition(fn)
+  def readHeading(fn: Double => Unit): Unit = globalTurtle.readHeading(fn)
   def setPenColor(color: Color): Unit = globalTurtle.setPenColor(color)
   def setPenFontSize(n: Int): Unit = globalTurtle.setPenFontSize(n)
   override def setPenFontFamily(name: String): Unit = globalTurtle.setPenFontFamily(name)
