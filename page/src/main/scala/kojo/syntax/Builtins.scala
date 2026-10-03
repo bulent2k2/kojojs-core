@@ -174,6 +174,8 @@ class Builtins(implicit kojoWorld: KojoWorld) {
 
   def mouseX = kojoWorld.mouseXY.x
   def mouseY = kojoWorld.mouseXY.y
+  // Masaüstü adı (staging.Inputs.mousePos); Türkçesi fareKonumu
+  def mousePosition: Point = kojoWorld.mouseXY
 
   def originTopLeft(): Unit = {
     zoomXY(1, -1, cwidth / 2, cheight / 2)
@@ -269,6 +271,12 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def hideAxes(): Unit = kojoWorld.hideAxes()
   def showGrid(): Unit = kojoWorld.showGrid()
   def hideGrid(): Unit = kojoWorld.hideGrid()
+  // Masaüstü Kojo'nun adları (tCanvas.gridOn/gridOff/axesOn/axesOff). Koco -> Kojo çevirmeni
+  // gridiGöster'i gridOn'a çeviriyor (kojojs-dev#183 Aşama 3); karşılıkları yukarıdakiler.
+  def gridOn(): Unit = showGrid()
+  def gridOff(): Unit = hideGrid()
+  def axesOn(): Unit = showAxes()
+  def axesOff(): Unit = hideAxes()
 
   def toggleFullScreenCanvas(): Unit = {
     kojoWorld.toggleFullScreenCanvas()
@@ -489,6 +497,27 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     notaÇalar.çal(pitch, durationMillis, volume)
   def setNoteInstrument(instrumentCode: Int): Unit = notaÇalar.çalgıyıKur(instrumentCode)
   def stopNotePlayer(): Unit = notaÇalar.durdur()
+
+  // Masaüstündeki newTurtle(x, y, costume) (TSCanvas.newTurtle); Türkçesi yeniKaplumbağa.
+  // İki kurucu ayrı yük: varsayılan argümanlar iki aşırı yükte birden olamaz.
+  def newTurtle(): Turtle = new Turtle(0, 0)
+  def newTurtle(x: Double, y: Double): Turtle = new Turtle(x, y)
+  def newTurtle(x: Double, y: Double, costume: String): Turtle = new Turtle(x, y, false, costume)
+
+  // Masaüstündeki Tw.Costume / Tw.Background (turtle/TurtleWorldAPI.scala), aynı değerlerle.
+  // Türkçeleri Görünüş / Artalan (tr/cizim.scala) bunların bir üst kümesi.
+  class CostumeSet {
+    val car = "/media/costumes/car.png"
+    val pencil = "/media/costumes/pencil.png"
+    val bat1 = "/media/costumes/bat1-a.png"
+    val bat2 = "/media/costumes/bat1-b.png"
+    val womanWaving = "/media/costumes/womanwaving.png"
+  }
+  class BackgroundSet {
+    val trainTrack = "/media/backgrounds/train-tracks3.gif"
+  }
+  val Costume = new CostumeSet
+  val Background = new BackgroundSet
 
   def epochTimeMillis = System.currentTimeMillis
   def epochTime = epochTimeMillis / 1000.0

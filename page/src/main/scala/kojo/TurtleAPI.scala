@@ -19,6 +19,8 @@ trait TurtleAPI extends VertexShapeSupport {
   /** Gradyan ya da dokuma boyasıyla doldurur (Boya.DüzBoya de geçerli). */
   def setFillPaint(boya: Boya): Unit
   def setPosition(x: Double, y: Double): Unit
+  /** Masaüstü adı (Turtle.jumpTo): çizmeden konuma git. iKojo'da setPosition ile aynı iş (Türkçesi atla). */
+  def jumpTo(x: Double, y: Double): Unit = setPosition(x, y)
   def setHeading(theta: Double): Unit
   def moveTo(x: Double, y: Double): Unit
   def lineTo(x: Double, y: Double) = moveTo(x, y)
