@@ -229,6 +229,34 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
             }
           }
         }
+      } ~ path("cevir") {
+        // Koco <-> Kojo betik çevirisi (kojojs-dev#183, Aşama 2). Derleyiciye
+        // dokunmuyor: sözcük düzeyinde, istek başına milisaniyeler; bu yüzden
+        // derleyici kuyruğunu/önbelleğini kullanmıyor ve ÖNBELLEKLENMİYOR
+        // (girdi serbest metin, aynı betiği iki kez çevirmek ucuz).
+        // Gövde sınırı /compile ile aynı: aynı editörden aynı betik geliyor.
+        handleRejections(CorsDirectives.corsRejectionHandler) {
+          CorsDirectives.cors(corsSettings) {
+            parameter("yon".?) { yon =>
+              withSizeLimit(64 * 1024) {
+                extractRequest { request =>
+                  complete {
+                    request.entity.toStrict(5.seconds).map { entity =>
+                      val kod = entity.data.decodeString(StandardCharsets.UTF_8)
+                      Cevir.cevir(kod, yon) match {
+                        case Right(sonuc) =>
+                          HttpResponse(entity = HttpEntity(`application/json`, write(sonuc).getBytes("UTF-8")))
+                            .withHeaders(`Cache-Control`(`no-cache`))
+                        case Left(ileti) =>
+                          HttpResponse(StatusCodes.BadRequest, entity = HttpEntity(`text/plain` withCharset `UTF-8`, ileti))
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       } ~ path("complete") {
         handleRejections(CorsDirectives.corsRejectionHandler) {
           CorsDirectives.cors(corsSettings) {

@@ -63,3 +63,55 @@ jobs:
 
       - name: page/compile
         run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 page/compile
+
+  # kojojs-dev#183 Aşama 2: Koco <-> Kojo çevirmeni (POST /cevir). router/ içindeki
+  # çevirmen kopyası bulent2k2/kojo'nun SABİT bir commit'inden (router/CEVIRMEN_SURUMU);
+  # bu iş kopyanın hâlâ bayt bayt o commit olduğunu ve router'ın derlenip sınandığını
+  # denetler. page-derleme'den ayrı iş: router ağır (akka) ve page senkronuyla değişmiyor.
+  router:
+    name: router derleniyor ve çevirmen kopyası aynı mı
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: çevirmen sürümü
+        id: surum
+        run: |
+          sha="$(grep -v '^#' router/CEVIRMEN_SURUMU | grep -m1 -E '^[0-9a-f]{40}$' || true)"
+          [ -n "$sha" ] || { echo "::error::router/CEVIRMEN_SURUMU'nda 40 haneli bir SHA yok."; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: bulent2k2/kojo
+          ref: ${{ steps.surum.outputs.sha }}
+          path: kojo-kaynak
+
+      - name: çevirmen kopyası sabit commit'le aynı mı
+        run: router/cevirmen-esitle.sh --kojo kojo-kaynak --denetle
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+
+      - uses: sbt/setup-sbt@v1
+
+      - name: router/test
+        run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 router/test
+
+      # Birim sınaması bunu YAKALAMAZ: scalatest scala-xml'i Test sınıf yoluna getiriyor,
+      # üretim yolunda eksik olsa da sınama geçiyor (canlı sunucuda NoClassDefFoundError
+      # olarak ölçüldü; router/CEVIRMEN.md). Bu yüzden üretim sınıf yoluna ayrıca bakılıyor.
+      - name: üretim sınıf yolunda scala-xml var mı
+        run: |
+          sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 --error "export router/Runtime/fullClasspath" \
+            | tail -1 | tr ':' '\n' > /tmp/router-cp.txt
+          grep -q 'scala-xml_2.13' /tmp/router-cp.txt || { echo "::error::router üretim sınıf yolunda scala-xml yok; /cevir ilk istekte NoClassDefFoundError verir."; exit 1; }
+          grep -q 'router/lib/scalariform.jar' /tmp/router-cp.txt || { echo "::error::router/lib/scalariform.jar sınıf yolunda değil."; exit 1; }
+          ! grep -q 'scalatest' /tmp/router-cp.txt || { echo "::error::scalatest üretim sınıf yoluna sızmış."; exit 1; }
