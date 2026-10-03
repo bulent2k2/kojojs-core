@@ -1,0 +1,84 @@
+package scalafiddle.router
+
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
+import upickle.default._
+
+/** `/cevir`'in çekirdeği (kojojs-dev#183 Aşama 2). Çevirmenin kendi davranışları
+  * masaüstü deposunda sınanıyor (CevirmenTest, CevirmenDerlemeTest); burada yalnız
+  * "bu sunucuda, bu sınıf yolunda, bu kaynaklarla çalışıyor mu" ve ince katmanın
+  * kuralları: yön bulma, geçersiz yön, JSON şekli.
+  */
+class CevirTest extends AnyFunSuite with Matchers {
+  val halka =
+    """tanım kenar(x0: Kesir, y0: Kesir): Birim =
+      |  için (i <- 1 to 10) noktayaGit(x0 * i / 10, y0 * i / 10)
+      |dez halka = Resim { kalemKalınlığınıKur(0); kenar(10, 20) }
+      |çiz(halka)
+      |halka.fareyeTıklayınca { (x, y) => satıryaz(f"$x%.2f") }
+      |yinele(3) { ileri() }
+      |""".stripMargin
+
+  test("Türkçe betik İngilizceye çevriliyor; yön betikten bulunuyor") {
+    val s = Cevir.cevir(halka, None).right.get
+    s.yon shouldBe Cevir.tr2en
+    s.kod should include("def kenar(x0: Double, y0: Double): Unit =")
+    s.kod should include("val halka = Picture {")
+    s.kod should include("setPenThickness(0)")
+    s.kod should include("repeat(3) { forward() }")
+    s.kod should include("halka.onMouseClick")
+    s.kalanAnahtarSozcukler shouldBe empty
+    s.rapor.cevrilen should be > 10
+  }
+
+  test("İngilizce betik Türkçeye çevriliyor; Türkçe anahtar sözcük yoksa İngilizce sayılır") {
+    val s = Cevir.cevir("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).right.get
+    s.yon shouldBe Cevir.en2tr
+    s.kod should include("dez r = Resim.daire(50)")
+    s.kod should include("çiz(r)")
+    s.kod should include("yinele(3) { ileri(10) }")
+    Cevir.yonBul("ileri(10)") shouldBe Cevir.en2tr
+    Cevir.yonBul("dez a = 1") shouldBe Cevir.tr2en
+  }
+
+  test("açık yön otomatiği ezer; 'oto' ve boş yön betikten bulur") {
+    Cevir.cevir("dez a = 1", Some("en2tr")).right.get.yon shouldBe Cevir.en2tr
+    Cevir.cevir("dez a = 1", Some("oto")).right.get.yon shouldBe Cevir.tr2en
+    Cevir.cevir("dez a = 1", Some("")).right.get.yon shouldBe Cevir.tr2en
+  }
+
+  test("geçersiz yön Left; ileti değeri söylüyor") {
+    Cevir.cevir("dez a = 1", Some("xx")).left.get should include("'xx'")
+  }
+
+  test("kullanıcının kendi adları çevrilmiyor; Türkçe harfli olanlar raporda 'kalanlar'da, sayısıyla") {
+    // Rapor yalnız ÇEVİRMENİN "Türkçe kaldı" dediklerini listeler: Türkçe harf (ı ş ğ ö ü ç) taşıyan ya da
+    // sözlükte bilinen adlar. `halka` gibi ASCII bir kullanıcı adı çevrilmeden kalır ama listelenmez
+    // (İngilizce bir ad da olabilir; ölçüldü).
+    val s = Cevir.cevir("dez başlık = \"a\"\nsatıryaz(başlık)\nsatıryaz(başlık + başlık)\n", None).right.get
+    s.kod should include("val başlık")
+    s.rapor.kalanlar should contain(Cevir.AdSayisi("başlık", 4))
+    val h = Cevir.cevir(halka, None).right.get
+    h.kod should include("val halka")
+    h.rapor.kalanlar.map(_.ad) should not contain "halka"
+  }
+
+  test("iKojo'ya özgü konumuOku / yönüOku -> readPosition / readHeading (kojo#79)") {
+    val s = Cevir.cevir("dez a = 1\nkonumuOku { n => satıryaz(n.x) }\nyönüOku { y => satıryaz(y) }\n", None).right.get
+    s.kod should include("readPosition {")
+    s.kod should include("readHeading {")
+  }
+
+  test("sonuç JSON'a yazılıp geri okunuyor (istemcinin göreceği şekil)") {
+    val s = Cevir.cevir(halka, None).right.get
+    val json = write(s)
+    ujson.read(json).obj.keySet should contain allOf ("yon", "kod", "rapor", "kalanAnahtarSozcukler")
+    read[Cevir.Sonuc](json) shouldBe s
+  }
+
+  test("Türkçe karakterler (ı ş ğ ö ü ç İ) bozulmadan geçiyor") {
+    val s = Cevir.cevir("dez çiçekAdı = \"İstanbul\"\nsatıryaz(çiçekAdı)\n", None).right.get
+    s.kod should include("\"İstanbul\"")
+    s.kod should include("çiçekAdı")
+  }
+}

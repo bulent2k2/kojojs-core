@@ -63,3 +63,59 @@ jobs:
 
       - name: page/compile
         run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 page/compile
+
+  # kojojs-dev#183 Aşama 2: Koco <-> Kojo çevirmeni (POST /cevir). router/ içindeki
+  # çevirmen kopyası bulent2k2/kojo'nun SABİT bir commit'inden (router/CEVIRMEN_SURUMU);
+  # bu iş kopyanın hâlâ bayt bayt o commit olduğunu ve router'ın derlenip sınandığını
+  # denetler. page-derleme'den ayrı iş: router ağır (akka) ve page senkronuyla değişmiyor.
+  router:
+    name: router derleniyor ve çevirmen kopyası aynı mı
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: çevirmen sürümü
+        id: surum
+        run: |
+          sha="$(grep -v '^#' router/CEVIRMEN_SURUMU | grep -m1 -E '^[0-9a-f]{40}$' || true)"
+          [ -n "$sha" ] || { echo "::error::router/CEVIRMEN_SURUMU'nda 40 haneli bir SHA yok."; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: bulent2k2/kojo
+          ref: ${{ steps.surum.outputs.sha }}
+          path: kojo-kaynak
+
+      - name: çevirmen kopyası sabit commit'le aynı mı
+        run: router/cevirmen-esitle.sh --kojo kojo-kaynak --denetle
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+
+      - uses: sbt/setup-sbt@v1
+
+      - name: router/test
+        run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 router/test
+
+      # Birim sınaması bunu YAKALAMAZ: scalatest scala-xml'i Test sınıf yoluna getiriyor,
+      # üretim yolunda eksik olsa da sınama geçiyor (canlı sunucuda NoClassDefFoundError
+      # olarak ölçüldü; router/CEVIRMEN.md). Bu yüzden üretim sınıf yoluna ayrıca bakılıyor.
+      - name: üretim sınıf yolunda scala-xml var mı
+        run: |
+          # sbt'nin ÇIKTISININ SON SATIRI sınıf yolu diye varsayılmıyor: koşucuda ilk deneme "scala-xml
+          # yok" dedi, oysa yerelde var -- sbt betiği sonuna başka bir şey yazıyor olabilir. Sınıf yolu,
+          # router/lib/scalariform.jar'ı içeren satır; o satır bulunamazsa da hata, günlükte çıktı duruyor.
+          sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 --error "export router/Runtime/fullClasspath" > /tmp/sbt-cikti.txt 2>&1 || true
+          echo "--- sbt çıktısı (satır sayısı: $(wc -l < /tmp/sbt-cikti.txt))"; cut -c1-200 /tmp/sbt-cikti.txt | tail -20
+          grep -F 'router/lib/scalariform.jar' /tmp/sbt-cikti.txt | tail -1 | tr ':' '\n' > /tmp/router-cp.txt
+          [ -s /tmp/router-cp.txt ] || { echo "::error::sınıf yolu satırı bulunamadı (router/lib/scalariform.jar içeren satır yok)."; exit 1; }
+          grep -q 'scala-xml_2.13' /tmp/router-cp.txt || { echo "::error::router üretim sınıf yolunda scala-xml yok; /cevir ilk istekte NoClassDefFoundError verir."; exit 1; }
+          ! grep -q 'scalatest' /tmp/router-cp.txt || { echo "::error::scalatest üretim sınıf yoluna sızmış."; exit 1; }
