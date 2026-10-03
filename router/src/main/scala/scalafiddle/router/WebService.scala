@@ -241,15 +241,18 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
               withSizeLimit(64 * 1024) {
                 extractRequest { request =>
                   complete {
-                    request.entity.toStrict(5.seconds).map { entity =>
+                    request.entity.toStrict(5.seconds).flatMap { entity =>
                       val kod = entity.data.decodeString(StandardCharsets.UTF_8)
-                      Cevir.cevir(kod, yon) match {
-                        case Right(sonuc) =>
-                          HttpResponse(entity = HttpEntity(`application/json`, write(sonuc).getBytes("UTF-8")))
-                            .withHeaders(`Cache-Control`(`no-cache`))
-                        case Left(ileti) =>
-                          HttpResponse(StatusCodes.BadRequest, entity = HttpEntity(`text/plain` withCharset `UTF-8`, ileti))
-                      }
+                      // Çeviri kendi havuzunda (Cevir.ec), derleyici dağıtıcısında değil
+                      Future {
+                        Cevir.cevir(kod, yon) match {
+                          case Right(sonuc) =>
+                            HttpResponse(entity = HttpEntity(`application/json`, write(sonuc).getBytes("UTF-8")))
+                              .withHeaders(`Cache-Control`(`no-cache`))
+                          case Left(ileti) =>
+                            HttpResponse(StatusCodes.BadRequest, entity = HttpEntity(`text/plain` withCharset `UTF-8`, ileti))
+                        }
+                      }(Cevir.ec)
                     }
                   }
                 }
@@ -510,6 +513,11 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
     }
   }
   val route = extRoute ~ compilerRoute
+
+  // Sözlük tembel yükleniyor (ilk istek ~280 ms, ölçüldü); açılışta bir kez ısıt ki ilk kullanıcı hissetmesin.
+  Future(Cevir.cevir("", None))(Cevir.ec).failed.foreach { ex =>
+    log.warn(s"/cevir ısıtılamadı: ${ex.getMessage}")
+  }
 
   val bindingFuture = Http().bindAndHandle(route, Config.interface, Config.port)
 
