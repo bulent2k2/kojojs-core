@@ -481,6 +481,15 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def stopMp3() = mp3player.stopMp3()
   def stopMp3Loop() = mp3player.stopMp3Loop()
 
+  // Masaüstündeki gibi: playNote beklemez, notalar bir zaman imleciyle sıraya
+  // girer (kojo.NotaÇalar). notaÇal (TurkishTurtle) aynı çalıcıyı kullanır.
+  val Instrument = kojo.Instrument
+  private[kojo] lazy val notaÇalar = new NotaÇalar
+  def playNote(pitch: Int, durationMillis: Int, volume: Int = 80): Unit =
+    notaÇalar.çal(pitch, durationMillis, volume)
+  def setNoteInstrument(instrumentCode: Int): Unit = notaÇalar.çalgıyıKur(instrumentCode)
+  def stopNotePlayer(): Unit = notaÇalar.durdur()
+
   def epochTimeMillis = System.currentTimeMillis
   def epochTime = epochTimeMillis / 1000.0
 

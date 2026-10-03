@@ -52,6 +52,8 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // ResimYöntemleri'nin ihtiyaç duyduğu builtins erişimi
   protected def kb: syntax.Builtins = builtins
   protected implicit def kd: KojoWorld = kojoWorld
+  // notaÇal ile playNote aynı çalıcıyı (aynı zaman imlecini) paylaşır
+  override protected lazy val notaÇalar: NotaÇalar = builtins.notaÇalar
 
   // Tür takma adları kojo.tr trait'lerinde; Renk de RenkYöntemleri'nde.
   type Hız = Speed.Speed
@@ -133,8 +135,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
    * eklenir, okumanın yapıldığı yere değil. Yani `konumuOku`dan sonra
    * yazdığın komutlar, işlevin içindekilerden önce çalışır.
    */
-  def konumuOku(işlev: Nokta => Birim): Birim =
-    kuyruktanOku(t => işlev(Nokta(t.position.x, t.position.y)))
+  def konumuOku(işlev: Nokta => Birim): Birim = etkinKaplumbağa.readPosition(işlev) // İngilizcesi readPosition
 
   /**
    * Kaplumbağa bu resme değiyor mu? -- `konumuOku` gibi geri çağrımalı.
@@ -201,11 +202,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
    * iKojo'nun ham `heading`'i dönüşleri biriktiriyor: dört kez sağa dönen bir
    * kaplumbağa için -270 diyor. Aynı yön, ama çocuğa 90 demek gerekiyor.
    */
-  def yönüOku(işlev: Kesir => Birim): Birim =
-    kuyruktanOku { t =>
-      val ham = t.heading % 360
-      işlev(if (ham < 0) ham + 360 else ham)
-    }
+  def yönüOku(işlev: Kesir => Birim): Birim = etkinKaplumbağa.readHeading(işlev) // İngilizcesi readHeading
 
   /**
    * Etkin kaplumbağa. `englishTurtle` bir GlobalTurtleForPicture; hangi
