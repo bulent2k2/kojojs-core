@@ -1,6 +1,6 @@
 package scalafiddle.compiler
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable, PoisonPill, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable, PoisonPill, Props, Status}
 import akka.http.scaladsl.model.ws.TextMessage
 import akka.stream.ActorMaterializer
 import org.scalajs.linker.interface.IRFile
@@ -178,6 +178,13 @@ class CompileActor(out: ActorRef, manager: ActorRef) extends Actor with ActorLog
   }
 
   override def postStop(): Unit = {
+    // Giden yarıyı (Source.actorRef) tamamla ki ws KAPANSIN (kojojs-core#54).
+    // Eskiden kapanmıyordu: Manager 5 sn sonra YENİ bir bağlantı açıyor, eskisi
+    // yarı açık kalıyordu. Router'ın gözünde eski kayıt ping zaman aşımına kadar
+    // yaşıyor ve /saglik onu kapasite sayıyordu -- kütüphane yükleyemeyip
+    // döngüye giren tek bir derleyici 65 sn'de 13 açık ws ve 12 kayıt biriktirdi
+    // (ölçüldü). Router tarafındaki eşi: CompilerService.postStop (#42).
+    out ! Status.Success(())
     manager ! CompilerTerminated
     timer.cancel()
     pongTimer.cancel()

@@ -50,7 +50,11 @@ object ActorFlow {
           def receive = {
             case Status.Success(_) | Status.Failure(_) =>
               flowActor ! PoisonPill
-            case Terminated =>
+            // `Terminated(_)`, `Terminated` DEĞİL: çıplak ad eşlik nesnesiyle
+            // eşitlik sınar ve gerçek Terminated(ref) mesajını hiç yakalamaz;
+            // sarmalayıcı çocuğu ölünce durmuyordu (kojojs-core#54). Router'ın
+            // kopyasında doğrusu vardı.
+            case Terminated(_) =>
               context.stop(self)
             case other => flowActor ! other
           }
