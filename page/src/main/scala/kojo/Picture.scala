@@ -202,6 +202,9 @@ trait Picture {
   }
 
   def setFillColor(c: Color): Unit
+  // Masaüstünde setFillColor Paint de alıyor (gradyan dahil); burada Boya ayrı
+  // adla vardı (setFillPaint). İngilizce ad aynı işi yapsın.
+  def setFillColor(b: Boya): Unit = setFillPaint(b)
   def setPenColor(c: Color): Unit
 
   /**
@@ -317,6 +320,13 @@ trait Picture {
 
   def showNext(): Unit = showNext(100)
   def showNext(gap: Long): Unit = Utils.notSupported("showNext", "for non-batch picture")
+
+  /**
+   * Masaüstü `Picture.update`: resmin verisini değiştirir. Yalnız yazı resminde
+   * anlamlı (TextPic); ötekilerde masaüstündeki gibi "desteklenmiyor" hatası.
+   * Dönüştürücüler (götür * ... -> resim) içerideki resme iletiyor.
+   */
+  def update(newData: Any): Unit = Utils.notSupported("update", "for immutable picture")
 
   /**
    * Fare olayına bağlanan her yol buradan geçiyor: etkileşimi aç ve isabet
