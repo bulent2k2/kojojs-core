@@ -660,6 +660,19 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     sıraya(SetFillPaint(boya))
   }
 
+  def setFillColor(boya: Boya): Unit = setFillPaint(boya)
+
+  /**
+   * Masaüstü `Turtle.act`: gövde BİR KEZ çalışır (Türkçe `davran`). Masaüstünde
+   * ayrı iş parçacığında; burada kaplumbağa komutları zaten kuyruğa girip
+   * eşzamansız işlendiğinden doğrudan çağırmak aynı sonucu veriyor. Bekleyen
+   * döngü yazmayın, sekmeyi dondurur; her karede iş için `react`.
+   */
+  def act(fn: Turtle => Unit): Unit = fn(this)
+
+  /** Masaüstü `Turtle.react`: gövde HER KAREDE çalışır (Türkçe `tepkiVer`). */
+  def react(fn: Turtle => Unit): Unit = kojoWorld.animate(fn(this))
+
   def setFillColor(color: Color): Unit = {
     sıraya(SetFillColor(color))
   }
