@@ -67,7 +67,7 @@ class NotaÇalar {
     beraberÇal(Seq((nota, süreMiliSaniye)), ses)
 
   /** Hepsi aynı anda başlar, aynı süre sürer; sonraki nota `süre` sonra. */
-  def akorÇal(notalar: Seq[Int], süreMiliSaniye: Int, ses: Int): Unit =
+  def akorÇal(notalar: collection.Seq[Int], süreMiliSaniye: Int, ses: Int): Unit =
     beraberÇal(notalar.map(n => (n, süreMiliSaniye)), ses)
 
   /**
@@ -75,7 +75,7 @@ class NotaÇalar {
    * uzununun bitişinde başlar. Önce HEPSİ doğrulanıyor: biri sınır dışıysa
    * hiçbir nota sıraya girmiyor (yarım akor çalmıyor). Boş dizi bir şey yapmaz.
    */
-  def beraberÇal(süreliNotalar: Seq[(Int, Int)], ses: Int): Unit = {
+  def beraberÇal(süreliNotalar: collection.Seq[(Int, Int)], ses: Int): Unit = {
     süreliNotalar.foreach { case (nota, _) =>
       require(nota >= 0 && nota <= 127, "Note pitch should be between 0 and 127")
     }
