@@ -17,6 +17,8 @@ trait PicTransformer extends Picture {
 
   def erase() = tpic.erase()
 
+  override def update(newData: Any): Unit = tpic.update(newData)
+
   def kojoWorld = tpic.kojoWorld
 
   def setFillColor(c: Color) = tpic.setFillColor(c)

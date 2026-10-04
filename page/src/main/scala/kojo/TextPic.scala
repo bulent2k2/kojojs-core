@@ -51,7 +51,7 @@ class TextPic(text: Any, fontSize: Int, color: Color, fontFamily: String = null)
     null
   }
 
-  def update(text: Any): Unit = {
+  override def update(text: Any): Unit = {
     textNode.text = text.toString
     kojoWorld.noteMutation(tnode) // skor/sayaç yazısı her kare güncellenir; pişmesin
     kojoWorld.render()

@@ -259,6 +259,21 @@ final case class RGBA(r: UnsignedByte, g: UnsignedByte, b: UnsignedByte, a: Norm
 final case class HSLA(h: Angle, s: Normalized, l: Normalized, a: Normalized) extends Color
 
 object Color extends CommonColors {
+  // Masaüstü Color.*Gradient adları ve imzaları (doodle/Color.scala). Masaüstünde
+  // java.awt.Paint döndürüyor; burada Boya (boyaRengi/fillColor/setFillColor alır).
+  // Türkçe Renk.doğrusalDeğişim vb. aynı kojo.Boya çağrılarını yapıyor.
+  def linearGradient(x1: Double, y1: Double, c1: Color, x2: Double, y2: Double, c2: Color, cyclic: Boolean = false): Boya =
+    Boya.doğrusal(x1, y1, c1, x2, y2, c2, cyclic)
+
+  def linearMultipleGradient(x1: Double, y1: Double, x2: Double, y2: Double, distribution: collection.Seq[Double], colors: collection.Seq[Color], cyclic: Boolean = false): Boya =
+    Boya.doğrusalÇoklu(x1, y1, x2, y2, distribution.toSeq, colors.toSeq, cyclic)
+
+  def radialGradient(cx: Double, cy: Double, c1: Color, radius: Double, c2: Color, cyclic: Boolean = false): Boya =
+    Boya.merkezden(cx, cy, c1, radius, c2, cyclic)
+
+  def radialMultipleGradient(x: Double, y: Double, radius: Double, distribution: collection.Seq[Double], colors: collection.Seq[Color], cyclic: Boolean = false): Boya =
+    Boya.merkezdenÇoklu(x, y, radius, distribution.toSeq, colors.toSeq, cyclic)
+
   def rgba(r: UnsignedByte, g: UnsignedByte, b: UnsignedByte, a: Normalized): Color =
     RGBA(r, g, b, a)
 
