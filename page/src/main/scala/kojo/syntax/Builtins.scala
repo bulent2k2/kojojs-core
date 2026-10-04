@@ -269,6 +269,38 @@ class Builtins(implicit kojoWorld: KojoWorld) {
       }
     }
   }
+  // Masaüstü showGameTimeCountdown (lite/Builtins.scala). Türkçe
+  // oyunSüresiniGeriyeSayarakGöster aynı gövdeyi kullanıyor. Masaüstündeki iki
+  // şey YOK: gameTimeRunning bekçisi (ikinci çağrıyı yok sayan) ve eski etiketi
+  // silme; iki çağrı iki etiket çizer.
+  def showGameTimeCountdown(
+    limitSecs: Int,
+    endMsg: => String,
+    color: Color = Color.black,
+    fontSize: Int = 15,
+    dx: Double = 10,
+    dy: Double = 50
+  ): Unit = {
+    val cb = canvasBounds
+    var kalan = limitSecs
+    val etiket = Picture.textu(kalan, fontSize, color)
+    draw(etiket)
+    etiket.setPosition(cb.x + dx, cb.y + dy)
+    timer(1000) {
+      kalan -= 1
+      etiket.update(kalan)
+      if (kalan <= 0) {
+        drawCenteredMessage(endMsg, color, fontSize * 2)
+        stopAnimation()
+      }
+    }
+  }
+
+  // Masaüstünde ayrı iş parçacığı; tarayıcıda tek iş parçacığı var, hemen çalışır.
+  // Kaplumbağa komutları zaten kuyruğa girip eşzamansız işleniyor, o yüzden
+  // art arda başlatılan gövdeler yine iç içe geçiyor. Türkçe artalandaOynat aynısı.
+  def runInBackground(code: => Unit): Unit = code
+
   def activateCanvas(): Unit = {
     // Odağı açıkça isteyen komut; tuş dinleyen program gibi editörden de
     // odak istiyor (#168). Kendi focus()'u yalnız bazı tarayıcılarda yetiyor.
@@ -378,6 +410,10 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def SpriteSheet(url: String, tileX: Int, tileY: Int) = kojo.SpriteSheet(url, tileX, tileY)
 
   object Picture {
+    // Masaüstü Picture.arc(radius, angle). Türkçe Resim.yay ile aynı: yarıçap kadar
+    // sağa kaydırılmış, kaplumbağayla çizilen yay.
+    def arc(radius: Double, angle: Double) =
+      trans(radius, 0) -> PictureT(t => t.arc(radius, angle))
     def rect(h: Double, w: Double) = Picture.fromPath { path =>
       path.moveTo(0, 0)
       path.lineTo(0, h)

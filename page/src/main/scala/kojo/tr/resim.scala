@@ -60,7 +60,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     // burada kapatıyoruz, yoksa aynı yazılımcık iki tarafta farklı yere çiziyor
     // ve ne derleyici ne de sınama bunu görüyor -- bkz. #75. Sınırları
     // ResimYayTest çiviliyor.
-    def yay(yarıçap: Kesir, açı: Kesir): Resim = kb.trans(yarıçap, 0) -> kb.PictureT(t => t.arc(yarıçap, açı))
+    def yay(yarıçap: Kesir, açı: Kesir): Resim = kb.Picture.arc(yarıçap, açı)
     def yazı(içerik: Her, yy: Yazıyüzü, renk: Renk): Resim = new kojo.TextPic(içerik, yy.boy, renk, yy.ad)
 
     def çiz(r: Resim): Birim = r.draw()

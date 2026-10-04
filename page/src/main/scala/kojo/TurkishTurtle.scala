@@ -550,7 +550,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // masaüstünde canlandırma başlarken çağrılır; burada hemen çalışır
   def canlandırmaBaşlayınca(işlev: => Birim): Birim = işlev
   // masaüstünde ayrı iş parçacığı; tarayıcıda tek iş parçacığı var, hemen çalışır
-  def artalandaOynat(kod: => Birim): Birim = kod
+  def artalandaOynat(kod: => Birim): Birim = builtins.runInBackground(kod)
 
   // Kaplumbağanın konumunu/yönünü SENKRON okuyan `konum` ve `doğrultu`
   // (masaüstü trInit.scala) BİLEREK eklenmedi: iKojo'da kaplumbağa komutları
@@ -638,19 +638,5 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
       yazıBoyu: Sayı = 15,
       kx: Kesir = 10,
       ky: Kesir = 50
-  ): Birim = {
-    val ta = tuvalSınırları
-    var kalan = süreSaniyeOlarak
-    val etiket = builtins.Picture.textu(kalan, yazıBoyu, renk)(kojoWorld)
-    etiket.draw()
-    etiket.setPosition(ta.x + kx, ta.y + ky)
-    builtins.timer(1000) {
-      kalan -= 1
-      etiket.update(kalan)
-      if (kalan <= 0) {
-        builtins.drawCenteredMessage(mesaj, renk, yazıBoyu * 2)
-        builtins.stopAnimation()
-      }
-    }
-  }
+  ): Birim = builtins.showGameTimeCountdown(süreSaniyeOlarak, mesaj, renk, yazıBoyu, kx, ky)
 }
