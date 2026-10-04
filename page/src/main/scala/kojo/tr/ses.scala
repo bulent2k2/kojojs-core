@@ -101,6 +101,17 @@ trait SesYöntemleri extends TemelTürler {
   def notaSus(süreMiliSaniye: Sayı): Birim = notaÇalar.sus(süreMiliSaniye)
 
   /**
+   * Sıradaki ve çalmakta olan bütün notaları susturur, zaman imlecini sıfırlar:
+   * bundan sonraki `notaÇal` hemen çalar. Masaüstündeki `stopNotePlayer`; orada
+   * Çalıştır/Durdur bunu kendiliğinden yapar, iKojo'da betik kendisi çağırır
+   * (yoksa melodi çalarken Çalıştır'a basınca ikinci melodi birincinin ardına eklenir).
+   */
+  def notaÇalıcıyıDurdur(): Birim = notaÇalar.durdur()
+
+  /** `notaÇalıcıyıDurdur` ile aynı (müziğiKapat/müziğiDurdur çiftleri gibi). */
+  def notaÇalıcıyıKapat(): Birim = notaÇalıcıyıDurdur()
+
+  /**
    * Sıradaki notaların bitmesine kalan süre (milisaniye), çalan yoksa 0. Nota
    * döngüsünden hemen sonra çağrılırsa melodinin toplam süresi. (`buAn - t0`
    * bunu vermez: notaÇal beklemez, yalnız sıraya koyar.)
