@@ -13,6 +13,13 @@ import scala.scalajs.js
  * nota `max(şimdi, imleç)` anında başlar, imleç notanın sonuna gider. (İmlecin
  * olmadığı eski hâlde bütün notalar aynı anda, akor gibi çalıyordu: #179.)
  *
+ * BERABER çalan notalar (`beraberÇal`, `akorÇal`): hepsi aynı `başla` anında
+ * başlar, her biri kendi süresince çalar; imleç EN UZUN notanın sonuna gider,
+ * yani sonraki nota hepsi bittikten sonra başlar. Masaüstünde karşılığı yok
+ * (tek kanal, tek iz); bu iKojo'ya özgü. Ses düzeyi nota sayısının karekökü
+ * kadar bölünür: güç sabit kalır, akor tek nota kadar yüksek çalar, çok notalı
+ * akor cızırdamaz. Tek nota için bölen 1, yani `çal` eskisi gibi.
+ *
  * Çalgı kodları MIDI program numaraları; Web Audio'da çalgı yok, dalga biçimine
  * kabaca eşlenir (`dalga`). Çalgı değişikliği, masaüstündeki gibi, yalnız
  * sonraki notaları etkiler.
@@ -45,35 +52,73 @@ class NotaÇalar {
     çalgı = kod
   }
 
-  def çal(nota: Int, süreMiliSaniye: Int, ses: Int): Unit = {
-    require(nota >= 0 && nota <= 127, "Note pitch should be between 0 and 127")
+  def çal(nota: Int, süreMiliSaniye: Int, ses: Int): Unit =
+    beraberÇal(Seq((nota, süreMiliSaniye)), ses)
+
+  /** Hepsi aynı anda başlar, aynı süre sürer; sonraki nota `süre` sonra. */
+  def akorÇal(notalar: Seq[Int], süreMiliSaniye: Int, ses: Int): Unit =
+    beraberÇal(notalar.map(n => (n, süreMiliSaniye)), ses)
+
+  /**
+   * Hepsi aynı anda başlar, her biri kendi süresince çalar; sonraki nota en
+   * uzununun bitişinde başlar. Önce HEPSİ doğrulanıyor: biri sınır dışıysa
+   * hiçbir nota sıraya girmiyor (yarım akor çalmıyor). Boş dizi bir şey yapmaz.
+   */
+  def beraberÇal(süreliNotalar: Seq[(Int, Int)], ses: Int): Unit = {
+    süreliNotalar.foreach { case (nota, _) =>
+      require(nota >= 0 && nota <= 127, "Note pitch should be between 0 and 127")
+    }
     require(ses >= 0 && ses <= 127, "Note volume should be between 0 and 127")
-    val ctx = bağlamıAl()
-    if (ctx != null) {
-      // Kullanıcı etkileşiminden önce kurulan bağlam askıda başlar
-      if ((ctx.state: Any) == "suspended" && js.typeOf(ctx.resume) == "function") ctx.resume()
-      val şimdi = ctx.currentTime.asInstanceOf[Double]
-      val başla = math.max(şimdi, imleç)
-      val bitiş = başla + math.max(süreMiliSaniye, 0) / 1000.0
-      imleç = bitiş
+    if (süreliNotalar.nonEmpty) {
+      val ctx = bağlamıAl()
+      if (ctx != null) {
+        // Kullanıcı etkileşiminden önce kurulan bağlam askıda başlar
+        if ((ctx.state: Any) == "suspended" && js.typeOf(ctx.resume) == "function") ctx.resume()
+        val şimdi = ctx.currentTime.asInstanceOf[Double]
+        val başla = math.max(şimdi, imleç)
+        // exponentialRamp sıfırdan başlayamaz (tanımsız); ses = 0 için ufak taban
+        val düzey = math.max(ses / 127.0 * 0.3 / math.sqrt(süreliNotalar.size), 1e-4) // hoparlörü patlatmadan
+        var sonBitiş = başla
+        süreliNotalar.foreach { case (nota, süreMiliSaniye) =>
+          val bitiş = başla + math.max(süreMiliSaniye, 0) / 1000.0
+          sonBitiş = math.max(sonBitiş, bitiş)
 
-      val osilatör = ctx.createOscillator()
-      val kazanç = ctx.createGain()
-      osilatör.`type` = NotaÇalar.dalga(çalgı)
-      osilatör.frequency.value = NotaÇalar.frekans(nota)
-      // exponentialRamp sıfırdan başlayamaz (tanımsız); ses = 0 için ufak taban
-      val düzey = math.max(ses / 127.0 * 0.3, 1e-4) // hoparlörü patlatmadan
-      kazanç.gain.setValueAtTime(düzey, başla)
-      kazanç.gain.exponentialRampToValueAtTime(0.001, bitiş)
-      osilatör.connect(kazanç)
-      kazanç.connect(ctx.destination)
-      osilatör.start(başla)
-      osilatör.stop(bitiş)
+          val osilatör = ctx.createOscillator()
+          val kazanç = ctx.createGain()
+          osilatör.`type` = NotaÇalar.dalga(çalgı)
+          osilatör.frequency.value = NotaÇalar.frekans(nota)
+          kazanç.gain.setValueAtTime(düzey, başla)
+          kazanç.gain.exponentialRampToValueAtTime(0.001, bitiş)
+          osilatör.connect(kazanç)
+          kazanç.connect(ctx.destination)
+          osilatör.start(başla)
+          osilatör.stop(bitiş)
 
-      çalanlar.filterInPlace(_._2 > şimdi)
-      çalanlar += ((kazanç, bitiş))
+          çalanlar += ((kazanç, bitiş))
+        }
+        imleç = sonBitiş
+        çalanlar.filterInPlace(_._2 > şimdi)
+      }
     }
   }
+
+  /** Sessiz bekleyiş: imleci ilerletir, ses çıkarmaz (müzikte es). */
+  def sus(süreMiliSaniye: Int): Unit = {
+    val ctx = bağlamıAl()
+    if (ctx != null) {
+      val şimdi = ctx.currentTime.asInstanceOf[Double]
+      imleç = math.max(şimdi, imleç) + math.max(süreMiliSaniye, 0) / 1000.0
+    }
+  }
+
+  /**
+   * Sıradaki bütün notaların bitmesine kalan süre (ms), boştaysa 0. Döngüyle
+   * nota dizdikten hemen sonra çağrılırsa melodinin toplam süresi. (Betikteki
+   * `buAn - t0` bunu vermez: notaÇal beklemez, yalnız sıraya koyar.)
+   */
+  def kalanMiliSaniye: Int =
+    if (bağlam == null) 0
+    else math.max(0.0, math.round((imleç - bağlam.currentTime.asInstanceOf[Double]) * 1000.0)).toInt
 
   /** Sıradaki bütün notaları susturur, imleci sıfırlar (masaüstü stopNotePlayer). */
   def durdur(): Unit = {
