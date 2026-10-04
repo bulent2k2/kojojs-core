@@ -80,7 +80,7 @@ trait SesYöntemleri extends TemelTürler {
    * Ses düzeyi nota sayısının KAREKÖKÜ kadar bölünür: akor tek nota kadar
    * yüksek çalar (çok kalabalık akorda cızırdamasın diye daha da kısılır).
    */
-  def akorÇal(notalar: Dizi[Sayı], süreMiliSaniye: Sayı, ses: Sayı = 80): Birim = {
+  def akorÇal(notalar: Diz[Sayı], süreMiliSaniye: Sayı, ses: Sayı = 80): Birim = {
     notalar.foreach(nota => require(nota >= 0 && nota <= 127, "nota 0 ile 127 arasında olmalı"))
     require(ses >= 0 && ses <= 127, "ses 0 ile 127 arasında olmalı")
     notaÇalar.akorÇal(notalar, süreMiliSaniye, ses)
@@ -91,7 +91,7 @@ trait SesYöntemleri extends TemelTürler {
    * süresince çalar; sonraki nota EN UZUN notanın bitişinde başlar. Melodi ile
    * bası beraber çalmak için: `beraberÇal(Dizi((67, 500), (43, 1000)))`.
    */
-  def beraberÇal(süreliNotalar: Dizi[(Sayı, Sayı)], ses: Sayı = 80): Birim = {
+  def beraberÇal(süreliNotalar: Diz[(Sayı, Sayı)], ses: Sayı = 80): Birim = {
     süreliNotalar.foreach { case (nota, _) => require(nota >= 0 && nota <= 127, "nota 0 ile 127 arasında olmalı") }
     require(ses >= 0 && ses <= 127, "ses 0 ile 127 arasında olmalı")
     notaÇalar.beraberÇal(süreliNotalar, ses)
