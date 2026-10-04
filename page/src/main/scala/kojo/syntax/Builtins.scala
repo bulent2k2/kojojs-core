@@ -213,6 +213,20 @@ class Builtins(implicit kojoWorld: KojoWorld) {
 
   def canvasBounds = kojoWorld.canvasBounds
 
+  // Masaüstü Kojo'nun canvasBounds'u java.awt.geom.Rectangle2D; betikler getMaxY gibi
+  // alıcıları çağırıyor. iKojo'nun PIXI.Rectangle'ında yalnız x, y, width, height var;
+  // Türkçe tuvalAlanı.X / .Y (= x + en, y + boy) ile aynı değerler.
+  implicit class RectangleJavaOps(r: pixiscalajs.PIXI.Rectangle) {
+    def getMinX: Double = r.x
+    def getMinY: Double = r.y
+    def getMaxX: Double = r.x + r.width
+    def getMaxY: Double = r.y + r.height
+    def getCenterX: Double = r.x + r.width / 2
+    def getCenterY: Double = r.y + r.height / 2
+    def getWidth: Double = r.width
+    def getHeight: Double = r.height
+  }
+
   def PictureT(fn: Turtle => Unit)(implicit kojoWorld: KojoWorld): TurtlePicture = {
     TurtlePicture(fn)
   }
@@ -343,6 +357,8 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def offset(x: Double, y: Double) = transform(_.offset(x, y))
   def scale(f: Double) = transform(_.scale(f))
   def scaleXY_experimental(fx: Double, fy: Double) = transform(_.scaleXY_experimental(fx, fy))
+  // Masaüstündeki scale(xf, yf); Türkçe büyüt(x, y) de aynı çağrıyı yapıyor
+  def scale(fx: Double, fy: Double) = transform(_.scaleXY_experimental(fx, fy))
   def penColor(c: Color) = transform(_.setPenColor(c))
   def penWidth(t: Double) = transform(_.setPenThickness(t))
   def penThickness(t: Double) = transform(_.setPenThickness(t))
