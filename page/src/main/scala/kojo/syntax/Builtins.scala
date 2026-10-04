@@ -513,6 +513,16 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     notaÇalar.çal(pitch, durationMillis, volume)
   def setNoteInstrument(instrumentCode: Int): Unit = notaÇalar.çalgıyıKur(instrumentCode)
   def stopNotePlayer(): Unit = notaÇalar.durdur()
+  // iKojo'ya özgü (masaüstü tek kanal): aynı anda başlayan notalar. Sonraki
+  // nota en uzun notanın bitişinde başlar. Ses düzeyi nota sayısının KAREKÖKÜ
+  // kadar bölünür (kalabalık grupta tepe güvenliği için daha da kısılır).
+  def playChord(pitches: Seq[Int], durationMillis: Int, volume: Int = 80): Unit =
+    notaÇalar.akorÇal(pitches, durationMillis, volume)
+  def playTogether(notes: Seq[(Int, Int)], volume: Int = 80): Unit =
+    notaÇalar.beraberÇal(notes, volume)
+  // Sessiz bekleyiş (es) ve "çalma ne zaman biter" sorgusu (ms).
+  def playRest(durationMillis: Int): Unit = notaÇalar.sus(durationMillis)
+  def noteTimeLeftMillis: Int = notaÇalar.kalanMiliSaniye
 
   // Masaüstündeki newTurtle(x, y, costume) (TSCanvas.newTurtle); Türkçesi yeniKaplumbağa.
   // İki kurucu ayrı yük: varsayılan argümanlar iki aşırı yükte birden olamaz.
