@@ -276,6 +276,10 @@ trait Picture {
     pgTransform.transform(_picGeom)
   }
 
+  // Masaüstü adı: intersects (collidesWith onun takma adı). Türkçe kesişir /
+  // çarpıştı / çarptıMı hep bu çağrıya gidiyor.
+  def intersects(other: Picture): Boolean = collidesWith(other)
+
   def collidesWith(other: Picture): Boolean = {
     if (other == this) {
       false
