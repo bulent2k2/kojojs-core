@@ -17,8 +17,12 @@ import scala.scalajs.js
  * başlar, her biri kendi süresince çalar; imleç EN UZUN notanın sonuna gider,
  * yani sonraki nota hepsi bittikten sonra başlar. Masaüstünde karşılığı yok
  * (tek kanal, tek iz); bu iKojo'ya özgü. Ses düzeyi nota sayısının karekökü
- * kadar bölünür: güç sabit kalır, akor tek nota kadar yüksek çalar, çok notalı
- * akor cızırdamaz. Tek nota için bölen 1, yani `çal` eskisi gibi.
+ * kadar bölünür: güç kabaca sabit kalır, akor tek nota kadar yüksek çalar. n
+ * eş fazlı nota en kötü durumda n * düzey toplar; 0.3/√n yalnız n <= 10'a
+ * kadar tepeyi 1'in altında tutar (0.3·√10 ≈ 0.95), o yüzden kalabalık gruplarda
+ * düzey 0.95/n ile sınırlanıyor: tepe hiçbir grupta 0.95'i aşmaz, cızırdamaz.
+ * Tek nota için bölen 1, yani `çal` eskisi gibi. Süresi 0 olan nota da grubun
+ * büyüklüğüne sayılır (sessiz kalır ama ötekileri kısar).
  *
  * Çalgı kodları MIDI program numaraları; Web Audio'da çalgı yok, dalga biçimine
  * kabaca eşlenir (`dalga`). Çalgı değişikliği, masaüstündeki gibi, yalnız
@@ -33,6 +37,13 @@ class NotaÇalar {
   private var çalgı = 0
   // (kazanç düğümü, bitiş anı): durdur() için, bitenler ayıklanır
   private val çalanlar = mutable.ArrayBuffer.empty[(js.Dynamic, Double)]
+
+  /** Bağlamı kurar ve askıdaysa sürdürür (kullanıcı etkileşiminden önce kurulan bağlam askıda başlar). */
+  private def hazırBağlam(): js.Dynamic = {
+    val ctx = bağlamıAl()
+    if (ctx != null && (ctx.state: Any) == "suspended" && js.typeOf(ctx.resume) == "function") ctx.resume()
+    ctx
+  }
 
   private def bağlamıAl(): js.Dynamic = {
     if (bağlam == null) {
@@ -70,14 +81,15 @@ class NotaÇalar {
     }
     require(ses >= 0 && ses <= 127, "Note volume should be between 0 and 127")
     if (süreliNotalar.nonEmpty) {
-      val ctx = bağlamıAl()
+      val ctx = hazırBağlam()
       if (ctx != null) {
-        // Kullanıcı etkileşiminden önce kurulan bağlam askıda başlar
-        if ((ctx.state: Any) == "suspended" && js.typeOf(ctx.resume) == "function") ctx.resume()
         val şimdi = ctx.currentTime.asInstanceOf[Double]
         val başla = math.max(şimdi, imleç)
+        val n = süreliNotalar.size
+        // 0.3/√n n <= 10'a kadar; ötesinde 0.95/n: n eş fazlı notanın toplamı 0.95'i aşmasın
+        val taban = math.min(0.3 / math.sqrt(n), 0.95 / n)
         // exponentialRamp sıfırdan başlayamaz (tanımsız); ses = 0 için ufak taban
-        val düzey = math.max(ses / 127.0 * 0.3 / math.sqrt(süreliNotalar.size), 1e-4) // hoparlörü patlatmadan
+        val düzey = math.max(ses / 127.0 * taban, 1e-4) // hoparlörü patlatmadan
         var sonBitiş = başla
         süreliNotalar.foreach { case (nota, süreMiliSaniye) =>
           val bitiş = başla + math.max(süreMiliSaniye, 0) / 1000.0
@@ -104,7 +116,7 @@ class NotaÇalar {
 
   /** Sessiz bekleyiş: imleci ilerletir, ses çıkarmaz (müzikte es). */
   def sus(süreMiliSaniye: Int): Unit = {
-    val ctx = bağlamıAl()
+    val ctx = hazırBağlam()
     if (ctx != null) {
       val şimdi = ctx.currentTime.asInstanceOf[Double]
       imleç = math.max(şimdi, imleç) + math.max(süreMiliSaniye, 0) / 1000.0
@@ -115,10 +127,12 @@ class NotaÇalar {
    * Sıradaki bütün notaların bitmesine kalan süre (ms), boştaysa 0. Döngüyle
    * nota dizdikten hemen sonra çağrılırsa melodinin toplam süresi. (Betikteki
    * `buAn - t0` bunu vermez: notaÇal beklemez, yalnız sıraya koyar.)
+   * Bağlam askıdaysa (kullanıcı etkileşiminden önce) saat ilerlemez, yani
+   * sıradaki bütün notaların süresi döner.
    */
   def kalanMiliSaniye: Int =
     if (bağlam == null) 0
-    else math.max(0.0, math.round((imleç - bağlam.currentTime.asInstanceOf[Double]) * 1000.0)).toInt
+    else math.max(0.0, math.round((imleç - bağlam.currentTime.asInstanceOf[Double]) * 1000.0).toDouble).toInt
 
   /** Sıradaki bütün notaları susturur, imleci sıfırlar (masaüstü stopNotePlayer). */
   def durdur(): Unit = {

@@ -77,18 +77,25 @@ trait SesYöntemleri extends TemelTürler {
   /**
    * Notaların HEPSİ aynı anda başlar, `süreMiliSaniye` kadar sürer; sonraki
    * nota o kadar sonra başlar. Masaüstünde karşılığı yok (iKojo'ya özgü).
-   * Ses düzeyi nota sayısıyla bölünür: akor tek nota kadar yüksek çalar.
+   * Ses düzeyi nota sayısının KAREKÖKÜ kadar bölünür: akor tek nota kadar
+   * yüksek çalar (çok kalabalık akorda cızırdamasın diye daha da kısılır).
    */
-  def akorÇal(notalar: Dizi[Sayı], süreMiliSaniye: Sayı, ses: Sayı = 80): Birim =
+  def akorÇal(notalar: Dizi[Sayı], süreMiliSaniye: Sayı, ses: Sayı = 80): Birim = {
+    notalar.foreach(nota => require(nota >= 0 && nota <= 127, "nota 0 ile 127 arasında olmalı"))
+    require(ses >= 0 && ses <= 127, "ses 0 ile 127 arasında olmalı")
     notaÇalar.akorÇal(notalar, süreMiliSaniye, ses)
+  }
 
   /**
    * `(nota, süreMiliSaniye)` çiftlerinin hepsi aynı anda başlar, her nota kendi
    * süresince çalar; sonraki nota EN UZUN notanın bitişinde başlar. Melodi ile
    * bası beraber çalmak için: `beraberÇal(Dizi((67, 500), (43, 1000)))`.
    */
-  def beraberÇal(süreliNotalar: Dizi[(Sayı, Sayı)], ses: Sayı = 80): Birim =
+  def beraberÇal(süreliNotalar: Dizi[(Sayı, Sayı)], ses: Sayı = 80): Birim = {
+    süreliNotalar.foreach { case (nota, _) => require(nota >= 0 && nota <= 127, "nota 0 ile 127 arasında olmalı") }
+    require(ses >= 0 && ses <= 127, "ses 0 ile 127 arasında olmalı")
     notaÇalar.beraberÇal(süreliNotalar, ses)
+  }
 
   /** Sessiz bekleyiş (es): sıradaki nota `süreMiliSaniye` sonra başlar. */
   def notaSus(süreMiliSaniye: Sayı): Birim = notaÇalar.sus(süreMiliSaniye)

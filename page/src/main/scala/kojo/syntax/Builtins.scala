@@ -514,7 +514,8 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def setNoteInstrument(instrumentCode: Int): Unit = notaÇalar.çalgıyıKur(instrumentCode)
   def stopNotePlayer(): Unit = notaÇalar.durdur()
   // iKojo'ya özgü (masaüstü tek kanal): aynı anda başlayan notalar. Sonraki
-  // nota en uzun notanın bitişinde başlar. Ses düzeyi nota sayısına bölünür.
+  // nota en uzun notanın bitişinde başlar. Ses düzeyi nota sayısının KAREKÖKÜ
+  // kadar bölünür (kalabalık grupta tepe güvenliği için daha da kısılır).
   def playChord(pitches: Seq[Int], durationMillis: Int, volume: Int = 80): Unit =
     notaÇalar.akorÇal(pitches, durationMillis, volume)
   def playTogether(notes: Seq[(Int, Int)], volume: Int = 80): Unit =
