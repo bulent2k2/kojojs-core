@@ -20,7 +20,7 @@ class CevirTest extends AnyFunSuite with Matchers {
       |""".stripMargin
 
   test("Türkçe betik İngilizceye çevriliyor; yön betikten bulunuyor") {
-    val s = Cevir.cevir(halka, None).right.get
+    val s = Cevir.cevir(halka, None).toOption.get
     s.yon shouldBe Cevir.tr2en
     s.kod should include("def kenar(x0: Double, y0: Double): Unit =")
     s.kod should include("val halka = Picture {")
@@ -32,7 +32,7 @@ class CevirTest extends AnyFunSuite with Matchers {
   }
 
   test("İngilizce betik Türkçeye çevriliyor; Türkçe anahtar sözcük yoksa İngilizce sayılır") {
-    val s = Cevir.cevir("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).right.get
+    val s = Cevir.cevir("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).toOption.get
     s.yon shouldBe Cevir.en2tr
     s.kod should include("dez r = Resim.daire(50)")
     s.kod should include("çiz(r)")
@@ -42,43 +42,52 @@ class CevirTest extends AnyFunSuite with Matchers {
   }
 
   test("açık yön otomatiği ezer; 'oto' ve boş yön betikten bulur") {
-    Cevir.cevir("dez a = 1", Some("en2tr")).right.get.yon shouldBe Cevir.en2tr
-    Cevir.cevir("dez a = 1", Some("oto")).right.get.yon shouldBe Cevir.tr2en
-    Cevir.cevir("dez a = 1", Some("")).right.get.yon shouldBe Cevir.tr2en
+    Cevir.cevir("dez a = 1", Some("en2tr")).toOption.get.yon shouldBe Cevir.en2tr
+    Cevir.cevir("dez a = 1", Some("oto")).toOption.get.yon shouldBe Cevir.tr2en
+    Cevir.cevir("dez a = 1", Some("")).toOption.get.yon shouldBe Cevir.tr2en
   }
 
   test("geçersiz yön Left; ileti değeri söylüyor") {
-    Cevir.cevir("dez a = 1", Some("xx")).left.get should include("'xx'")
+    Cevir.cevir("dez a = 1", Some("xx")).swap.toOption.get should include("'xx'")
   }
 
   test("kullanıcının kendi adları çevrilmiyor; Türkçe harfli olanlar raporda 'kalanlar'da, sayısıyla") {
     // Rapor yalnız ÇEVİRMENİN "Türkçe kaldı" dediklerini listeler: Türkçe harf (ı ş ğ ö ü ç) taşıyan ya da
     // sözlükte bilinen adlar. `halka` gibi ASCII bir kullanıcı adı çevrilmeden kalır ama listelenmez
     // (İngilizce bir ad da olabilir; ölçüldü).
-    val s = Cevir.cevir("dez başlık = \"a\"\nsatıryaz(başlık)\nsatıryaz(başlık + başlık)\n", None).right.get
+    val s = Cevir.cevir("dez başlık = \"a\"\nsatıryaz(başlık)\nsatıryaz(başlık + başlık)\n", None).toOption.get
     s.kod should include("val başlık")
     s.rapor.kalanlar should contain(Cevir.AdSayisi("başlık", 4))
-    val h = Cevir.cevir(halka, None).right.get
+    val h = Cevir.cevir(halka, None).toOption.get
     h.kod should include("val halka")
     h.rapor.kalanlar.map(_.ad) should not contain "halka"
   }
 
   test("iKojo'ya özgü konumuOku / yönüOku -> readPosition / readHeading (kojo#79)") {
-    val s = Cevir.cevir("dez a = 1\nkonumuOku { n => satıryaz(n.x) }\nyönüOku { y => satıryaz(y) }\n", None).right.get
+    val s = Cevir.cevir("dez a = 1\nkonumuOku { n => satıryaz(n.x) }\nyönüOku { y => satıryaz(y) }\n", None).toOption.get
     s.kod should include("readPosition {")
     s.kod should include("readHeading {")
   }
 
   test("sonuç JSON'a yazılıp geri okunuyor (istemcinin göreceği şekil)") {
-    val s = Cevir.cevir(halka, None).right.get
+    val s = Cevir.cevir(halka, None).toOption.get
     val json = write(s)
     ujson.read(json).obj.keySet should contain allOf ("yon", "kod", "rapor", "kalanAnahtarSozcukler")
     read[Cevir.Sonuc](json) shouldBe s
   }
 
   test("Türkçe karakterler (ı ş ğ ö ü ç İ) bozulmadan geçiyor") {
-    val s = Cevir.cevir("dez çiçekAdı = \"İstanbul\"\nsatıryaz(çiçekAdı)\n", None).right.get
+    val s = Cevir.cevir("dez çiçekAdı = \"İstanbul\"\nsatıryaz(çiçekAdı)\n", None).toOption.get
     s.kod should include("\"İstanbul\"")
     s.kod should include("çiçekAdı")
+  }
+
+  test("çeviri havuzu ayrı ve daemon: varsayılan dağıtıcıyı meşgul etmez") {
+    import scala.concurrent.{Await, Future}
+    import scala.concurrent.duration._
+    val (ad, daemon) = Await.result(
+      Future((Thread.currentThread.getName, Thread.currentThread.isDaemon))(Cevir.ec), 5.seconds)
+    ad shouldBe "cevir"
+    daemon shouldBe true
   }
 }

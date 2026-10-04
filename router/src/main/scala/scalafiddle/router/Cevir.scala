@@ -4,6 +4,9 @@ import net.kogics.kojo.lite.i18n.tr.Çevirmen
 import net.kogics.kojo.lite.i18n.tr.Çevirmen.{İngilizcedenTürkçeyeYön, TürkçedenİngilizceyeYön, Yön}
 import upickle.default._
 
+import java.util.concurrent.{Executors, ThreadFactory}
+import scala.concurrent.ExecutionContext
+
 /** `POST /cevir`: Koco (Türkçe) betik <-> Kojo (İngilizce) betik (kojojs-dev#183).
   *
   * Çevirmenin kendisi masaüstü Koco'nun kitaplığı (bulent2k2/kojo:
@@ -16,6 +19,21 @@ import upickle.default._
   * yüklenir (`Çevirmen.sözlük` tembel).
   */
 object Cevir {
+
+  /** Çeviri için AYRI, küçük bir havuz (kojojs-core#58 incelemesi §4.1): çeviri router'ın /compile ve
+    * WebSocket yönlendirmesiyle aynı JVM'de koşuyor ve 64 KB'lık bir istek en kötü ~350 ms CPU tutuyor
+    * (ölçüldü). Varsayılan dağıtıcıda koşsaydı, sürekli 64 KB gönderen bir istemci onu meşgul ederdi.
+    * İki iş parçacığı: çeviri istekleri kendi aralarında kuyruklanır, derleyici işi etkilenmez.
+    */
+  val ec: ExecutionContext = ExecutionContext.fromExecutorService(
+    Executors.newFixedThreadPool(2, new ThreadFactory {
+      def newThread(r: Runnable): Thread = {
+        val t = new Thread(r, "cevir")
+        t.setDaemon(true)
+        t
+      }
+    })
+  )
 
   /** Rapordaki bir ad ve kaç kez geçtiği. */
   case class AdSayisi(ad: String, sayi: Int)
