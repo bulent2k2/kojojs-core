@@ -102,14 +102,17 @@ trait SesYöntemleri extends TemelTürler {
 
   /**
    * Sıradaki ve çalmakta olan bütün notaları susturur, zaman imlecini sıfırlar:
-   * bundan sonraki `notaÇal` hemen çalar. Masaüstündeki `stopNotePlayer`; orada
-   * Çalıştır/Durdur bunu kendiliğinden yapar, iKojo'da betik kendisi çağırır
-   * (yoksa melodi çalarken Çalıştır'a basınca ikinci melodi birincinin ardına eklenir).
+   * bundan sonraki `notaÇal` hemen çalar. Masaüstündeki `stopNotePlayer`.
+   * Çalıştır ve Durdur düğmeleri için GEREKMEZ: ikisi de sonuç çerçevesini
+   * yeniden yükler, eski sayfanın ses bağlamı kapanır. Komut, betiğin kendi
+   * içinden (düğme, zamanlayıcı, canlandır döngüsü) melodiyi baştan başlatırken
+   * ya da notaları yarıda kesmek isterken işe yarar. Çalarlar için ad kalıbı:
+   * `yeniMp3Çalar`, `müziğiKapat` (asıl ad Kapat, Durdur takma ad).
    */
-  def notaÇalıcıyıDurdur(): Birim = notaÇalar.durdur()
+  def notaÇalarıKapat(): Birim = notaÇalar.durdur()
 
-  /** `notaÇalıcıyıDurdur` ile aynı (müziğiKapat/müziğiDurdur çiftleri gibi). */
-  def notaÇalıcıyıKapat(): Birim = notaÇalıcıyıDurdur()
+  /** `notaÇalarıKapat` ile aynı (`müziğiDurdur` = `müziğiKapat` gibi). */
+  def notaÇalarıDurdur(): Birim = notaÇalarıKapat()
 
   /**
    * Sıradaki notaların bitmesine kalan süre (milisaniye), çalan yoksa 0. Nota
