@@ -106,12 +106,13 @@ trait SesYöntemleri extends TemelTürler {
    * Çalıştır ve Durdur düğmeleri için GEREKMEZ: ikisi de sonuç çerçevesini
    * yeniden yükler, eski sayfanın ses bağlamı kapanır. Komut, betiğin kendi
    * içinden (düğme, zamanlayıcı, canlandır döngüsü) melodiyi baştan başlatırken
-   * ya da notaları yarıda kesmek isterken işe yarar. Çalarlar için ad kalıbı:
-   * `yeniMp3Çalar`, `müziğiKapat` (asıl ad Kapat, Durdur takma ad).
+   * ya da notaları yarıda kesmek isterken işe yarar. Ad kalıbı: "Çalar"
+   * (`yeniMp3Çalar`) ve asıl ad Kapat, Durdur takma ad (`müzikMp3üKapat` /
+   * `Mp3üDurdur`; masaüstünde `müziğiKapat` / `müziğiDurdur` de böyle).
    */
   def notaÇalarıKapat(): Birim = notaÇalar.durdur()
 
-  /** `notaÇalarıKapat` ile aynı (`müziğiDurdur` = `müziğiKapat` gibi). */
+  /** `notaÇalarıKapat` ile aynı (`Mp3üDurdur` = `müzikMp3üKapat` gibi). */
   def notaÇalarıDurdur(): Birim = notaÇalarıKapat()
 
   /**
