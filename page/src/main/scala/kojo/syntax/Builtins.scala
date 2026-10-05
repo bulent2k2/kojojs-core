@@ -48,6 +48,20 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   def randomInt = Random.nextInt
   def randomLong = Random.nextLong
   def randomFrom[T](seq: collection.Seq[T]) = seq(random(seq.length))
+
+  // Masaüstü shuffle (CoreBuiltins). Masaüstü collection.Seq alıp collection.Seq
+  // veriyor; burada aynı koleksiyon TÜRÜ dönüyor (Vector -> Vector), yani
+  // masaüstünün kabul ettiği her çağrıyı da kabul ediyor. Türkçe rastgeleKarıştır
+  // aynı gövdeyi kullanıyor; ikisi aynı Random'u (setRandomSeed ile kurulan) paylaşıyor.
+  def shuffle[T, C](xs: IterableOnce[T])(implicit bf: scala.collection.BuildFrom[xs.type, T, C]): C =
+    new scala.util.Random(Random).shuffle(xs)
+
+  // Masaüstü round(n, digits) (CoreBuiltins): yarımlar yukarı yuvarlanır
+  // (math.round); Türkçe yuvarla ile aynı formül.
+  def round(n: Double, digits: Int = 0): Double = {
+    val factor = math.pow(10, digits)
+    math.round(n * factor).toLong / factor
+  }
   // 2.13: eski Int/Double overload üçlüsü silme sonrası aynı imzaya
   // düşüyordu (erasure); Numeric ile tek metot ikisini de kapsıyor
   def randomFrom[T, W](seq: collection.Seq[T], weights: collection.Seq[W])(implicit num: Numeric[W]): T = {

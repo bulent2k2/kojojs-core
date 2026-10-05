@@ -504,7 +504,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def rastgeleÇanEğrisinden: Kesir = builtins.randomNormalDouble
   // masaüstü gibi aynı koleksiyon türünü döndürür (Yöney -> Yöney, Dizin -> Dizin)
   def rastgeleKarıştır[T, C](xLer: IterableOnce[T])(implicit bf: scala.collection.BuildFrom[xLer.type, T, C]): C =
-    new scala.util.Random(builtins.Random).shuffle(xLer)
+    builtins.shuffle(xLer)
   def gerekli(gerekçe: İkil, mesaj: => Any = ""): Birim = require(gerekçe, mesaj)
   def zamanTut[T](başlık: Yazı = "Zaman ölçümü:")(işlev: => T)(bitiş: Yazı = "sürdü."): T = {
     val t0 = buSaniye
