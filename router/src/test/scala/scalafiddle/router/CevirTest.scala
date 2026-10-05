@@ -78,6 +78,14 @@ class CevirTest extends AnyFunSuite with Matchers {
     t.kod should include("notaÇal(60, 500)")
   }
 
+  test("göster (üye) visible, Mp3Çalar.durdur stopMp3, Dizim.boş boyutlu ofDim (kojo#82)") {
+    val e = Cevir.cevir("dez a = 1\nateş.göster()\nfrenSesiÇalar.durdur()\ndurdur()\nDizim.boş[Nokta](3, 4)\n", None).toOption.get
+    e.kod should include("ateş.visible()")
+    e.kod should include("frenSesiÇalar.stopMp3()")
+    e.kod should include("\nstopAnimation()\n")
+    e.kod should include("Array.ofDim[Point](3, 4)")
+  }
+
   test("sonuç JSON'a yazılıp geri okunuyor (istemcinin göreceği şekil)") {
     val s = Cevir.cevir(halka, None).toOption.get
     val json = write(s)
