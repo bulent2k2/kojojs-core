@@ -69,6 +69,15 @@ class CevirTest extends AnyFunSuite with Matchers {
     s.kod should include("readHeading {")
   }
 
+  test("notaÇalarıKapat / notaÇalarıDurdur <-> stopNotePlayer, iki yönde (kojo#81)") {
+    val e = Cevir.cevir("dez a = 1\nnotaÇalarıKapat()\nnotaÇalarıDurdur()\n", None).toOption.get
+    e.kod should include("stopNotePlayer()\nstopNotePlayer()")
+    // eşit oyda asıl ad (Kapat) seçiliyor: ceviri-kurallar.tsv
+    val t = Cevir.cevir("stopNotePlayer()\nplayNote(60, 500)\n", None).toOption.get
+    t.kod should include("notaÇalarıKapat()")
+    t.kod should include("notaÇal(60, 500)")
+  }
+
   test("sonuç JSON'a yazılıp geri okunuyor (istemcinin göreceği şekil)") {
     val s = Cevir.cevir(halka, None).toOption.get
     val json = write(s)
