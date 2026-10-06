@@ -321,10 +321,27 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def rastgeleŞeffafRenk: Renk = builtins.randomTransparentColor
 
   // ---- giriş / çıkış ----
-  def satıroku(istem: Yazı = ""): Yazı = builtins.readln(istem)
-  def sayıOku(istem: Yazı = ""): Sayı = builtins.readInt(istem)
+  // İngilizce katman ("Read failed.", NumberFormatException) olduğu gibi kalıyor;
+  // Türkçe katman kendi iletilerini veriyor. Davranış aynı: iptal ve sayı
+  // olmayan girdi çalışma sırası kural dışılığı fırlatır.
+  def satıroku(istem: Yazı = ""): Yazı =
+    try builtins.readln(istem)
+    catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
+  def sayıOku(istem: Yazı = ""): Sayı = {
+    val girdi =
+      try builtins.readln(istem)
+      catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
+    try girdi.toInt
+    catch { case _: NumberFormatException => throw new ÇalışmaSırasıKuralDışı("Sayı bekleniyordu: \"" + girdi + "\"") }
+  }
   def belirt(koşul: İkil, mesaj: Yazı = ""): Birim = if (!koşul) throw new ÇalışmaSırasıKuralDışı(s"belirt başarısız: $mesaj") // assert
-  def kesirOku(istem: Yazı = ""): Kesir = builtins.readDouble(istem)
+  def kesirOku(istem: Yazı = ""): Kesir = {
+    val girdi =
+      try builtins.readln(istem)
+      catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
+    try girdi.toDouble
+    catch { case _: NumberFormatException => throw new ÇalışmaSırasıKuralDışı("Sayı bekleniyordu: \"" + girdi + "\"") }
+  }
 
   /**
    * `Predef.println`/`print` DEĞİL: Scala.js'te onlar `console.log`'a gidiyor,

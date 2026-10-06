@@ -109,7 +109,9 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   implicit def bd2double(bd: BigDecimal) = bd.doubleValue
 
   def readln(prompt: String): String = {
-    val ret = window.prompt(prompt, "Type here")
+    // Öntanımlı metin BOŞ: "Type here" gerçek bir değerdi, seçili gelmiyordu
+    // (cep tarayıcısında klavye açılınca elle silmek gerekiyordu).
+    val ret = window.prompt(prompt, "")
     if (ret == null)
       throw new RuntimeException("Read failed.")
     else
