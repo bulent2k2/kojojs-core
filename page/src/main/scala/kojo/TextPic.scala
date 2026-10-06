@@ -57,5 +57,5 @@ class TextPic(text: Any, fontSize: Int, color: Color, fontFamily: String = null)
     kojoWorld.render()
   }
 
-  def copy: Picture = new TextPic(text, fontSize, color)
+  def copy: Picture = new TextPic(text, fontSize, color, fontFamily) // fontFamily düşerse kopya varsayılan yüzle çizilirdi
 }
