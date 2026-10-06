@@ -124,9 +124,12 @@ class Builtins(implicit kojoWorld: KojoWorld) {
       ret
   }
 
-  def readInt(prompt: String): Int = readln(prompt).toInt
+  // Sayılar kırpılarak okunur: cep klavyeleri girdinin sonuna boşluk ekleyebiliyor
+  // ("5 " canlıda NumberFormatException veriyordu, kojojs-dev #201). readln
+  // kırpılmaz: yazı girdisinde boşluk anlamlı olabilir.
+  def readInt(prompt: String): Int = readln(prompt).trim.toInt
 
-  def readDouble(prompt: String): Double = readln(prompt).toDouble
+  def readDouble(prompt: String): Double = readln(prompt).trim.toDouble
 
   def setBackground(color: Color): Unit = {
     kojoWorld.setBackground(color)

@@ -323,7 +323,9 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   // ---- giriş / çıkış ----
   // İngilizce katman ("Read failed.", NumberFormatException) olduğu gibi kalıyor;
   // Türkçe katman kendi iletilerini veriyor. Davranış aynı: iptal ve sayı
-  // olmayan girdi çalışma sırası kural dışılığı fırlatır.
+  // olmayan girdi çalışma sırası kural dışılığı fırlatır. Sayı okuyanlar girdiyi
+  // kırpar (cep klavyesi sona boşluk ekler, #201); ileti girileni OLDUĞU GİBİ
+  // gösterir ki görünmez boşluk tırnak içinde fark edilsin. satıroku kırpmaz.
   def satıroku(istem: Yazı = ""): Yazı =
     try builtins.readln(istem)
     catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
@@ -331,7 +333,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
     val girdi =
       try builtins.readln(istem)
       catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
-    try girdi.toInt
+    try girdi.trim.toInt
     catch { case _: NumberFormatException => throw new ÇalışmaSırasıKuralDışı("Sayı bekleniyordu: \"" + girdi + "\"") }
   }
   def belirt(koşul: İkil, mesaj: Yazı = ""): Birim = if (!koşul) throw new ÇalışmaSırasıKuralDışı(s"belirt başarısız: $mesaj") // assert
@@ -339,7 +341,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
     val girdi =
       try builtins.readln(istem)
       catch { case _: RuntimeException => throw new ÇalışmaSırasıKuralDışı("Okuma iptal edildi.") }
-    try girdi.toDouble
+    try girdi.trim.toDouble
     catch { case _: NumberFormatException => throw new ÇalışmaSırasıKuralDışı("Sayı bekleniyordu: \"" + girdi + "\"") }
   }
 
