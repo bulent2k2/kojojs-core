@@ -69,6 +69,16 @@ class CevirTest extends AnyFunSuite with Matchers {
     s.kod should include("readHeading {")
   }
 
+  test("iKojo'ya özgü soluk / renkliYazı / canlandırmayıDurdur ve kullanıcının zaman değişkeni (kojo#84)") {
+    val k = "dez a = yeşil.soluk(0.8)\nden zaman = 0\nzaman += 1\nçiz(kalemKalınlığı(2) -> Resim.renkliYazı(\"x\", 40, mavi))\ncanlandırmayıDurdur()\n"
+    val s = Cevir.cevir(k, None).toOption.get
+    s.kod should include("green.fadeOut(0.8)")
+    s.kod should include("var zaman = 0")
+    s.kod should include("zaman += 1")
+    s.kod should include("penThickness(2) -> Picture.textu(\"x\", 40, blue)")
+    s.kod should include("stopAnimation()")
+  }
+
   test("notaÇalarıKapat / notaÇalarıDurdur <-> stopNotePlayer, iki yönde (kojo#81)") {
     val e = Cevir.cevir("dez a = 1\nnotaÇalarıKapat()\nnotaÇalarıDurdur()\n", None).toOption.get
     e.kod should include("stopNotePlayer()\nstopNotePlayer()")
