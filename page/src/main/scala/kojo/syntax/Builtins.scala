@@ -21,6 +21,12 @@ class Builtins(implicit kojoWorld: KojoWorld) {
   val Color = kojo.doodle.Color
   type Color = kojo.doodle.Color
 
+  // Masaüstü Kojo'nun Font(ad, boy)'u. Türkçe Yazıyüzü ile AYNI tür (kojo.Font); Türkçe tarafta
+  // ayrıca bir `Font` YOK: betik önsözü `builtins._` ile `trTurtle._`'i aynı düzeyde içe aktarıyor,
+  // iki ayrı `Font` her betikte "reference to Font is ambiguous" olurdu.
+  type Font = kojo.Font
+  def Font(name: String, size: Int): Font = kojo.Font(name, size)
+
   val ColorMaker = kojo.doodle.Color
   val cm = kojo.doodle.Color
   val noColor = Color(0, 0, 0, 0)
@@ -465,7 +471,15 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     def textu(text: Any, fontSize: Int, color: Color = Color.red)(implicit kojoWorld: KojoWorld): TextPic = {
       new TextPic(text, fontSize, color)
     }
-    def text(s0: Any, fontSize: Int = 15) = textu(s0, fontSize)
+    // Masaüstü: textu(içerik, font, renk). Yazı boyu font'tan gelir (15 değil).
+    def textu(text: Any, font: Font, color: Color)(implicit kojoWorld: KojoWorld): TextPic = {
+      new TextPic(text, font.size, color, font.name)
+    }
+    // Masaüstü Picture.text'in üç biçimi: (içerik, boy = 15, renk = kırmızı), (içerik, font) ve
+    // (içerik, font, renk). Varsayılan renk iki masaüstü biçiminde de kırmızı.
+    def text(s0: Any, fontSize: Int = 15, color: Color = Color.red): TextPic = textu(s0, fontSize, color)
+    def text(s0: Any, font: Font): TextPic = textu(s0, font, Color.red)
+    def text(s0: Any, font: Font, color: Color): TextPic = textu(s0, font, color)
 
     def image(img: SubImage)(implicit kojoWorld: KojoWorld): ImagePicRaw = {
       new ImagePicRaw(img, None)
