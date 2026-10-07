@@ -70,4 +70,17 @@ object Config {
   val clientFiles = config.getStringList("clientFiles").asScala.toSeq
 
   val cacheDir = config.getString("cacheDir")
+
+  /** `// #yükle` satırlarının içe alabildiği örnek dizini (editörün KOCO_ORNEKLER'i ile aynı).
+    * Boşsa özellik KAPALI: kaynak olduğu gibi derlenir (yerel sbt koşusu, upstream davranışı). */
+  /** Kayıtlı yazılımcık bağlantılarında (`// #yükle https://<sunucu>/sf/<kimlik>/<sürüm>`) kabul edilen sunucu
+    * adları: bu sitenin genel adresi (SCALAFIDDLE_URL; start.sh PUBLIC_URL'den veriyor) ve `localhost`.
+    * Başka sunucunun bağlantısı içe alınmaz (yalnız yol: `/sf/<kimlik>/<sürüm>`, her zaman bu sunucudan). */
+  val yukleHostlari: Set[String] =
+    (Option(config.getString("ornekler.publicUrl")).map(_.trim).filter(_.nonEmpty)
+      .flatMap(u => scala.util.Try(new java.net.URI(u).getHost).toOption.flatMap(Option(_))).toSet + "localhost")
+      .map(_.toLowerCase)
+
+  val ornekKoku: Option[java.nio.file.Path] =
+    Option(config.getString("ornekler.dir")).map(_.trim).filter(_.nonEmpty).map(java.nio.file.Paths.get(_))
 }

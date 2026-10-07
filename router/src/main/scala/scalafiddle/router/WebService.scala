@@ -179,9 +179,43 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
     source
   }
 
-  def cachedCompile(source: String, paramMap: Map[String, String], clientIP: RemoteAddress): Future[HttpResponse] = {
+  def cachedCompile(userSource: String, paramMap: Map[String, String], clientIP: RemoteAddress): Future[HttpResponse] = {
+    // `// #yükle` satırları derlemeden hemen önce burada genişletiliyor (OrnekYukleyici); editördeki metin
+    // olduğu gibi kalıyor. Kayıtlı yazılımcık bağlantıları HTTP ile getirilir (bloke eder): `#yükle` içeren
+    // istekler ayrı havuza geçer, diğerleri hiç bekletilmez. Hata satırları yanıt ÖNBELLEĞE yazılmadan özgün
+    // satırlara döndürülüyor: önbellekteki yanıt zaten editörün koordinatlarında, okurken ayrıca işlem gerekmiyor.
+    val genisletmeF: Future[Option[OrnekYukleyici.Genisletme]] =
+      Config.ornekKoku match {
+        case Some(kok) if OrnekYukleyici.yukleVarMi(userSource) =>
+          Future {
+            OrnekYukleyici.expandEditorSource(
+              kok,
+              userSource,
+              OrnekYukleyici.httpFiddleCoz(Config.scalaFiddleSourceUrl),
+              Config.yukleHostlari)
+          }(OrnekYukleyici.ec).recover {
+            // beklenmeyen bir hata derlemeyi düşürmesin: genişletmeden derlenir (içe alınanlar "tanımsız ad"
+            // hatası olarak görünür); neden günlükte
+            case e: Throwable =>
+              log.warn("#yükle genişletilemedi, kaynak olduğu gibi derleniyor", e)
+              None
+          }(OrnekYukleyici.ec)
+        case _ => Future.successful(None)
+      }
+    genisletmeF.flatMap(genisletme => cachedCompile2(userSource, genisletme, paramMap, clientIP))
+  }
+
+  private def cachedCompile2(
+      userSource: String,
+      genisletme: Option[OrnekYukleyici.Genisletme],
+      paramMap: Map[String, String],
+      clientIP: RemoteAddress): Future[HttpResponse] = {
+    val source = genisletme.map(_.kaynak).getOrElse(userSource)
+    // Önbellek anahtarı GENİŞLETİLMİŞ kaynak (içe alınan dosyanın içeriği değişirse eski yanıt gelmesin) ve
+    // eşleme parametreleri (aynı genişletilmiş metin farklı özgün betikten gelirse satırlar farklı döner).
+    val keySource = source + genisletme.map(g => s"\u0000yukle:${g.ekleneBasi}:${g.eklenen}:${g.ilkYukleSatiri}").getOrElse("")
     val sourceHash =
-      MessageDigest.getInstance("SHA1").digest(source.getBytes(StandardCharsets.UTF_8)).map("%02X".format(_)).mkString
+      MessageDigest.getInstance("SHA1").digest(keySource.getBytes(StandardCharsets.UTF_8)).map("%02X".format(_)).mkString
     val allParams = paramMap.updated("sourceSHA1", sourceHash).updated("sfversion", Config.version)
     log.debug(s"Source hash: $sourceHash")
     cacheOr("compile", allParams, compileValidator, 3600 * 24 * 90) {
@@ -192,9 +226,9 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
         .mapTo[Either[String, CompilerResponse]]
         .map {
           case Right(response: CompilationResponse) if response.jsCode.isDefined =>
-            CacheResult(write(response).getBytes("UTF-8"))
+            CacheResult(write(donus(genisletme, response)).getBytes("UTF-8"))
           case Right(response: CompilationResponse) =>
-            NoCacheResult(write(response).getBytes("UTF-8"))
+            NoCacheResult(write(donus(genisletme, response)).getBytes("UTF-8"))
           case Left(error) =>
             CacheError(error)
           case _ =>
@@ -207,6 +241,10 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
       }
     }(data => HttpResponse(entity = HttpEntity(`application/json`, data)))
   }
+
+  /** Genişletme yapıldıysa derleyicinin yanıtını editörün satırlarına döndürür (bkz. OrnekYukleyici.geriEsle). */
+  private def donus(g: Option[OrnekYukleyici.Genisletme], yanit: CompilationResponse): CompilationResponse =
+    g.fold(yanit)(OrnekYukleyici.geriEsle(_, yanit))
 
   val extRoute: Route = {
     post {
