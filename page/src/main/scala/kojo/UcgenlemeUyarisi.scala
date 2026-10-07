@@ -92,10 +92,10 @@ object ÜçgenlemeUyarısı {
    * Bundan az noktalı şekil için not YOK (#180).
    *
    * Notun önkabulü "maliyet algoritmadan geliyor": kendini kesen yolun dolgusu nokta
-   * sayısıyla karesele yakın büyüyor. Küçük şekilde bu doğru olamaz: yukarıdaki ölçüm
-   * 250 nokta x 7 kat için ~8 ms diyor, yani 100 nokta bir ms'yi bulmaz. O hâlde küçük
-   * bir şekilde bütçeyi aşan süre, algoritmanın değil ORTAMIN maliyeti -- ve en
-   * belirgin hâli ilk çağrı: libtess'in ilk çalışması (JIT, ilk yol). Ölçüldü (başsız
+   * sayısıyla karesele yakın büyüyor. Çoğu küçük şekilde bu doğru olamaz: 100 noktalı bir
+   * gül ~2.6 ms (ölçüldü, #180 incelemesi), yukarıdaki tablo da 250 nokta x 7 kat için
+   * ~8 ms diyor. O hâlde küçük bir şekilde bütçeyi aşan süre çoğunlukla algoritmanın
+   * değil ORTAMIN maliyeti -- ve en belirgin hâli ilk çağrı: libtess'in ilk çalışması (JIT, ilk yol). Ölçüldü (başsız
    * Chromium, taze süreç): 5 noktalı karede ilk çağrı 2.4-6.8 ms, sonrakiler 0.1-0.5 ms.
    * Yavaş bir makinede ilk çağrı bütçeyi aşıyor: dört kenarlı bir karenin ilk
    * çalıştırılışında "27 ms sürdü (5 nokta)" ve "noktayı yarıya indir" öğüdü çıkıyordu
@@ -111,7 +111,12 @@ object ÜçgenlemeUyarısı {
    * konuşuyor (PIXI 4, stencil'siz bağlam, elle `dolgu=libtess`): orada büyük şekil gerçekten
    * libtess'e gidiyor ve kendini kesen şeklin maliyeti gerçek.
    *
-   * 100: ölçümün konuştuğu en küçük şeklin (250 nokta) altı, bütçeye uzaklığı yüzlerce kat.
+   * 100: yuvarlak bir sayı; bilinen bir bedeli var. Çok yoğun, kendini kesen şekiller (ölçüldü:
+   * yıldız {99/49}, {100/49}) 99-100 noktada bile ~15-21 ms ile bütçeyi aşabiliyor, yani
+   * "yüzlerce kat uzak" her şekil için doğru DEĞİL (gül, kare gibi yaygın şekillerde doğru).
+   * Taban bu yoğun şekilleri YALNIZ stencilsiz dünyada ve 65-99 noktada susturuyor (stencil'li
+   * dünyada zaten 64'ten büyük şekil libtess'e gitmiyor). Alternatif: tabanı Eşik + 1 = 65
+   * yapmak; o zaman 65-99 noktalı ilk çağrının soğuk maliyeti yanlış alarm verebilir.
    * Birikim DURMUYOR: küçük evrenin süresi toplama giriyor, şekil eşiği geçince konuşabilir
    * (karşılaştırma yalnız konuşma anındaki nokta sayısına bakıyor).
    *
