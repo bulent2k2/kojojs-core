@@ -22,6 +22,29 @@ genişletilmiş metin olarak yüklenir, burada kullanıcı satırı kendi yazar.
   `..`, mutlak yol ve sembolik bağlarla köke çıkılamaz (adayın GERÇEK yolu kök içinde olmalı);
   toplam içe alma 1 MB ile sınırlı.
 
+## Kayıtlı yazılımcıklar (`/sf/<kimlik>/<sürüm>`)
+
+`#yükle` hedefi kaydedilmiş bir yazılımcık bağlantısı da olabilir; tam adres gerekmez:
+
+```
+// #yükle /sf/rNLmJw9/2
+// #yükle sf/rNLmJw9/2
+// #yükle https://ikojo.fly.dev/sf/rNLmJw9/2
+// #yükle /sf/rNLmJw9          (sürüm yoksa 0, editörün /sf/:id rotası gibi)
+```
+
+- Router kaydı editörün `/raw/<kimlik>/<sürüm>` ucundan (`SCALAFIDDLE_SOURCE_URL`) getirir ve yalnız
+  `$FiddleStart`/`$FiddleEnd` arasını (kullanıcının kodunu) içe alır; sarmalayıcı, `$FiddleDependency` ve
+  `$ScalaVersion` satırları girmez. İşaretsiz kaynak içe alınmaz (uyarı). Kayıttaki `#yükle` satırları da genişler.
+- **Başka sunucunun adresi içe alınmaz** (uyarı): getirme hep bu sunucudan yapılır, yoksa aynı kimlik bizde
+  varsa yanlış betik yüklenirdi. Kabul edilen adlar: bu sitenin genel adresi (`SCALAFIDDLE_URL`) ve `localhost`
+  (kapı numarası yok sayılır). Yalnız yol her zaman geçerli.
+- **Dışarıya istek açmaz:** URL = yapılandırılmış editör tabanı + doğrulanmış kimlik (7 harf/rakam) + sayı;
+  yönlendirme izlenmez, 3 sn zaman aşımı, 256 KB sınırı, bir istekte en çok 8 kayıt.
+- Getirme bloke edilir; `#yükle` içeren istekler ayrı bir havuzda (`OrnekYukleyici.ec`) çalışır, öbürleri
+  hiç bekletilmez. Getirme editörde bir "gömülü erişim" kaydı bırakır (`/raw` ucu böyle).
+- Hata satırları `[sf/<kimlik>/<sürüm>]` önekiyle `#yükle` satırına bağlanır.
+
 ## Satır eşlemesi
 
 Derleyici genişletilmiş kaynağı derler; hata satırları yanıt ÖNBELLEĞE yazılmadan

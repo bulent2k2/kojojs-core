@@ -1,9 +1,12 @@
 package scalafiddle.router
 
+import java.net.{HttpURLConnection, URI}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.util.concurrent.{Executors, ThreadFactory}
 
 import scala.collection.mutable
+import scala.concurrent.ExecutionContext
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -42,7 +45,49 @@ object OrnekYukleyici {
     * bu sınır, küçük bir betiğin çok sayıda büyük dosyayı çağırıp bellek/derleyici zamanı yemesini önler. */
   val enFazlaEklenen: Int = 1024 * 1024
 
+  /** Kaydedilmiş bir yazılımcığı getiren işlev: (kimlik, sürüm) -> ham kaynak (editörün `/raw/<id>/<sürüm>`ü). */
+  type FiddleCoz = (String, Int) => Option[String]
+
+  /** Hiçbir yazılımcık getirmeyen çözücü (sınama ve yazılımcık içe almanın kapalı olduğu durum). */
+  val fiddleYok: FiddleCoz = (_, _) => None
+
+  /** Tek bir `#yükle` çağrısında en çok kaç ayrı kayıtlı yazılımcık getirilir (editör sunucusuna yük ve
+    * derleme gecikmesi sınırı). */
+  val enFazlaFiddle: Int = 8
+
+  /** Bir kayıtlı yazılımcığın en çok kaç bayt okunacağı. */
+  val enFazlaFiddleBayti: Int = 256 * 1024
+
+  /** Getirmeler bu havuzda (router'ın dağıtıcısı bloke olmasın); yalnız `#yükle` içeren istekler kullanır. */
+  val ec: ExecutionContext = ExecutionContext.fromExecutorService(
+    Executors.newFixedThreadPool(4, new ThreadFactory {
+      def newThread(r: Runnable): Thread = {
+        val t = new Thread(r, "yukle")
+        t.setDaemon(true)
+        t
+      }
+    })
+  )
+
   private val yukleRE: Regex = """^\s*//\s*#(yükle|include)\s+(\S.*?)\s*$""".r
+
+  // `/sf/<kimlik>/<sürüm>`: tam adres (`https://ikojo.fly.dev/sf/rNLmJw9/2`, `http://localhost:9000/sf/…`: kapı
+  // numarası yok sayılır) ya da yalnız yol (`/sf/rNLmJw9/2`, `sf/rNLmJw9/2`); sürüm verilmezse 0 (editörün `/sf/:id` rotası da öyle). Kimlik biçimi editörünki
+  // (ApiGuard.fiddleKimligiMi: 7 harf/rakam). Sondaki `?zrc=…`/`#…` yok sayılır.
+  private val fiddleRE: Regex =
+    """^(?:(?i:https?)://([^/\s?#:]+)(?::\d+)?)?/?sf/([0-9A-Za-z]{7})(?:/(\d{1,6}))?/?(?:[?#]\S*)?$""".r
+
+  /** `#yükle` hedefi kayıtlı bir yazılımcık bağlantısıysa (sunucu adı, kimlik, sürüm). */
+  def fiddleHedefi(hedef: String): Option[(Option[String], String, Int)] =
+    hedef match {
+      case fiddleRE(host, id, ver) => Some((Option(host).map(_.toLowerCase), id, Option(ver).fold(0)(_.toInt)))
+      case _                       => None
+    }
+
+  /** Metinde (satır başında) herhangi bir `#yükle`/`#include` satırı var mı: ucuz ön denetim, yoksa genişletme
+    * için ayrı iş parçacığına geçilmez. */
+  def yukleVarMi(kaynak: String): Boolean = yukleSatiriRE.findFirstIn(kaynak).isDefined
+  private val yukleSatiriRE: Regex = """(?m)^\s*//\s*#(yükle|include)\s+\S""".r
 
   // Editör istemcisiyle (FiddleEditor.extractCode) ve editördeki OrnekYukleyici ile aynı işaretler
   private val fiddleStartRE: Regex = """\s*// \$FiddleStart\s*$""".r
@@ -69,7 +114,12 @@ object OrnekYukleyici {
 
   /** Kaynakta `$FiddleStart`/`$FiddleEnd` arasında `#yükle` varsa genişletir; yoksa (ya da işaret yoksa) None:
     * hiçbir şeye dokunulmaz, derleme eskisi gibi. `kok` örnek dizini. */
-  def expandEditorSource(kok: Path, kaynak: String): Option[Genisletme] = {
+  def expandEditorSource(
+      kok: Path,
+      kaynak: String,
+      fiddleCoz: FiddleCoz = fiddleYok,
+      izinliHostlar: Set[String] = Set("localhost")
+  ): Option[Genisletme] = {
     val satirlar = kaynak.split("\n", -1).toVector
     val bas      = satirlar.indexWhere(s => fiddleStartRE.unapplySeq(s).isDefined)
     val son      = satirlar.indexWhere(s => fiddleEndRE.unapplySeq(s).isDefined)
@@ -78,7 +128,7 @@ object OrnekYukleyici {
       val govdeAraligi = (bas + 1) until son
       val ilk          = govdeAraligi.find(i => yukleRE.unapplySeq(satirlar(i)).isDefined)
       ilk.map { ilkSatir =>
-        val d       = new Durum(kok.toAbsolutePath.normalize)
+        val d       = new Durum(kok.toAbsolutePath.normalize, fiddleCoz, izinliHostlar.map(_.toLowerCase))
         val eklenen = mutable.ArrayBuffer[(String, String)]() // (satır, ait olduğu dosya)
         val yeniGovde = govdeAraligi.map { i =>
           satirlar(i) match {
@@ -130,10 +180,11 @@ object OrnekYukleyici {
   }
 
   /** Genişletme boyunca taşınan değişken durum. */
-  private final class Durum(val kok: Path) {
-    val alinanlar = mutable.HashSet[Path]()
+  private final class Durum(val kok: Path, val fiddleCoz: FiddleCoz, val izinliHostlar: Set[String]) {
+    val alinanlar = mutable.HashSet[String]() // dosya yolu ya da "sf:<kimlik>/<sürüm>"
     val uyarilar  = mutable.ArrayBuffer[(Int, String)]()
     var toplam    = 0 // içe alınan toplam karakter (iç içe olanlar dahil)
+    var fiddleler = 0 // getirilen kayıtlı yazılımcık sayısı
     var satir     = 0 // işlenen üst düzey #yükle satırının özgün kaynaktaki numarası
   }
 
@@ -152,35 +203,122 @@ object OrnekYukleyici {
     }
     if (hedef.startsWith("~")) uyari("ev dizini (~) tarayıcıda yok; bu dosya masaüstü Koco'ya özel, içe alınmadı")
     else
-      hedefCoz(d.kok, icAlan, hedef) match {
-        case Some(p) if d.alinanlar.contains(p) => "daha önce alındı"
-        case Some(_) if d.toplam > enFazlaEklenen =>
-          uyari(s"içe alma sınırı (${enFazlaEklenen / 1024} KB) aşıldı, içe alınmadı")
-        case Some(p) =>
-          d.alinanlar += p
-          val goreli = d.kok.relativize(p).toString.replace('\\', '/')
-          oku(p) match {
-            case Some(icerik) =>
-              d.toplam += icerik.length + 1
-              // Editördeki genisletKod gibi: bu dosyanın KENDİ içe aldıkları dosyanın başına, gövdesi arkaya
-              val icEklenen = mutable.ArrayBuffer[(String, String)]()
-              val icGovde   = mutable.ArrayBuffer[(String, String)]()
-              icerik.split("\n", -1).foreach {
-                case yukleRE(pr, h) =>
-                  val a = ic(d, p, pr, h, icEklenen)
-                  icGovde += ((s"// #${pr.capitalize} $h -- $a", goreli))
-                case satir => icGovde += ((satir, goreli))
+      fiddleHedefi(hedef) match {
+        case Some((host, id, ver)) => fiddleAl(d, pragma, hedef, host, id, ver, eklenen, uyari)
+        case None =>
+          hedefCoz(d.kok, icAlan, hedef) match {
+            case Some(p) if d.alinanlar.contains(p.toString) => "daha önce alındı"
+            case Some(_) if d.toplam > enFazlaEklenen =>
+              uyari(s"içe alma sınırı (${enFazlaEklenen / 1024} KB) aşıldı, içe alınmadı")
+            case Some(p) =>
+              d.alinanlar += p.toString
+              val goreli = d.kok.relativize(p).toString.replace('\\', '/')
+              oku(p) match {
+                case Some(icerik) =>
+                  blokEkle(d, pragma, hedef, goreli, p, icerik.split("\n", -1).toVector, eklenen)
+                  "içeriği yukarıya alındı"
+                case None => uyari(s"$goreli okunamadı, içe alınmadı")
               }
-              eklenen += ((s"// --- #$pragma $hedef başı ($goreli) ---", goreli))
-              eklenen ++= icEklenen
-              eklenen ++= icGovde
-              eklenen += ((s"// --- #$pragma $hedef sonu ---", goreli))
-              "içeriği yukarıya alındı"
-            case None => uyari(s"$goreli okunamadı, içe alınmadı")
+            case None => uyari("dosya bulunamadı, içe alınmadı")
           }
-        case None => uyari("dosya bulunamadı, içe alınmadı")
       }
   }
+
+  /** Kayıtlı bir yazılımcık bağlantısını (`/sf/<kimlik>/<sürüm>`) içe alır. Adres başka bir sunucunun ise
+    * (kullanıcı oradan getirmeyi bekler ama biz kendi kaydımızdan getirirdik) REDDEDİLİR: yanlış betik yüklemekten
+    * iyidir. Getirme yalnız yapılandırılmış editör sunucusundan (kimlik ve sürüm doğrulanmış sabit biçimde),
+    * yani dışarıya istek açmıyor. */
+  private def fiddleAl(
+      d: Durum,
+      pragma: String,
+      hedef: String,
+      host: Option[String],
+      id: String,
+      ver: Int,
+      eklenen: mutable.ArrayBuffer[(String, String)],
+      uyari: String => String
+  ): String = {
+    val etiket = s"sf/$id/$ver"
+    val anahtar = s"sf:$id/$ver"
+    if (host.exists(h => !d.izinliHostlar.contains(h)))
+      uyari(s"adres bu sunucunun değil (${host.get}), içe alınmadı")
+    else if (d.alinanlar.contains(anahtar)) "daha önce alındı"
+    else if (d.toplam > enFazlaEklenen) uyari(s"içe alma sınırı (${enFazlaEklenen / 1024} KB) aşıldı, içe alınmadı")
+    else if (d.fiddleler >= enFazlaFiddle) uyari(s"bir seferde en çok $enFazlaFiddle kayıtlı betik alınır, içe alınmadı")
+    else {
+      d.alinanlar += anahtar
+      d.fiddleler += 1
+      d.fiddleCoz(id, ver) match {
+        case None => uyari(s"$etiket bulunamadı, içe alınmadı")
+        case Some(ham) =>
+          govdeCikar(ham.replace("\r", "")) match {
+            case Some(govde) =>
+              blokEkle(d, pragma, hedef, etiket, d.kok.resolve("-"), govde, eklenen)
+              "içeriği yukarıya alındı"
+            case None => uyari(s"$etiket okunamadı, içe alınmadı")
+          }
+      }
+    }
+  }
+
+  /** Kayıtlı bir yazılımcığın tam kaynağından yalnız `$FiddleStart`/`$FiddleEnd` arasını (kullanıcının
+    * kodunu) alır; işaret yoksa None (sarmalayıcıyı da içe almak derlemeyi bozar). */
+  def govdeCikar(kaynak: String): Option[Vector[String]] = {
+    val satirlar = kaynak.split("\n", -1).toVector
+    val bas      = satirlar.indexWhere(s => fiddleStartRE.unapplySeq(s).isDefined)
+    val son      = satirlar.indexWhere(s => fiddleEndRE.unapplySeq(s).isDefined)
+    if (bas < 0 || son <= bas) None else Some(satirlar.slice(bas + 1, son))
+  }
+
+  /** Bir dosyanın/yazılımcığın satırlarını işler (kendi içe aldıkları başa, gövde arkaya; editördeki
+    * genisletKod gibi) ve `eklenen`e `başı`/`sonu` işaretleriyle ekler. `icAlan`: içeride göreli `#yükle`
+    * hedeflerinin çözüleceği yer (dosya için kendi yolu; yazılımcık için kök). */
+  private def blokEkle(
+      d: Durum,
+      pragma: String,
+      hedef: String,
+      etiket: String,
+      icAlan: Path,
+      satirlar: Vector[String],
+      eklenen: mutable.ArrayBuffer[(String, String)]
+  ): Unit = {
+    d.toplam += satirlar.map(_.length + 1).sum
+    val icEklenen = mutable.ArrayBuffer[(String, String)]()
+    val icGovde   = mutable.ArrayBuffer[(String, String)]()
+    satirlar.foreach {
+      case yukleRE(pr, h) =>
+        val a = ic(d, icAlan, pr, h, icEklenen)
+        icGovde += ((s"// #${pr.capitalize} $h -- $a", etiket))
+      case satir => icGovde += ((satir, etiket))
+    }
+    eklenen += ((s"// --- #$pragma $hedef başı ($etiket) ---", etiket))
+    eklenen ++= icEklenen
+    eklenen ++= icGovde
+    eklenen += ((s"// --- #$pragma $hedef sonu ---", etiket))
+  }
+
+  /** Editörün `/raw/<kimlik>/<sürüm>` ucundan kayıtlı yazılımcığı getirir (`tabanUrl` = `scalaFiddleSourceUrl`,
+    * sonu `/` ile). Süre ve boyut sınırlı; 200 dışı, hata ya da büyük gövde = None. Bloke eder: `ec` havuzunda
+    * çağrılmalı. */
+  def httpFiddleCoz(tabanUrl: String, zamanAsimiMs: Int = 3000): FiddleCoz = (id, ver) =>
+    Try {
+      val url = URI.create(s"${tabanUrl.stripSuffix("/")}/$id/$ver").toURL
+      val c   = url.openConnection().asInstanceOf[HttpURLConnection]
+      c.setConnectTimeout(zamanAsimiMs)
+      c.setReadTimeout(zamanAsimiMs)
+      c.setInstanceFollowRedirects(false)
+      try {
+        if (c.getResponseCode != 200) None
+        else {
+          val in  = c.getInputStream
+          val buf = new java.io.ByteArrayOutputStream()
+          val b   = new Array[Byte](8192)
+          var n   = in.read(b)
+          while (n >= 0 && buf.size <= enFazlaFiddleBayti) { buf.write(b, 0, n); n = in.read(b) }
+          if (buf.size > enFazlaFiddleBayti) None else Some(new String(buf.toByteArray, StandardCharsets.UTF_8))
+        }
+      } finally c.disconnect()
+    }.toOption.flatten
 
   private def oku(dosya: Path): Option[String] =
     Try {

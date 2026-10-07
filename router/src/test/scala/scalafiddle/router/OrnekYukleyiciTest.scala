@@ -1,7 +1,7 @@
 package scalafiddle.router
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
@@ -206,5 +206,169 @@ class OrnekYukleyiciTest extends AnyFunSuite with Matchers with BeforeAndAfterAl
     val genSatir = gen.indexOf("  ileri(10)".trim) match { case -1 => gen.indexWhere(_.trim == "ileri(10)"); case i => i }
     val d = OrnekYukleyici.geriEsle(g, CompilationResponse(None, Seq(hata(genSatir)), ""))
     ozV(d.annotations.head.row).trim shouldBe "ileri(10)"
+  }
+
+  // ---- kayıtlı yazılımcık bağlantıları (/sf/<kimlik>/<sürüm>) ----
+
+  /** Editörün /raw ucunun döndürdüğü biçim: tam kaynak + eklenen $FiddleDependency/$ScalaVersion satırları. */
+  private def kayit(govde: String*): String =
+    (sar(govde: _*) + "\n// $FiddleDependency org.scala-js %%% scalajs-dom % 1.2.0\n// $ScalaVersion 2.13\n")
+
+  private val tabloya: OrnekYukleyici.FiddleCoz = {
+    case ("rNLmJw9", 2) => Some(kayit("  dez ortak = 42", "  def selam() = satıryaz(ortak)"))
+    case ("rNLmJw9", 0) => Some(kayit("  dez ilk = 1"))
+    case ("Ic00000", 1) => Some(kayit("// #yükle /samples/tr/tanimlar", "dez icten = sayfa"))
+    case ("Marksiz", 1) => Some("dez isaretsiz = 1\n")
+    case _              => None
+  }
+  private val hostlar = Set("ikojo.fly.dev", "localhost")
+
+  private def fiddleliGenislet(govde: String*) =
+    OrnekYukleyici.expandEditorSource(kok, sar(govde: _*), tabloya, hostlar)
+
+  test("fiddleHedefi: tam adres, yalnız yol, yolun başı olmadan; sürüm verilmezse 0") {
+    val f = OrnekYukleyici.fiddleHedefi _
+    f("/sf/rNLmJw9/2") shouldBe Some((None, "rNLmJw9", 2))
+    f("sf/rNLmJw9/2") shouldBe Some((None, "rNLmJw9", 2))
+    f("https://ikojo.fly.dev/sf/rNLmJw9/2") shouldBe Some((Some("ikojo.fly.dev"), "rNLmJw9", 2))
+    f("HTTPS://IKOJO.fly.dev/sf/rNLmJw9/2?zrc=abc#x") shouldBe Some((Some("ikojo.fly.dev"), "rNLmJw9", 2))
+    f("/sf/rNLmJw9") shouldBe Some((None, "rNLmJw9", 0)) // editörün /sf/:id rotası da 0
+    f("/sf/rNLmJw9/") shouldBe Some((None, "rNLmJw9", 0))
+  }
+
+  test("fiddleHedefi: bağlantı OLMAYANLAR (dosya yolları, kısa kimlik, fazlalık) None") {
+    val f = OrnekYukleyici.fiddleHedefi _
+    Seq("/samples/tr/tanimlar", "othello/tr/otello", "/sf/kisa/1", "/sf/rNLmJw9/2/fazla", "sf/rNLmJw9/2.kojo",
+        "/sf/rNLmJw9/x", "ftp://ikojo.fly.dev/sf/rNLmJw9/2", "/sf/rNLmJw9/9999999").foreach(h => f(h) shouldBe None)
+  }
+
+  test("yukleVarMi: yalnız satır başındaki #yükle/#include (ucuz ön denetim)") {
+    OrnekYukleyici.yukleVarMi("sil()\n  // #yükle /sf/rNLmJw9/2\n") shouldBe true
+    OrnekYukleyici.yukleVarMi("// #include x\n") shouldBe true
+    OrnekYukleyici.yukleVarMi("sil() // #yükle x\n") shouldBe false
+    OrnekYukleyici.yukleVarMi("// yükle\n") shouldBe false
+  }
+
+  test("govdeCikar: yalnız FiddleStart/End arası; işaretsizde None") {
+    OrnekYukleyici.govdeCikar(kayit("  a", "  b")).get shouldBe Vector("  a", "  b")
+    OrnekYukleyici.govdeCikar("dez x = 1\n") shouldBe None
+  }
+
+  test("SF: `/sf/<kimlik>/<sürüm>` gövdenin başına eklenir; sarmalayıcı ve $Fiddle... satırları GİRMEZ") {
+    val g = fiddleliGenislet("satıryaz(1)", "// #yükle /sf/rNLmJw9/2", "selam()").get
+    g.kaynak should include("dez ortak = 42")
+    g.kaynak should include("// --- #yükle /sf/rNLmJw9/2 başı (sf/rNLmJw9/2) ---")
+    g.kaynak should include("// #Yükle /sf/rNLmJw9/2 -- içeriği yukarıya alındı")
+    g.kaynak.split("\n").count(_.contains("object ScalaFiddle")) shouldBe 1 // içe alınanın sarmalayıcısı yok
+    g.kaynak.split("\n").count(_.contains("FiddleDependency")) shouldBe 0
+    g.uyarilar shouldBe empty
+    g.dosyalar.distinct shouldBe Vector("sf/rNLmJw9/2")
+  }
+
+  test("SF: tam adres (bu sitenin adı) ve localhost kabul; yalnız yol kabul; yol başında / olmadan da") {
+    Seq("https://ikojo.fly.dev/sf/rNLmJw9/2", "http://localhost:9000/sf/rNLmJw9/2", "/sf/rNLmJw9/2", "sf/rNLmJw9/2")
+      .foreach { h =>
+        val g = fiddleliGenislet(s"// #yükle $h").get
+        g.kaynak should include("dez ortak = 42")
+        g.uyarilar shouldBe empty
+      }
+  }
+
+  test("SF: başka sunucunun adresi İÇE ALINMAZ (aynı kimlik bizde olsa bile): uyarı") {
+    val g = fiddleliGenislet("// #yükle https://baska.example.com/sf/rNLmJw9/2").get
+    g.kaynak should not include "dez ortak = 42"
+    g.eklenen shouldBe 0
+    g.uyarilar.head._2 should include("adres bu sunucunun değil (baska.example.com)")
+  }
+
+  test("SF: yok olan kayıt ve işaretsiz kayıt: uyarı, derleme sürer") {
+    val g = fiddleliGenislet("// #yükle /sf/Yok0000/1", "// #yükle /sf/Marksiz/1").get
+    g.eklenen shouldBe 0
+    g.uyarilar.map(_._2) shouldBe Seq(
+      "// #Yükle /sf/Yok0000/1 -- sf/Yok0000/1 bulunamadı, içe alınmadı",
+      "// #Yükle /sf/Marksiz/1 -- sf/Marksiz/1 okunamadı, içe alınmadı"
+    )
+  }
+
+  test("SF: sürüm verilmezse 0; aynı kayıt iki kez (farklı yazımla) bir kez alınır") {
+    val g = fiddleliGenislet("// #yükle /sf/rNLmJw9", "// #yükle https://ikojo.fly.dev/sf/rNLmJw9/0").get
+    g.kaynak.split("\n").count(_.trim == "dez ilk = 1") shouldBe 1
+    g.kaynak should include("-- daha önce alındı")
+  }
+
+  test("SF: kayıtlı yazılımcığın İÇİNDEKİ #yükle (dosya) de genişler, hata kaynağı kendi etiketiyle") {
+    val g = fiddleliGenislet("// #yükle /sf/Ic00000/1").get
+    g.kaynak should include("dez sayfa = 1") // /samples/tr/tanimlar
+    g.kaynak should include("dez icten = sayfa")
+    g.dosyalar should contain("sf/Ic00000/1")
+    g.dosyalar.exists(_.endsWith("tanimlar.kojo")) shouldBe true
+  }
+
+  test("SF: bir seferde en çok enFazlaFiddle kayıt getirilir; getirici sayısı bununla sınırlı") {
+    var getirilen = 0
+    val sayan: OrnekYukleyici.FiddleCoz = (id, v) => { getirilen += 1; Some(kayit("dez x = 1")) }
+    val ids = Seq("A000001", "A000002", "A000003", "A000004", "A000005", "A000006", "A000007", "A000008", "A000009", "A000010")
+    val g = OrnekYukleyici.expandEditorSource(kok, sar(ids.map(i => s"// #yükle /sf/$i/1"): _*), sayan, hostlar).get
+    getirilen shouldBe OrnekYukleyici.enFazlaFiddle
+    g.uyarilar.size shouldBe ids.size - OrnekYukleyici.enFazlaFiddle
+    g.uyarilar.head._2 should include("en çok")
+  }
+
+  test("SF: kendini içe alan kayıt döngü yapmaz") {
+    val dongu: OrnekYukleyici.FiddleCoz = (id, v) => Some(kayit(s"// #yükle /sf/$id/$v", "dez d = 1"))
+    val g = OrnekYukleyici.expandEditorSource(kok, sar("// #yükle /sf/Dongu00/3"), dongu, hostlar).get
+    g.kaynak.split("\n").count(_.trim == "dez d = 1") shouldBe 1
+    g.kaynak should include("-- daha önce alındı")
+  }
+
+  test("SF geriEsle: içe alınan kayıttaki hata, #yükle satırında [sf/…] önekiyle") {
+    val oz = sar("sil()", "// #yükle /sf/rNLmJw9/2", "selam()")
+    val g  = OrnekYukleyici.expandEditorSource(kok, oz, tabloya, hostlar).get
+    val d  = OrnekYukleyici.geriEsle(g, CompilationResponse(None, Seq(hata(g.ekleneBasi + 1, "boom")), ""))
+    oz.split("\n")(d.annotations.head.row).trim shouldBe "// #yükle /sf/rNLmJw9/2"
+    d.annotations.head.text.head shouldBe "[sf/rNLmJw9/2] boom"
+  }
+
+  // ---- HTTP getirici (gerçek yerel sunucuya karşı) ----
+  private def sunucuyla[T](f: String => T): T = {
+    import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
+    val sv = HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    def yanit(he: HttpExchange, kod: Int, govde: Array[Byte]): Unit = {
+      he.sendResponseHeaders(kod, if (govde.isEmpty) -1 else govde.length.toLong)
+      if (govde.nonEmpty) he.getResponseBody.write(govde)
+      he.close()
+    }
+    sv.createContext("/raw/", new HttpHandler {
+      def handle(he: HttpExchange): Unit = he.getRequestURI.getPath match {
+        case "/raw/rNLmJw9/2" => yanit(he, 200, kayit("dez ortak = 42").getBytes("UTF-8"))
+        case "/raw/Buyuk00/1" => yanit(he, 200, Array.fill[Byte](OrnekYukleyici.enFazlaFiddleBayti + 10)('a'.toByte))
+        case "/raw/Yavas00/1" => Thread.sleep(1500); yanit(he, 200, "x".getBytes)
+        case "/raw/Yonlen0/1" => he.getResponseHeaders.add("Location", "http://127.0.0.1:1/"); yanit(he, 302, Array.empty)
+        case _                => yanit(he, 404, Array.empty)
+      }
+    })
+    sv.start()
+    try f(s"http://127.0.0.1:${sv.getAddress.getPort}/raw/") finally sv.stop(0)
+  }
+
+  test("httpFiddleCoz: 200 -> kaynak; 404, yönlendirme, aşırı büyük gövde ve zaman aşımı -> None") {
+    sunucuyla { taban =>
+      val c = OrnekYukleyici.httpFiddleCoz(taban, zamanAsimiMs = 400)
+      c("rNLmJw9", 2).get should include("dez ortak = 42")
+      c("Yok0000", 1) shouldBe None
+      c("Yonlen0", 1) shouldBe None // yönlendirme izlenmez
+      c("Buyuk00", 1) shouldBe None
+      c("Yavas00", 1) shouldBe None
+    }
+  }
+
+  test("uçtan uca: expandEditorSource + httpFiddleCoz (gerçek HTTP)") {
+    sunucuyla { taban =>
+      val g = OrnekYukleyici
+        .expandEditorSource(kok, sar("// #yükle https://ikojo.fly.dev/sf/rNLmJw9/2"),
+                            OrnekYukleyici.httpFiddleCoz(taban, 2000), hostlar).get
+      g.kaynak should include("dez ortak = 42")
+      g.uyarilar shouldBe empty
+    }
   }
 }

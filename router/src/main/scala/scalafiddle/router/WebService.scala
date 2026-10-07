@@ -181,10 +181,36 @@ class WebService(system: ActorSystem, cache: Cache, compilerManager: ActorRef) {
 
   def cachedCompile(userSource: String, paramMap: Map[String, String], clientIP: RemoteAddress): Future[HttpResponse] = {
     // `// #yükle` satırları derlemeden hemen önce burada genişletiliyor (OrnekYukleyici); editördeki metin
-    // olduğu gibi kalıyor. Hata satırları yanıt ÖNBELLEĞE yazılmadan özgün satırlara döndürülüyor: önbellekteki
-    // yanıt zaten editörün koordinatlarında, okurken ayrıca işlem gerekmiyor.
-    val genisletme = Config.ornekKoku.flatMap(OrnekYukleyici.expandEditorSource(_, userSource))
-    val source     = genisletme.map(_.kaynak).getOrElse(userSource)
+    // olduğu gibi kalıyor. Kayıtlı yazılımcık bağlantıları HTTP ile getirilir (bloke eder): `#yükle` içeren
+    // istekler ayrı havuza geçer, diğerleri hiç bekletilmez. Hata satırları yanıt ÖNBELLEĞE yazılmadan özgün
+    // satırlara döndürülüyor: önbellekteki yanıt zaten editörün koordinatlarında, okurken ayrıca işlem gerekmiyor.
+    val genisletmeF: Future[Option[OrnekYukleyici.Genisletme]] =
+      Config.ornekKoku match {
+        case Some(kok) if OrnekYukleyici.yukleVarMi(userSource) =>
+          Future {
+            OrnekYukleyici.expandEditorSource(
+              kok,
+              userSource,
+              OrnekYukleyici.httpFiddleCoz(Config.scalaFiddleSourceUrl),
+              Config.yukleHostlari)
+          }(OrnekYukleyici.ec).recover {
+            // beklenmeyen bir hata derlemeyi düşürmesin: genişletmeden derlenir (içe alınanlar "tanımsız ad"
+            // hatası olarak görünür); neden günlükte
+            case e: Throwable =>
+              log.warn("#yükle genişletilemedi, kaynak olduğu gibi derleniyor", e)
+              None
+          }(OrnekYukleyici.ec)
+        case _ => Future.successful(None)
+      }
+    genisletmeF.flatMap(genisletme => cachedCompile2(userSource, genisletme, paramMap, clientIP))
+  }
+
+  private def cachedCompile2(
+      userSource: String,
+      genisletme: Option[OrnekYukleyici.Genisletme],
+      paramMap: Map[String, String],
+      clientIP: RemoteAddress): Future[HttpResponse] = {
+    val source = genisletme.map(_.kaynak).getOrElse(userSource)
     // Önbellek anahtarı GENİŞLETİLMİŞ kaynak (içe alınan dosyanın içeriği değişirse eski yanıt gelmesin) ve
     // eşleme parametreleri (aynı genişletilmiş metin farklı özgün betikten gelirse satırlar farklı döner).
     val keySource = source + genisletme.map(g => s"\u0000yukle:${g.ekleneBasi}:${g.eklenen}:${g.ilkYukleSatiri}").getOrElse("")
