@@ -70,4 +70,9 @@ object Config {
   val clientFiles = config.getStringList("clientFiles").asScala.toSeq
 
   val cacheDir = config.getString("cacheDir")
+
+  /** `// #yükle` satırlarının içe alabildiği örnek dizini (editörün KOCO_ORNEKLER'i ile aynı).
+    * Boşsa özellik KAPALI: kaynak olduğu gibi derlenir (yerel sbt koşusu, upstream davranışı). */
+  val ornekKoku: Option[java.nio.file.Path] =
+    Option(config.getString("ornekler.dir")).map(_.trim).filter(_.nonEmpty).map(java.nio.file.Paths.get(_))
 }
