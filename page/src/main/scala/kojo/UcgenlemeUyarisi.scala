@@ -89,6 +89,40 @@ object ÜçgenlemeUyarısı {
   private[kojo] val bütçeMs = 16.7
 
   /**
+   * Bundan az noktalı şekil için not YOK (#180).
+   *
+   * Notun önkabulü "maliyet algoritmadan geliyor": kendini kesen yolun dolgusu nokta
+   * sayısıyla karesele yakın büyüyor. Küçük şekilde bu doğru olamaz: yukarıdaki ölçüm
+   * 250 nokta x 7 kat için ~8 ms diyor, yani 100 nokta bir ms'yi bulmaz. O hâlde küçük
+   * bir şekilde bütçeyi aşan süre, algoritmanın değil ORTAMIN maliyeti -- ve en
+   * belirgin hâli ilk çağrı: libtess'in ilk çalışması (JIT, ilk yol). Ölçüldü (başsız
+   * Chromium, taze süreç): 5 noktalı karede ilk çağrı 2.4-6.8 ms, sonrakiler 0.1-0.5 ms.
+   * Yavaş bir makinede ilk çağrı bütçeyi aşıyor: dört kenarlı bir karenin ilk
+   * çalıştırılışında "27 ms sürdü (5 nokta)" ve "noktayı yarıya indir" öğüdü çıkıyordu
+   * (#180'i açan kişinin makinesinde; kaydedip yeniden çalıştırınca çıkmadığı bildirildi, bu
+   * ölçülmedi). Başlangıç betikleri tam da bu şekilleri çiziyor, ve yanlış öğüt en çok
+   * onlara zarar veriyor.
+   *
+   * STENCİL İLE İLİŞKİSİ (StencilDolgu.Eşik = 64): stencil'li dünyada (PIXI 5 + stencil'li bağlam,
+   * yani Chrome'da varsayılan) libtess YALNIZ en çok 64 noktalı şekil alıyor; büyük şekil
+   * stencil'e gidip hiç üçgenlenmiyor ve zaten not düşmüyordu (#147). Yani orada bu notun
+   * konuşabildiği tek yer küçük şekildi, ve yukarıdaki sebeple hep yanlış alarmdı. Taban
+   * (100 > 64) o dünyada notu tümüyle susturuyor, ki doğrusu bu. Not YALNIZ stencilsiz dünyada
+   * konuşuyor (PIXI 4, stencil'siz bağlam, elle `dolgu=libtess`): orada büyük şekil gerçekten
+   * libtess'e gidiyor ve kendini kesen şeklin maliyeti gerçek.
+   *
+   * 100: ölçümün konuştuğu en küçük şeklin (250 nokta) altı, bütçeye uzaklığı yüzlerce kat.
+   * Birikim DURMUYOR: küçük evrenin süresi toplama giriyor, şekil eşiği geçince konuşabilir
+   * (karşılaştırma yalnız konuşma anındaki nokta sayısına bakıyor).
+   *
+   * BİLEREK YAPILMAYAN: ısınma çalıştırması. Ölçüldü, ilk 120 noktalı çağrıyı 5.4'ten 2.8 ms'ye
+   * indiriyor, ama sorunu çözen bu değil (5 noktalı kare ısınmadan da not düşürürdü) ve her
+   * sayfa yüklemesine bir üçgenleme ekler. Eşik küçük şekilleri susturuyor; ilk büyük şeklin
+   * soğuk maliyeti sınırda kalabilir.
+   */
+  private[kojo] val enAzNokta = 100
+
+  /**
    * İki not arasındaki en az süre -- DuraklamaUyarısı'ndaki zaman kapısının
    * aynısı, aynı gerekçeyle (#98 incelemesi): `canlandır` içinde her karede
    * yeniden çizilen ağır bir şekil saniyede 20-50 özdeş satır basardı ve
@@ -236,7 +270,8 @@ private[kojo] final class ÜçgenlemeRaporu {
     birikim.sonNoktaSayısı = noktaSayısı
     val bittiSayılır = bitti || durdu
     val toplam = birikim.toplamMs
-    val konuşulabilir = toplam > bütçeMs && (bittiSayılır || toplam > erkenÇarpan * bütçeMs)
+    val konuşulabilir = noktaSayısı >= enAzNokta && toplam > bütçeMs &&
+      (bittiSayılır || toplam > erkenÇarpan * bütçeMs)
     if (!birikim.bildirildi && konuşulabilir) konuş(birikim, metin(toplam, noktaSayısı, bittiSayılır))
     if (bitti) birikim.unut()
   }
@@ -269,7 +304,7 @@ private[kojo] final class ÜçgenlemeRaporu {
    * giriş yalnız durmuş şekli kapsıyor; ikisi ayrı durum.
    */
   private[kojo] def şekilDurdu(birikim: ŞekilBirikimi): Unit =
-    if (!birikim.bildirildi && birikim.toplamMs > bütçeMs)
+    if (!birikim.bildirildi && birikim.sonNoktaSayısı >= enAzNokta && birikim.toplamMs > bütçeMs)
       konuş(birikim, metin(birikim.toplamMs, birikim.sonNoktaSayısı, bitti = true))
 
   /** Zaman kapısı + sayaç + panel; iki girişin ortak ucu. */

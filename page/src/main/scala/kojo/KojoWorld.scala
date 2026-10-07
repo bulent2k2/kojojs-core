@@ -477,8 +477,10 @@ class KojoWorldImpl extends KojoWorld {
   private val canvas_holder =
     document.getElementById("canvas-holder").asInstanceOf[html.Div]
   val margin = 4.0
-  var canvasWidth = fiddleContainer.clientWidth - margin
-  var canvasHeight = fiddleContainer.clientHeight - margin
+  // Kap kurulurken gizliyse (0 boyut) -4 çıkardı ve ilk çizici eksi boyutla kurulurdu
+  // (#173); en az 1. Görününce gelen resize gerçek boyutu kurar.
+  var canvasWidth = math.max(1.0, fiddleContainer.clientWidth - margin)
+  var canvasHeight = math.max(1.0, fiddleContainer.clientHeight - margin)
   var canvasOriginX = -canvasWidth / 2
   var canvasOriginY = -canvasHeight / 2
   var screenWidth = canvasWidth
@@ -612,8 +614,18 @@ class KojoWorldImpl extends KojoWorld {
     render()
   }
 
+  /**
+   * Pencere ya da kap boyu değişince. Kap SIFIR boyuta inebiliyor (editörde
+   * "Betiklerim" paneli açılınca sonuç çerçevesi 0 genişliğe iniyor): margin
+   * düşünce -4 çıkıyor, renderer.resize eksi boyutla çağrılıyor ve konsola
+   * `glViewport: negative width/height` düşüyor (#173). Boyut geçerli değilse
+   * HİÇBİR ŞEY yapılmıyor, önceki boyut kalıyor; kap yeniden görününce gelen
+   * resize doğru boyutu kuruyor.
+   */
   def resize(event: UIEvent): Unit = {
-    size(fiddleContainer.clientWidth - margin, fiddleContainer.clientHeight - margin)
+    val w = fiddleContainer.clientWidth - margin
+    val h = fiddleContainer.clientHeight - margin
+    if (w > 0 && h > 0) size(w, h)
   }
 
   //  def originAt(x: Double, y: Double): Unit = {
