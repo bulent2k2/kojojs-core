@@ -349,7 +349,7 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def çarpışma(başkaları: Dizi[Resim]): Option[Resim] = r.collision(başkaları) // Belki[Resim]
     def çarpışmalar(başkaları: Set[Resim]): Set[Resim] = r.collisions(başkaları) // Küme[Resim]
     def uzaklık(öbürü: Resim): Kesir = r.distanceTo(öbürü)
-    def çizili: İkil = r.made // isDrawn
+    def çizili: İkil = r.isDrawn // yalnız çiz() yapar, sil() geri almaz; `made` (hazır) DEĞİL (#182)
     def büyütmeOranı: (Kesir, Kesir) = (r.tnode.scale.x, r.tnode.scale.y) // scaleFactor
     // masaüstünde bu dört ad resmi yerinde değiştirir; burada dönüşümlü kopya döner
     // (aynı zincirleme kullanım: `resim.veBoya(kırmızı).veKondur(10, 10)`)

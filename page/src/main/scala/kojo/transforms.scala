@@ -9,6 +9,14 @@ trait PicTransformer extends Picture {
 
   def made = tpic.made
 
+  // İki yol var: sarmalayıcı `draw()`'ı DEVREDER (PreDrawTransform/PostDrawTransform ezip
+  // `tpic.draw()` çağırıyor, kendi imini koymuyor: `tpic.isDrawn` doğru) ya da Picture.draw()'ı
+  // olduğu gibi kullanır (o zaman kendi imi konuyor ve `realDraw` içeriye gidiyor, `tpic`
+  // çizili sayılmaz: `super.isDrawn` doğru). Bugün Transform'un yalnız iki alt sınıfı var ve
+  // ikisi de devrediyor; `super.isDrawn ||` düz bir alt sınıf için KORUMA (CizildiTest'te
+  // "düz Transform" savı onu tutuyor). Masaüstündeki `tpic.isDrawn` (#182).
+  override def isDrawn: Boolean = super.isDrawn || tpic.isDrawn
+
   def ready = tpic.ready
 
   def tnode = tpic.tnode

@@ -19,11 +19,20 @@ trait Picture {
   def copy: Picture
 
   def realDraw(): Unit
+
+  // `draw()` çağrıldı mı. Masaüstündeki `isDrawn` (RedrawStopper): yalnız `draw()`
+  // doğru yapar, `erase()` yanlışa DÖNDÜRMEZ (#182). `made` ("resim hazır") ile
+  // karıştırılmasın: VectorGraphicsPic ve TextPic kurucuda made=true yapıyor, yani
+  // `made` resim çizilmeden de doğru. İmgede de ayrı: imge yüklenmiş ama çizilmemiş olabilir.
+  private var _drawn = false
+  def isDrawn: Boolean = _drawn
+
   def draw(): Unit = {
     // `durakla` + resim karışımını duyurabilmek için (sorun #73). Burada,
     // realDraw'da değil: realDraw'ı alt sınıflar uyguluyor ve tnode'u sahneye
     // ekleyen başka yollar da var; `draw` kullanıcının çağırdığı tek kapı.
     DuraklamaUyarısı.resimÇizimi()
+    _drawn = true
     realDraw()
     //    updateGeomTransform()
   }
