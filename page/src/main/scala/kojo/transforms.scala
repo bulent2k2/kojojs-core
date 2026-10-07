@@ -9,6 +9,11 @@ trait PicTransformer extends Picture {
 
   def made = tpic.made
 
+  // Sarmalayıcı kendi `draw()`'ını çalıştırabilir (Transform) ya da çizimi içerideki
+  // resme devredebilir (PreDrawTransform/PostDrawTransform `tpic.draw()` çağırıp kendi
+  // imini koymuyor): ikisinde de doğru cevap bunların VEYAsı (#182).
+  override def isDrawn: Boolean = super.isDrawn || tpic.isDrawn
+
   def ready = tpic.ready
 
   def tnode = tpic.tnode
