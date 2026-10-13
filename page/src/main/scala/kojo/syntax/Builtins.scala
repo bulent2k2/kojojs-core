@@ -163,6 +163,24 @@ class Builtins(implicit kojoWorld: KojoWorld) {
 
   def drawLoop(fn: => Unit) = animate(fn)
 
+  type CanvasDraw = kojo.CanvasDraw
+  import scala.language.reflectiveCalls
+
+  // Masaüstü canvasSketch / animateWithCanvasDraw / animateWithSetupCanvasDraw
+  def canvasSketch(
+      sketch: {
+        def setup(cd: CanvasDraw): Unit
+        def drawLoop(cd: CanvasDraw): Unit
+      },
+      scaleOutFactor: Double = 1
+  ): Unit = Picture.fromSketch(sketch, scaleOutFactor).draw()
+
+  def animateWithSetupCanvasDraw(setupCanvas: CanvasDraw => Unit)(drawFrame: CanvasDraw => Unit): Unit =
+    new SketchPic(setupCanvas, drawFrame, 1, setRandomSeed).draw()
+
+  def animateWithCanvasDraw(drawFrame: CanvasDraw => Unit): Unit =
+    animateWithSetupCanvasDraw { canvas => }(drawFrame)
+
   def timer(ms: Long)(fn: => Unit): Unit = {
     kojoWorld.timer(ms)(fn)
   }
@@ -501,6 +519,17 @@ class Builtins(implicit kojoWorld: KojoWorld) {
     }
 
     def fromPath(fn: Graphics => Unit) = { new PathPic(fn) }
+
+    // Masaüstü Picture.fromSketch (Processing tarzı eskiz): `setup` bir kez, `drawLoop` her karede;
+    // ikisi de aynı CanvasDraw'a çizer. Resim tek bir tuval, çizilenler piksel. Bkz. SketchPic.
+    // Parametre yapısal tür (masaüstüyle aynı imza: oradaki betikler burada da derlenir).
+    def fromSketch(
+        sketch: {
+          def setup(cd: CanvasDraw): Unit
+          def drawLoop(cd: CanvasDraw): Unit
+        },
+        scaleOutFactor: Double = 1
+    ): Picture = new SketchPic(cd => sketch.setup(cd), cd => sketch.drawLoop(cd), scaleOutFactor, setRandomSeed)
 
     def fromVertexShape(fn: VertexShape => Unit) = fromPath { g =>
       fn(new VertexShape(g))

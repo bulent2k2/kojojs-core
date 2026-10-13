@@ -13,7 +13,7 @@ package kojo.tr
  * soyut `kb` üyesi TurkishTurtle tarafından sağlanıyor.
  */
 trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYöntemleri with Yöney2BYöntemleri
-    with YazıyüzüYöntemleri {
+    with YazıyüzüYöntemleri with TuvalÇizimYöntemleri {
   protected def kb: kojo.syntax.Builtins
   // Picture.image / draw gibi metotlar örtük KojoWorld istiyor; Builtins'in
   // kendi kojoWorld'ü dışarıdan erişilebilir değil, o yüzden ayrıca alıyoruz.
@@ -50,6 +50,9 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
     def yatayBoşluk(boşluk: Kesir): Resim = kb.Picture.hgap(boşluk)
     def dikeyBoşluk(boşluk: Kesir): Resim = kb.Picture.vgap(boşluk)
     def yoldan(işlev: pixiscalajs.PIXI.Graphics => Birim): Resim = kb.Picture.fromPath(işlev)
+    // masaüstü Resim.eskizden: tek bir tuval resmi, çizilenler piksel -- bkz. tr/eskiz.scala, SketchPic
+    def eskizden(eskiz: Eskiz, ölçekÇarpanı: Kesir = 1): Resim =
+      new kojo.SketchPic(eskiz.kurulum, eskiz.çizimDöngüsü, ölçekÇarpanı, kb.setRandomSeed)
     // masaüstü: Resim.noktadan { gn => gn.başla(); gn.nokta(x, y); ...; gn.bitir() } (VertexShape)
     def noktadan(işlev: GeoNokta => Birim): Resim = kb.Picture.fromPath(g => işlev(new GeoNokta(g)))
     // masaüstü: Resim.yazı(içerik, yazıyüzü[, renk]) -- Yazıyüzü ailesi PIXI metin stiline
