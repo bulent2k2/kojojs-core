@@ -421,6 +421,11 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def tuşBasılıMı(tuşKodu: Sayı): İkil = builtins.isKeyPressed(tuşKodu)
   def canlandır(işlev: => Birim): Birim = builtins.animate(işlev)
   def canlandırmayıDurdur(): Birim = builtins.stopAnimation()
+  // Eskiz (Processing tarzı tuval çizimi): masaüstü Koco ile aynı adlar, bkz. tr/eskiz.scala
+  def canlandırTuvalÇizimle(görüntüyüÇiz: TuvalÇizim => Birim): Birim = builtins.animateWithCanvasDraw(görüntüyüÇiz)
+  def canlandırKurulumluTuvalÇizimle(kurulum: TuvalÇizim => Birim)(görüntüyüÇiz: TuvalÇizim => Birim): Birim =
+    builtins.animateWithSetupCanvasDraw(kurulum)(görüntüyüÇiz)
+  def tuvalEskizi(eskiz: Eskiz, ölçekÇarpanı: Kesir = 1): Birim = Resim.eskizden(eskiz, ölçekÇarpanı).draw()
   def tuvalSınırları: Dikdörtgen = builtins.canvasBounds
   def tuvaliEtkinleştir(): Birim = builtins.activateCanvas()
   def yakınlaştırmayıKapat(): Birim = builtins.disablePanAndZoom()
