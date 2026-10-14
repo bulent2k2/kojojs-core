@@ -94,6 +94,24 @@ jobs:
       - name: çevirmen kopyası sabit commit'le aynı mı
         run: router/cevirmen-esitle.sh --kojo kojo-kaynak --denetle
 
+      # Router'ın pini ile kojojs-dev'in pini kopmasın (kojojs-core#80: editördeki Çevir kojo#84'te
+      # kalmıştı, kojojs-dev'in ölçüm kapısı güncel çevirmeni ölçüp "geçti" diyordu). Karar tablosu
+      # router/pin-denetle.sh başında: router geride/ayrışmış -> kırmızı, router önde -> uyarı.
+      # Karşı yönü kojojs-dev'deki aynı adlı denetim kapatıyor.
+      - uses: actions/checkout@v7
+        with:
+          repository: bulent2k2/kojojs-dev
+          path: kojojs-dev-kaynak
+      - name: kojo geçmişi (sabit commit'ler arasında ata/torun bakmak için)
+        run: |
+          if [ "$(git -C kojo-kaynak rev-parse --is-shallow-repository)" = true ]; then
+            git -C kojo-kaynak fetch --quiet --filter=blob:none --unshallow origin master
+          else
+            git -C kojo-kaynak fetch --quiet --filter=blob:none origin master
+          fi
+      - name: router çevirmen pini kojojs-dev'inkinden geride değil mi
+        run: router/pin-denetle.sh --dev kojojs-dev-kaynak --kojo kojo-kaynak
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

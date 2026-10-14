@@ -53,6 +53,26 @@ Yükseltmek: `CEVIRMEN_SURUMU`'ndaki SHA'yı değiştir,
 `router/cevirmen-esitle.sh --kojo ../kojo` ile kopyala, ikisini aynı commit'te
 gönder.
 
+## Pin, kojojs-dev'inkiyle kopmamalı
+
+Çevirmen iki yerde SABİT bir kojo commit'ine bağlı: bu `router/CEVIRMEN_SURUMU` (editördeki
+Çevir düğmesinin kullandığı kopya) ve kojojs-dev'in `araclar/kojo-cevirmen-surumu.txt`'i
+(`cevir-derle` ölçüm kapısı). Kopunca hiçbir şey kırmızı yanmıyordu: kojojs-dev düzeltilmiş
+çevirmeni ölçüp "geçti" derken canlı site eski kopyayla `Picture.eskizden` üretti (#80).
+
+CI'daki `router/pin-denetle.sh` iki pini kojo geçmişinde karşılaştırır:
+
+| durum | sonuç |
+|---|---|
+| aynı | geçer |
+| router GERİDE | kırmızı: router'ı yükseltin (yukarıdaki "Yükseltmek") |
+| router ÖNDE | geçer + uyarı: kojojs-dev de yükseltilmeli |
+| ayrışmış (biri öbürünün atası değil) | kırmızı |
+
+İki depo tek PR'da değişemediği için "önde" kırmızı DEĞİL; yükseltme PR'ı kendi kendini
+engellemesin diye. Karşı yönü (kojojs-dev geride) kojojs-dev'deki `araclar/pin-denetle.py`
+kapatıyor; yani bir taraf önde kalırsa öbür deponun CI'ı kırmızıya döner ve yetişmeye zorlar.
+
 `dict.scala` ve `cevirmen.scala` çevirmenin kitaplık sınırına dahil;
 `SözlükÜreteci`, `CevirmenMain` ve `ÇeviriDoğrulama` bilerek dışarıda (masaüstü
 kaynaklarını okuyorlar ya da derleyici kullanıyorlar), buraya kopyalanmaz.
