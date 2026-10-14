@@ -31,6 +31,24 @@ class CevirTest extends AnyFunSuite with Matchers {
     s.rapor.cevrilen should be > 10
   }
 
+  test("Eskiz: Resim.eskizden -> Picture.fromSketch, tuval.nokta -> point (editörde `Picture.eskizden` hatası)") {
+    val eskiz =
+      """sınıf Gezginler yayar Eskiz {
+        |  tanım kurulum(tuval: TuvalÇizim) { tuval.artalan(siyah) }
+        |  tanım çizimDöngüsü(tuval: TuvalÇizim) { tuval.fırça(kırmızı); tuval.nokta(10, 20) }
+        |}
+        |çiz(Resim.eskizden(yeni Gezginler))
+        |canlandırTuvalÇizimle { t => t.nokta(1, 2) }
+        |""".stripMargin
+    val s = Cevir.cevir(eskiz, None).toOption.get
+    s.yon shouldBe Cevir.tr2en
+    s.kod should include("draw(Picture.fromSketch(new Gezginler))")
+    s.kod should not include "eskizden"
+    s.kod should include("tuval.point(10, 20)")
+    s.kod should include("t.point(1, 2)")
+    s.kod should not include "vertex"
+  }
+
   test("İngilizce betik Türkçeye çevriliyor; Türkçe anahtar sözcük yoksa İngilizce sayılır") {
     val s = Cevir.cevir("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).toOption.get
     s.yon shouldBe Cevir.en2tr
