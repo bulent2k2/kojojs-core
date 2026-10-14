@@ -1,5 +1,5 @@
 #!/bin/bash
-# router/CEVIRMEN_SURUMU (bu depo) ile kojojs-dev'in araclar/kojo-cevirmen-surumu.txt'i aynı çevirmen
+# router/TRANSLATOR_VERSION (bu depo) ile kojojs-dev'in araclar/kojo-cevirmen-surumu.txt'i aynı çevirmen
 # commit'ini gösteriyor mu.
 #
 #   router/pin-denetle.sh --dev <kojojs-dev klonu> --kojo <kojo klonu, geçmişiyle>
@@ -11,7 +11,7 @@
 #
 # KARAR (pin'ler tek PR'da birlikte değişemiyor, iki depo):
 #   aynı                    geçer
-#   bu depo (router) GERİDE kırmızı: router'ı yükseltin (CEVIRMEN.md "Yükseltmek")
+#   bu depo (router) GERİDE kırmızı: router'ı yükseltin (TRANSLATOR.md "Upgrading")
 #   bu depo ÖNDE            geçer, UYARI: kojojs-dev de yükseltilmeli. Yükseltme PR'ı kendi kendini
 #                           kırmızıya çevirmesin; öbür depodaki denetim karşı yönü kapatıyor
 #   ayrışmış                kırmızı (biri master'dan, öbürü dalından)
@@ -28,9 +28,9 @@ while [ $# -gt 0 ]; do
 done
 [ -d "$KOJO/.git" ] || { echo "HATA: --kojo bir git klonu olmalı" >&2; exit 2; }
 sha_oku() { grep -v '^#' "$1" | grep -m1 -E '^[0-9a-f]{40}$' || true; }
-BENIM="$(sha_oku "$BURASI/CEVIRMEN_SURUMU")"
+BENIM="$(sha_oku "$BURASI/TRANSLATOR_VERSION")"
 ONUN="$(sha_oku "$DEV/araclar/kojo-cevirmen-surumu.txt")"
-[ -n "$BENIM" ] || { echo "HATA: router/CEVIRMEN_SURUMU'nda 40 haneli SHA yok" >&2; exit 2; }
+[ -n "$BENIM" ] || { echo "HATA: router/TRANSLATOR_VERSION'nda 40 haneli SHA yok" >&2; exit 2; }
 [ -n "$ONUN" ] || { echo "HATA: kojojs-dev/araclar/kojo-cevirmen-surumu.txt'de 40 haneli SHA yok" >&2; exit 2; }
 
 if [ "$BENIM" = "$ONUN" ]; then
@@ -43,8 +43,8 @@ done
 if git -C "$KOJO" merge-base --is-ancestor "$BENIM" "$ONUN"; then
   echo "::error::router çevirmeni (kojo@${BENIM:0:12}) kojojs-dev'dekinden (kojo@${ONUN:0:12}) GERİDE."
   echo "Canlı Çevir düğmesi eski çevirmenle çalışır; kojojs-dev'in ölçtüğü ile sitenin yaptığı ayrışır."
-  echo "Düzeltme: router/CEVIRMEN_SURUMU'nu ${ONUN} yapın, router/cevirmen-esitle.sh --kojo ../kojo koşun,"
-  echo "ikisini aynı commit'te gönderin (bkz. router/CEVIRMEN.md)."
+  echo "Düzeltme: router/TRANSLATOR_VERSION'nu ${ONUN} yapın, router/translator-sync.sh --kojo ../kojo koşun,"
+  echo "ikisini aynı commit'te gönderin (bkz. router/TRANSLATOR.md)."
   exit 1
 elif git -C "$KOJO" merge-base --is-ancestor "$ONUN" "$BENIM"; then
   echo "::warning::router çevirmeni (kojo@${BENIM:0:12}) kojojs-dev'dekinden (kojo@${ONUN:0:12}) ÖNDE. kojojs-dev de yükseltilmeli: araclar/kojo-cevirmen-surumu.txt + cevir-derle.py --guncelle."
