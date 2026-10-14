@@ -64,7 +64,7 @@ jobs:
       - name: page/compile
         run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 page/compile
 
-  # kojojs-dev#183 Aşama 2: Koco <-> Kojo çevirmeni (POST /cevir). router/ içindeki
+  # kojojs-dev#183 Aşama 2: Koco <-> Kojo çevirmeni (POST /translate, fork: /cevir). router/ içindeki
   # çevirmen kopyası bulent2k2/kojo'nun SABİT bir commit'inden (router/TRANSLATOR_VERSION);
   # bu iş kopyanın hâlâ bayt bayt o commit olduğunu ve router'ın derlenip sınandığını
   # denetler. page-derleme'den ayrı iş: router ağır (akka) ve page senkronuyla değişmiyor.

@@ -34,7 +34,7 @@ object Cevir {
   /** `yon`: "tr2en" | "en2tr" | boş/"oto" (betikten bul). Geçersiz değer: Left(ileti). */
   def cevir(kod: String, yon: Option[String]): Either[String, Sonuc] = {
     // Eski adlandırma: "oto"; yeni uçta "auto". İkisi de betikten bulur.
-    val direction = yon.map(y => if (y == "oto") Translate.auto else y)
+    val direction = yon.map(y => if (y == "oto") Translate.auto else if (y == Translate.auto) "?" else y)
     Translate.translate(kod, direction).left.map(_ => s"geçersiz yön: '${yon.getOrElse("")}' (tr2en, en2tr ya da oto olmalı)").map { r =>
       Sonuc(
         r.direction,

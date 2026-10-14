@@ -59,6 +59,11 @@ class TranslateTest extends AnyFunSuite with Matchers {
     Translate.detectDirection("dez a = 1") shouldBe Translate.tr2en
   }
 
+  test("a name with several translations is reported as ambiguous, with the chosen one and the others") {
+    val s = Translate.translate("dez a = Resim.daire(50)\n", None).toOption.get
+    s.report.ambiguous should contain(Translate.Ambiguous("daire", "Picture.circle", Seq("circle"), 1))
+  }
+
   test("an explicit direction overrides detection; 'auto' and an empty direction detect from the script") {
     Translate.translate("dez a = 1", Some("en2tr")).toOption.get.direction shouldBe Translate.en2tr
     Translate.translate("dez a = 1", Some("auto")).toOption.get.direction shouldBe Translate.tr2en
