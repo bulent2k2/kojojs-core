@@ -156,7 +156,7 @@ lazy val router = (project in file("router"))
       "com.lihaoyi"           %% "upickle"        % versions.upickle,
       "com.github.marklister" %% "base64"         % versions.base64,
       "ch.megard"             %% "akka-http-cors" % "0.4.3",
-      // /cevir (kojojs-dev#183): router/lib/scalariform.jar'ın sözcükleyicisi çalışma zamanında
+      // /translate, /cevir (kojojs-dev#183): router/lib/scalariform.jar'ın sözcükleyicisi çalışma zamanında
       // scala.xml.parsing.TokenTests ister. Aşağıdaki scalatest bunu Test'e zaten getiriyordu --
       // yani birim sınaması geçti, gerçek sunucu NoClassDefFoundError verdi (canlı denemede
       // ölçüldü). Üretim sınıf yoluna açıkça ekleniyor.

@@ -65,7 +65,7 @@ jobs:
         run: sbt -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 page/compile
 
   # kojojs-dev#183 Aşama 2: Koco <-> Kojo çevirmeni (POST /cevir). router/ içindeki
-  # çevirmen kopyası bulent2k2/kojo'nun SABİT bir commit'inden (router/CEVIRMEN_SURUMU);
+  # çevirmen kopyası bulent2k2/kojo'nun SABİT bir commit'inden (router/TRANSLATOR_VERSION);
   # bu iş kopyanın hâlâ bayt bayt o commit olduğunu ve router'ın derlenip sınandığını
   # denetler. page-derleme'den ayrı iş: router ağır (akka) ve page senkronuyla değişmiyor.
   router:
@@ -81,8 +81,8 @@ jobs:
       - name: çevirmen sürümü
         id: surum
         run: |
-          sha="$(grep -v '^#' router/CEVIRMEN_SURUMU | grep -m1 -E '^[0-9a-f]{40}$' || true)"
-          [ -n "$sha" ] || { echo "::error::router/CEVIRMEN_SURUMU'nda 40 haneli bir SHA yok."; exit 1; }
+          sha="$(grep -v '^#' router/TRANSLATOR_VERSION | grep -m1 -E '^[0-9a-f]{40}$' || true)"
+          [ -n "$sha" ] || { echo "::error::router/TRANSLATOR_VERSION'nda 40 haneli bir SHA yok."; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v7
@@ -92,7 +92,7 @@ jobs:
           path: kojo-kaynak
 
       - name: çevirmen kopyası sabit commit'le aynı mı
-        run: router/cevirmen-esitle.sh --kojo kojo-kaynak --denetle
+        run: router/translator-sync.sh --kojo kojo-kaynak --check
 
       # Router'ın pini ile kojojs-dev'in pini kopmasın (kojojs-core#80: editördeki Çevir kojo#84'te
       # kalmıştı, kojojs-dev'in ölçüm kapısı güncel çevirmeni ölçüp "geçti" diyordu). Karar tablosu
@@ -125,7 +125,7 @@ jobs:
 
       # Birim sınaması bunu YAKALAMAZ: scalatest scala-xml'i Test sınıf yoluna getiriyor,
       # üretim yolunda eksik olsa da sınama geçiyor (canlı sunucuda NoClassDefFoundError
-      # olarak ölçüldü; router/CEVIRMEN.md). Bu yüzden üretim sınıf yoluna ayrıca bakılıyor.
+      # olarak ölçüldü; router/TRANSLATOR.md). Bu yüzden üretim sınıf yoluna ayrıca bakılıyor.
       - name: üretim sınıf yolunda scala-xml var mı
         run: |
           # sbt'nin ÇIKTISININ SON SATIRI sınıf yolu diye varsayılmıyor: koşucuda ilk deneme "scala-xml
@@ -135,5 +135,5 @@ jobs:
           echo "--- sbt çıktısı (satır sayısı: $(wc -l < /tmp/sbt-cikti.txt))"; cut -c1-200 /tmp/sbt-cikti.txt | tail -20
           grep -F 'router/lib/scalariform.jar' /tmp/sbt-cikti.txt | tail -1 | tr ':' '\n' > /tmp/router-cp.txt
           [ -s /tmp/router-cp.txt ] || { echo "::error::sınıf yolu satırı bulunamadı (router/lib/scalariform.jar içeren satır yok)."; exit 1; }
-          grep -q 'scala-xml_2.13' /tmp/router-cp.txt || { echo "::error::router üretim sınıf yolunda scala-xml yok; /cevir ilk istekte NoClassDefFoundError verir."; exit 1; }
+          grep -q 'scala-xml_2.13' /tmp/router-cp.txt || { echo "::error::router üretim sınıf yolunda scala-xml yok; /translate ve /cevir ilk istekte NoClassDefFoundError verir."; exit 1; }
           ! grep -q 'scalatest' /tmp/router-cp.txt || { echo "::error::scalatest üretim sınıf yoluna sızmış."; exit 1; }
