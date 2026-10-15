@@ -597,11 +597,19 @@ class KojoWorldImpl extends KojoWorld {
     initEvents()
   }
 
+  // Tam ekran isteği tarayıcıda yalnız KULLANICI ETKİNLİĞİYLE (tıklama, dokunma, tuş) kabul
+  // edilir. `tümEkranTuval()` betiğin başında çağrılınca etkinlik yok: Çalıştır'a basıldıktan
+  // sonra derleme sürüyor, etkinlik süresi doluyor ve istek sessizce REDDEDİLİYORDU -- yeni
+  // tarayıcılarda requestFullscreen bir söz (Promise) döndürüyor ve reddi try/catch'e
+  // düşmüyor. Artık ret görülünce bir SONRAKİ tıklama/dokunma/tuşta bir kez daha deneniyor
+  // (oyunda ilk dokunuş ya da tuş).
+  private var tamEkranBekliyor = false
+
   def toggleFullScreenCanvas(): Unit = {
     try {
       import org.scalajs.dom.experimental.Fullscreen._
       if (window.document.fullscreenElement == null) {
-        fiddleContainer.requestFullscreen()
+        tamEkranİste()
       }
       else {
         window.document.exitFullscreen()
@@ -610,6 +618,36 @@ class KojoWorldImpl extends KojoWorld {
     catch {
       case _: Throwable =>
     }
+  }
+
+  private def tamEkranİste(): Unit = {
+    val sonuç = fiddleContainer.asInstanceOf[js.Dynamic].requestFullscreen()
+    if (!js.isUndefined(sonuç) && sonuç != null && js.typeOf(sonuç.selectDynamic("catch")) == "function") {
+      val reddedilince: js.Function1[js.Any, Unit] = { (_: js.Any) => tamEkranıSonrakiEtkinliktenSonraDene() }
+      // yöntem olarak çağrılmalı (this = söz); selectDynamic(...)(f) this'siz çağırırdı
+      sonuç.applyDynamic("catch")(reddedilince)
+    }
+  }
+
+  private def tamEkranıSonrakiEtkinliktenSonraDene(): Unit = {
+    if (tamEkranBekliyor || kapandı) return
+    tamEkranBekliyor = true
+    val dinleyici: js.Function1[Event, Unit] = { (_: Event) =>
+      if (tamEkranBekliyor) {
+        tamEkranBekliyor = false
+        try {
+          if (!kapandı && window.document.asInstanceOf[js.Dynamic].fullscreenElement == null) {
+            fiddleContainer.asInstanceOf[js.Dynamic].requestFullscreen()
+          }
+        }
+        catch { case _: Throwable => }
+      }
+    }
+    val bir = js.Dynamic.literal(once = true)
+    val pencere = window.asInstanceOf[js.Dynamic]
+    // tıklama/dokunma bırakılınca ve tuşa basılınca: fullscreen isteğini kabul eden etkinlikler
+    pencere.addEventListener("pointerup", dinleyici, bir)
+    pencere.addEventListener("keydown", dinleyici, bir)
   }
 
   def size(w: Double, h: Double): Unit = {
@@ -639,7 +677,12 @@ class KojoWorldImpl extends KojoWorld {
   def resize(event: UIEvent): Unit = {
     val w = fiddleContainer.clientWidth - margin
     val h = fiddleContainer.clientHeight - margin
-    if (w > 0 && h > 0) size(w, h)
+    if (w > 0 && h > 0) {
+      size(w, h)
+      // size() sahneyi ölçek 1'e döndürüyor; çizim birimi (santim/inç) kurulmuşsa geri koy,
+      // yoksa tam ekrana geçince ya da pencere boyu değişince her şey santim yerine piksel boyuna iner
+      if (birimÖlçeği != 1.0) resetView()
+    }
   }
 
   //  def originAt(x: Double, y: Double): Unit = {

@@ -36,12 +36,22 @@ import scala.scalajs.js
  */
 class CanvasDraw private[kojo] (
     canvas: dom.html.Canvas,
-    val width: Double,
-    val height: Double,
-    seedFn: Long => Unit
+    yüzeyEni: Double,
+    yüzeyBoyu: Double,
+    seedFn: Long => Unit,
+    // `ölçek` != 1: bağlama BİR KEZ scale(ölçek) uygulanır, yani kullanıcının koordinatları yüzey piksel
+    // değil sahne birimi olur (SketchPic'te `ölçekÇarpanı = 0` otomatik kipi; incelemeyle, #230).
+    // `width`/`height` bu durumda sahne birimidir; `background` ise gerçek yüzeyi boyar.
+    ölçek: Double = 1.0
 ) {
   private val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]
   private val c = ctx.asInstanceOf[js.Dynamic]
+
+  /** Kullanıcının gördüğü tuval eni/boyu (`ölçek` 1 ise yüzey pikseli, değilse sahne birimi). */
+  val width: Double = yüzeyEni / ölçek
+  val height: Double = yüzeyBoyu / ölçek
+
+  if (ölçek != 1.0) ctx.scale(ölçek, ölçek)
 
   // masaüstü: CapJoin.CAP_ROUND / CAP_SQUARE / CAP_BUTT, JOIN_MITER / JOIN_BEVEL
   val ROUND = 1
@@ -118,7 +128,7 @@ class CanvasDraw private[kojo] (
     val m = c.getTransform()
     val inv = m.inverse()
     val p0 = inv.transformPoint(js.Dynamic.literal(x = 0.0, y = 0.0))
-    val p1 = inv.transformPoint(js.Dynamic.literal(x = width, y = height))
+    val p1 = inv.transformPoint(js.Dynamic.literal(x = yüzeyEni, y = yüzeyBoyu))
     val x0 = p0.x.asInstanceOf[Double]; val y0 = p0.y.asInstanceOf[Double]
     val x1 = p1.x.asInstanceOf[Double]; val y1 = p1.y.asInstanceOf[Double]
     withCurrentPaint(css) { ctx.fillRect(x0, y0, x1 - x0, y1 - y0) }
