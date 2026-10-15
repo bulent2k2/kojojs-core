@@ -165,45 +165,131 @@ object Translator {
       }
       nameSet.result()
     }
-    // Variables of type TuvalÇizim (TR->EN only): the declarations `canvas: TuvalÇizim` and the
-    // lambda parameters of `canlandırTuvalÇizimle { canvas => ... }` (and of both blocks of the
-    // setup variant). Why: `tuval.nokta(x, y)` -> point, `GeoNokta.nokta` -> vertex, both are
-    // `nokta`; at word level the receiver's type is unknown and the most frequent one (vertex)
-    // was taken -- the script compiled, but crashed when run, for lack of `beginShape`. If the
-    // receiver is in this set, the member lookup is done with the virtual receiver `TuvalÇizim.`
-    // (translation-rules.tsv: `nokta  TuvalÇizim.  point`).
+    // Variables of the canvas type: `TuvalÇizim` in Turkish, `CanvasDraw` in English -- the declarations
+    // `canvas: TuvalÇizim` / `cd: CanvasDraw` and the lambda parameters of `canlandırTuvalÇizimle { canvas => ... }`
+    // / `animateWithCanvasDraw { cd => ... }` (and of both blocks of the setup variants). Why: the member names
+    // of the canvas collide with other objects' members at word level, where the receiver's type is unknown:
+    //   TR->EN  `tuval.nokta(x, y)` -> point, `GeoNokta.nokta` -> vertex, both are `nokta`; the most frequent
+    //           one (vertex) was taken -- the script compiled, but crashed when run, for lack of `beginShape`.
+    //   EN->TR  `cd.fill` -> boya (the canvas), but `fill` is `doldur` for a picture; likewise `rotate`
+    //           (döndürRadyan / döndür), `beginShape` (şekilBaşla / başla) and `endShape` (şekilBitir / bitir).
+    // If the receiver is in this set, the member lookup is done first with the virtual receiver `TuvalÇizim.`
+    // / `CanvasDraw.` (translation-rules.tsv: `nokta  TuvalÇizim.  point`, `fill  CanvasDraw.  boya`).
     // A use without a declaration (a canvas passed on to another function) is not known; in that
     // case the old receiver-less behaviour applies.
-    val canvasVariables: Set[String] =
-      if (direction != TurkishToEnglish) Set.empty
-      else {
-        val sig = tokens.indices.filter(j => isSignificant(tokens(j))).toVector
-        val nameSet = Set.newBuilder[String]
-        def typeAt(k: Int) = tokens(sig(k)).tokenType
-        def textAt(k: Int) = tokens(sig(k)).text
-        for (k <- sig.indices) {
-          // `name: TuvalÇizim`
-          if (k >= 2 && textAt(k) == "TuvalÇizim" && typeAt(k - 1) == Tokens.COLON && isIdentifier(tokens(sig(k - 2)))) nameSet += textAt(k - 2)
-          // `canlandırTuvalÇizimle { name => ...}`; in the setup variant the second block too
-          if (textAt(k) == "canlandırTuvalÇizimle" || textAt(k) == "canlandırKurulumluTuvalÇizimle") {
-            // take the lambda parameter of the block at m, return the position after the matching closer
-            def scanBlock(m: Int): Int =
-              if (m + 2 < sig.length && (typeAt(m) == Tokens.LBRACE || typeAt(m) == Tokens.LPAREN)) {
-                if (isIdentifier(tokens(sig(m + 1))) && typeAt(m + 2) == Tokens.ARROW) nameSet += textAt(m + 1)
-                val opener = typeAt(m); val closer = if (opener == Tokens.LBRACE) Tokens.RBRACE else Tokens.RPAREN
-                var depth = 0; var n = m
-                do {
-                  if (typeAt(n) == opener) depth += 1 else if (typeAt(n) == closer) depth -= 1
-                  n += 1
-                } while (depth > 0 && n < sig.length)
-                n
-              } else sig.length
-            val afterFirstBlock = scanBlock(k + 1)
-            if (textAt(k) == "canlandırKurulumluTuvalÇizimle") scanBlock(afterFirstBlock)
+    val canvasTypeName = direction match { case TurkishToEnglish => "TuvalÇizim"; case EnglishToTurkish => "CanvasDraw" }
+    val canvasReceiverContext = canvasTypeName + "."
+    val (canvasLambdaFunction, canvasSetupLambdaFunction) = direction match {
+      case TurkishToEnglish => ("canlandırTuvalÇizimle", "canlandırKurulumluTuvalÇizimle")
+      case EnglishToTurkish => ("animateWithCanvasDraw", "animateWithSetupCanvasDraw")
+    }
+    val canvasVariables: Set[String] = {
+      val sig = tokens.indices.filter(j => isSignificant(tokens(j))).toVector
+      val nameSet = Set.newBuilder[String]
+      def typeAt(k: Int) = tokens(sig(k)).tokenType
+      def textAt(k: Int) = tokens(sig(k)).text
+      for (k <- sig.indices) {
+        // `name: TuvalÇizim` / `name: CanvasDraw`
+        if (k >= 2 && textAt(k) == canvasTypeName && typeAt(k - 1) == Tokens.COLON && isIdentifier(tokens(sig(k - 2)))) nameSet += textAt(k - 2)
+        // `canlandırTuvalÇizimle { name => ...}`; in the setup variant the second block too
+        if (textAt(k) == canvasLambdaFunction || textAt(k) == canvasSetupLambdaFunction) {
+          // take the lambda parameter of the block at m, return the position after the matching closer
+          def scanBlock(m: Int): Int =
+            if (m + 2 < sig.length && (typeAt(m) == Tokens.LBRACE || typeAt(m) == Tokens.LPAREN)) {
+              if (isIdentifier(tokens(sig(m + 1))) && typeAt(m + 2) == Tokens.ARROW) nameSet += textAt(m + 1)
+              val opener = typeAt(m); val closer = if (opener == Tokens.LBRACE) Tokens.RBRACE else Tokens.RPAREN
+              var depth = 0; var n = m
+              do {
+                if (typeAt(n) == opener) depth += 1 else if (typeAt(n) == closer) depth -= 1
+                n += 1
+              } while (depth > 0 && n < sig.length)
+              n
+            } else sig.length
+          val afterFirstBlock = scanBlock(k + 1)
+          if (textAt(k) == canvasSetupLambdaFunction) scanBlock(afterFirstBlock)
+        }
+      }
+      nameSet.result()
+    }
+    // Sketch classes. Turkish writes `class X extends Eskiz { def kurulum(tuval: TuvalÇizim) ...
+    // def çizimDöngüsü(tuval: TuvalÇizim) ... }`; English Kojo has no `Eskiz` type: `Picture.fromSketch`
+    // takes any object with `setup(cd: CanvasDraw)` and `drawLoop(cd: CanvasDraw)` (a structural type),
+    // found BY NAME. Without this step the English output kept `extends Eskiz` and the Turkish method
+    // names: it compiled on iKoco only because of an overload for the Turkish trait, and failed on
+    // desktop English Kojo. Edits are computed before the main loop, as token index -> replacement text:
+    //   TR->EN  `extends Eskiz` (the whole parent clause) is dropped, and in the class body
+    //           `kurulum` -> `setup`, `çizimDöngüsü` -> `drawLoop`.
+    //   EN->TR  a class or object with NO parent whose body defines BOTH `def setup(x: CanvasDraw` and
+    //           `def drawLoop(x: CanvasDraw` gets `extends Eskiz` (`yayar Eskiz`), and the names go back.
+    // Only the exact shape is recognized; `extends Eskiz with Other` and the like are left as they are.
+    // A name used after a dot (`o.kurulum`) is not renamed.
+    val sketchEdits: Map[Int, String] = {
+      val sig = tokens.indices.filter(j => isSignificant(tokens(j))).toVector
+      def ty(k: Int) = tokens(sig(k)).tokenType
+      def tx(k: Int) = tokens(sig(k)).text
+      val (turkishNames, englishNames) = (Seq("kurulum", "çizimDöngüsü"), Seq("setup", "drawLoop"))
+      val (fromNames, toNames) = direction match {
+        case TurkishToEnglish => (turkishNames, englishNames)
+        case EnglishToTurkish => (englishNames, turkishNames)
+      }
+      val edits = scala.collection.mutable.Map.empty[Int, String]
+      for (k <- sig.indices if ty(k) == Tokens.CLASS || ty(k) == Tokens.OBJECT) {
+        // the class body: the first `{` outside parentheses, before another definition starts
+        var m = k + 1; var depth = 0; var open = -1; var stop = false
+        while (!stop && m < sig.length) {
+          ty(m) match {
+            case Tokens.LPAREN | Tokens.LBRACKET                 => depth += 1
+            case Tokens.RPAREN | Tokens.RBRACKET                 => depth -= 1
+            case Tokens.LBRACE if depth == 0                     => open = m; stop = true
+            case Tokens.CLASS | Tokens.OBJECT | Tokens.TRAIT |
+                 Tokens.DEF | Tokens.VAL | Tokens.VAR if depth == 0 => stop = true
+            case _                                               =>
+          }
+          if (!stop) m += 1
+        }
+        if (open > 0) {
+          var braces = 0; var close = -1; var q = open
+          while (close < 0 && q < sig.length) {
+            if (ty(q) == Tokens.LBRACE) braces += 1 else if (ty(q) == Tokens.RBRACE) { braces -= 1; if (braces == 0) close = q }
+            q += 1
+          }
+          // `extends Eskiz` as the whole parent clause, right before the body
+          val extendsAt = (k + 1 until open).find(e => ty(e) == Tokens.EXTENDS)
+          val hasSketchParent = extendsAt.exists(e => e + 2 == open && tx(e + 1) == "Eskiz")
+          val hasNoParent = extendsAt.isEmpty && !(k + 1 until open).exists(e => ty(e) == Tokens.WITH)
+          // the body defines `def <name>(x: CanvasDraw` at the top level of the class
+          def definesWithCanvasDraw(name: String): Boolean = close > 0 && {
+            var d = 0
+            (open to close).exists { e =>
+              if (ty(e) == Tokens.LBRACE) d += 1 else if (ty(e) == Tokens.RBRACE) d -= 1
+              d == 1 && ty(e) == Tokens.DEF && e + 5 < sig.length && tx(e + 1) == name && ty(e + 2) == Tokens.LPAREN &&
+                isIdentifier(tokens(sig(e + 3))) && ty(e + 4) == Tokens.COLON && tx(e + 5) == "CanvasDraw"
+            }
+          }
+          val applies = close > 0 && (direction match {
+            case TurkishToEnglish => hasSketchParent
+            case EnglishToTurkish => hasNoParent && englishNames.forall(definesWithCanvasDraw)
+          })
+          if (applies) {
+            direction match {
+              case TurkishToEnglish =>
+                // drop the whitespace before `extends` too: `class X extends Eskiz {` -> `class X {`
+                val e = extendsAt.get
+                val first = if (sig(e) > 0 && tokens(sig(e) - 1).tokenType == Tokens.WS) sig(e) - 1 else sig(e)
+                (first to sig(e + 1)).foreach(edits(_) = "")
+              case EnglishToTurkish =>
+                val bracePrefix = if (sig(open) > 0 && tokens(sig(open) - 1).tokenType == Tokens.WS) "" else " "
+                edits(sig(open)) = s"$bracePrefix${keywordTable(Tokens.EXTENDS)._2} Eskiz {"
+            }
+            for (e <- open + 1 until close if isIdentifier(tokens(sig(e))) && !(ty(e - 1) == Tokens.DOT)) {
+              val i = fromNames.indexOf(tx(e))
+              if (i >= 0) edits(sig(e)) = toNames(i)
+            }
           }
         }
-        nameSet.result()
       }
+      edits.toMap
+    }
     var previous: Option[Token] = None // the previous token that is not whitespace/comment
     var beforePrevious: Option[Token] = None
     var swallowed = Set.empty[Int]     // tokens swallowed when receiver+dot+name are replaced together
@@ -301,7 +387,8 @@ object Translator {
       val t = tokens(i)
       val tt = t.tokenType
       val replacement: String =
-        if (swallowed(i)) ""
+        if (sketchEdits.contains(i)) sketchEdits(i)
+        else if (swallowed(i)) ""
         else if (keywordTable.contains(tt)) {
           val (en, tr) = keywordTable(tt)
           direction match {
@@ -359,7 +446,7 @@ object Translator {
             case None =>
               // Order: the plain rule specific to the receiver (`tuvalAlanı.` -> height), then the receiver/member/bare context.
               val receiverName = if (isMember) beforePrevious.filter(isIdentifier).map(_.text + ".") else None
-              // If the receiver is a TuvalÇizim, the virtual `TuvalÇizim.` receiver is looked up first (see canvasVariables).
+              // If the receiver is a canvas, the virtual `TuvalÇizim.` / `CanvasDraw.` receiver is looked up first (see canvasVariables).
               val isCanvasReceiver = isMember && beforePrevious.exists(a => canvasVariables(a.text))
               // `r.saydamlık(0.5)` and `r.saydamlık` go to two different English methods of
               // different arity (opacityMod / opacity); if we do not tell them apart by context, a
@@ -395,7 +482,7 @@ object Translator {
                 if (isUserDefined) Some(userTranslations(t.text))
                 // An explicit "-" rule (vertex bare, setColumns bare) also cuts off the postfix fall-through (measured: tree2).
                 else if (isReceiverSpecificUntouched || dictionary.isLeftUntouched(directionCode, t.text, context)) None
-                else (if (isCanvasReceiver) lookup(t.text, "TuvalÇizim.") else None)
+                else (if (isCanvasReceiver) lookup(t.text, canvasReceiverContext) else None)
                   .orElse(receiverName.flatMap(a => lookup(t.text, a))).orElse(lookup(t.text, context))
                   // The user's own name (TR->EN) is not taken for a postfix and does not look in the member table: `zaman += 1`,
                   // even if the token before it is a value, `zaman` -> `hepsi` must not happen (it stays at the definition, which would be inconsistent).

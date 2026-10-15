@@ -49,6 +49,40 @@ class TranslateTest extends AnyFunSuite with Matchers {
     s.code should not include "vertex"
   }
 
+  test("sketch class: `yayar Eskiz` is dropped and kurulum/çizimDöngüsü become setup/drawLoop (English Kojo has no Eskiz type)") {
+    val eskiz =
+      """sınıf Gezginler yayar Eskiz {
+        |  tanım kurulum(tuval: TuvalÇizim) { tuval.artalan(siyah) }
+        |  tanım çizimDöngüsü(tuval: TuvalÇizim) { tuval.fırça(kırmızı); tuval.nokta(10, 20) }
+        |}
+        |çiz(Resim.eskizden(yeni Gezginler))
+        |""".stripMargin
+    val s = Translate.translate(eskiz, None).toOption.get
+    s.code should include("class Gezginler {")
+    s.code should not include "Eskiz"
+    s.code should include("def setup(tuval: CanvasDraw)")
+    s.code should include("def drawLoop(tuval: CanvasDraw)")
+    s.code should not include "kurulum"
+    // and back: the same shape returns
+    val back = Translate.translate(s.code, Some(Translate.en2tr)).toOption.get
+    back.code should include("sınıf Gezginler yayar Eskiz {")
+    back.code should include("tanım kurulum(tuval: TuvalÇizim)")
+    back.code should include("tanım çizimDöngüsü(tuval: TuvalÇizim)")
+  }
+
+  test("CanvasDraw receiver (EN->TR): fill/rotate/beginShape/endShape go to the canvas names, a picture's do not") {
+    val en =
+      """def f(cd: CanvasDraw) { cd.fill(1, 2, 3); cd.rotate(0.5); cd.beginShape(); cd.endShape() }
+        |def g(p: Picture) { p.rotate(30) }
+        |""".stripMargin
+    val s = Translate.translate(en, Some(Translate.en2tr)).toOption.get
+    s.code should include("cd.boya(1, 2, 3)")
+    s.code should include("cd.döndürRadyan(0.5)")
+    s.code should include("cd.şekilBaşla()")
+    s.code should include("cd.şekilBitir()")
+    s.code should include("p.döndür(30)")
+  }
+
   test("English script is translated to Turkish; with no Turkish keyword it counts as English") {
     val s = Translate.translate("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).toOption.get
     s.direction shouldBe Translate.en2tr
