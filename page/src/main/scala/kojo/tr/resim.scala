@@ -154,6 +154,9 @@ trait ResimYöntemleri extends TemelTürler with RenkYöntemleri with NoktaYönt
    * tangram-skier) üç satıra bölmeden taşımak mümkün değildi.
    */
   def döndürMerkezli(açı: Kesir, x: Kesir, y: Kesir): Dönüştürücü = kb.rotp(açı, x, y)
+  // masaüstü: yansıtY = Y ekseni çevresinde (X ters), yansıtX = X ekseni çevresinde (Y ters)
+  def yansıtX: Dönüştürücü = kb.flipX
+  def yansıtY: Dönüştürücü = kb.flipY
   def büyüt(oran: Kesir): Dönüştürücü = kb.scale(oran)
   def büyüt(xOranı: Kesir, yOranı: Kesir): Dönüştürücü = kb.scaleXY_experimental(xOranı, yOranı)
   def götür(n: Nokta): Dönüştürücü = kb.trans(n.x, n.y)

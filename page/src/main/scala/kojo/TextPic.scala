@@ -9,7 +9,7 @@ class TextPic(text: Any, fontSize: Int, color: Color, fontFamily: String = null)
   extends Picture with ReadyPromise {
   val textNode = {
     val pixiText = new PIXI.Text(text.toString)
-    pixiText.setTransform(0, 0, 1, -1, 0, 0, 0, 0, 0)
+    pixiText.setTransform(0, 0, 1 / kojoWorld.birimÖlçeği, -1 / kojoWorld.birimÖlçeği, 0, 0, 0, 0, 0)
     pixiText.style.fontSize = fontSize
     // facade'de fontFamily yok (v3 çağı); PIXI 4.8'de var
     if (fontFamily != null) pixiText.style.asInstanceOf[scala.scalajs.js.Dynamic].fontFamily = fontFamily

@@ -17,7 +17,8 @@ class ImagePic(url: String, envelope: Option[Picture])(implicit val kojoWorld: K
 
   private def init(loader: PIXI.loaders.Loader, any: Any): Unit = {
     sprite = new PIXI.Sprite(loader.resources(url).texture)
-    sprite.setTransform(0, sprite.height, 1, -1, 0, 0, 0, 0, 0)
+    val u = kojoWorld.birimÖlçeği // imge ekran pikseli boyunda kalsın (masaüstü picshapes: 1 / camScale)
+    sprite.setTransform(0, sprite.height / u, 1 / u, -1 / u, 0, 0, 0, 0, 0)
     imgLayer.addChild(sprite)
     envelope match {
       case None => makeDone()
