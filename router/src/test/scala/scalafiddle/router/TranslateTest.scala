@@ -83,6 +83,18 @@ class TranslateTest extends AnyFunSuite with Matchers {
     s.code should include("p.döndür(30)")
   }
 
+  test("alias loses ties (EN->TR): disablePanAndZoom and stopMp3 give the wrapper names, not tuvaliSabitle / Mp3üDurdur") {
+    val s = Translate.translate("disablePanAndZoom()\nstopMp3()\nstopMusic()\n", Some(Translate.en2tr)).toOption.get
+    s.code should include("yaklaşmayaİzinVerme()")
+    s.code should include("müzikMp3üKapat()")
+    s.code should include("müziğiKapat()")
+    s.code should not include "tuvaliSabitle"
+    // the alias still translates the other way
+    val back = Translate.translate("tuvaliSabitle()\nMp3üDurdur()\n", Some(Translate.tr2en)).toOption.get
+    back.code should include("disablePanAndZoom()")
+    back.code should include("stopMp3()")
+  }
+
   test("English script is translated to Turkish; with no Turkish keyword it counts as English") {
     val s = Translate.translate("val r = Picture.circle(50)\ndraw(r)\nrepeat(3) { forward(10) }\n", None).toOption.get
     s.direction shouldBe Translate.en2tr
