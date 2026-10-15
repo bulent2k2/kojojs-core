@@ -309,6 +309,20 @@ trait KojoWorld {
   def size(width: Double, height: Double): Unit
   def zoomXY(xfactor: Double, yfactor: Double, cx: Double, cy: Double): Unit
   def resetView(): Unit
+
+  /**
+   * Çizim birimi ölçeği: 1 birim kaç ekran pikseli (Pixel 1, Cm ~37.8, Inch 96). `clearWithUL`
+   * kuruyor. Sahne bu oranda büyütüldüğünden, EKRAN boyutu niyetiyle verilen varsayılanlar
+   * (kalem kalınlığı 2, yazı boyu, imge) bu orana bölünüyor -- masaüstündeki `2 / camScale`
+   * ile aynı (picture/picshapes.scala). Piksel birimde 1: hiçbir şey değişmez.
+   * Bilinen sınır: ızgara/eksen çizgileri ve pişirme (sahne ölçeği 1 değilken kapalı) birim
+   * ölçeğine uyarlanmadı.
+   */
+  private[kojo] var birimÖlçeği: Double = 1.0
+  private[kojo] def birimiKur(ul: UnitLen): Unit = {
+    birimÖlçeği = ul.pikselOranı
+    resetView()
+  }
   def mouseXY: Point
   def erasePictures(): Unit
   def scroll(x: Double, y: Double): Unit
@@ -1631,7 +1645,7 @@ class KojoWorldImpl extends KojoWorld {
 
   // Tuvali başlangıç görünümüne döndür: dünya-(0,0) merkezde, yakınlaştırma 1.
   // (Fareyle kaydırma da stage.position'ı değiştirir; zoomXY onu geri kurar.)
-  def resetView(): Unit = zoomXY(1, 1, 0, 0)
+  def resetView(): Unit = zoomXY(birimÖlçeği, birimÖlçeği, 0, 0)
 
   // Tuvali dünya birimiyle kaydırır (masaüstü tCanvas.scroll). Ölçek hesaba
   // katılır, yoksa yakınlaştırılmışken kaydırma miktarı tutmaz. Ekran merkezini

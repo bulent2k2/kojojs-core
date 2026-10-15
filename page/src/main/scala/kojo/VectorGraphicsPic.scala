@@ -7,7 +7,7 @@ trait VectorGraphicsPic extends Picture with ReadyPromise {
   def makePic(graphics: Graphics)
   val path = new Graphics()
   val noColor = Color(0, 0, 0)
-  path.lineStyle(2, Color.red.toRGBDouble, 1.0)
+  path.lineStyle(2 / kojoWorld.birimÖlçeği, Color.red.toRGBDouble, 1.0)
   path.beginFill(noColor.toRGBDouble, 0.0)
   makePic(path)
   val tnode = path

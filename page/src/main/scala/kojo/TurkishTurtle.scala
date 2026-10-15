@@ -483,6 +483,12 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def ikiÇizimArasıSüre: Kesir = kareSüresi // frameDeltaTime
   def fareKonumu: Nokta = kojoWorld.mouseXY
   def silipSakla(): Birim = silVeSakla()
+
+  // ---- çizim birimi (masaüstü: silVeÇizimBiriminiKur(santim)) ----
+  type UzunlukBirimi = kojo.UnitLen
+  val (noktaSayısı, santim, inç) = (kojo.Pixel, kojo.Cm, kojo.Inch)
+  /** Tuvali siler ve 1 çizim biriminin ne olduğunu kurar: `noktaSayısı` (piksel), `santim`, `inç`. */
+  def silVeÇizimBiriminiKur(birim: UzunlukBirimi): Birim = builtins.clearWithUL(birim)
   def çizVeSakla(resimler: Resim*): Birim = builtins.drawAndHide(resimler: _*)
   // masaüstünde Future döndürür; burada Birim (tarayıcıda iptal edilebilir sayaç yok)
   def yineleSayaçla(miliSaniye: Uzun)(işlev: => Birim): Birim = builtins.timer(miliSaniye)(işlev)
@@ -572,7 +578,7 @@ class TurkishTurtle(val englishTurtle: TurtleAPI, builtins: syntax.Builtins)(imp
   def çıktıYazıRenginiKur(renk: Renk): Birim = {}
   def çıktıyıSil(): Birim = builtins.clearOutput() // clearOutput = {}; 6 betikte ilk hata buydu
   // masaüstünde canlandırma başlarken çağrılır; burada hemen çalışır
-  def canlandırmaBaşlayınca(işlev: => Birim): Birim = işlev
+  def canlandırmaBaşlayınca(işlev: => Birim): Birim = builtins.onAnimationStart(işlev)
   // masaüstünde ayrı iş parçacığı; tarayıcıda tek iş parçacığı var, hemen çalışır
   def artalandaOynat(kod: => Birim): Birim = builtins.runInBackground(kod)
 

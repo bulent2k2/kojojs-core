@@ -434,7 +434,7 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private val tempForwardPath = new PIXI.Graphics()
 
-  private var penWidth = 2d
+  private var penWidth = 2d / kojoWorld.birimÖlçeği // ekranda 2 piksel (birim ölçeğine bölünür)
   private var penColor = Color.red
   // Dolgu artık düz renk DEĞİL Boya: gradyan ve dokuma da olabiliyor.
   private var fillBoya: Boya = _
@@ -1058,7 +1058,8 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   private def realWriteText(text: String): Unit = {
     if (!penIsUp) {
       val pixiText = new PIXI.Text(text)
-      pixiText.setTransform(0, 0, 1, -1, 0, 0, 0, 0, 0)
+      // 1/birimÖlçeği: yazı boyu birim ne olursa olsun ekran pikseli (masaüstü Utils.textNode)
+      pixiText.setTransform(0, 0, 1 / kojoWorld.birimÖlçeği, -1 / kojoWorld.birimÖlçeği, 0, 0, 0, 0, 0)
       pixiText.position = position
       pixiText.rotation = (heading - 90).toRadians
       pixiText.style.fontSize = penFontSize
