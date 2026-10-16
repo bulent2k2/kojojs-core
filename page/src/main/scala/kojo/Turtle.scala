@@ -463,7 +463,13 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
   // 0 ise komut aynı karede biter). Sonuç doğru; yalnız pompanın her zaman
   // eşzamansız başladığı varsayılmasın.
   private def sıraya(komut: Command): Unit = {
-    commandQ.enqueue(komut)
+    // İç kuyruk yazma penceresi (pushQ..popQ) EŞZAMANLI: realMoveTo gibi bir real* işi
+    // kendi alt komutlarını (yön, ileri, PopQ) içeride sıraya diziyor. Pencerenin DIŞINDA
+    // gelen her komut -- ör. canlandır'ın her karede eklediği moveTo, ileri adım rAF ile
+    // sürerken -- taban kuyruğa gidiyor ve iç kuyruk bitince sırasını alıyor. Eskiden
+    // `commandQ` (en içteki kuyruk) kullanılıyordu: komut PopQ'nun ARKASINA düşüyor,
+    // realPopQ'daki `assert(commandQ.size == 0)` patlıyor ve pompa kalıcı ölüyordu (#213).
+    (if (içKuyruğaYazılıyor) commandQs.head else commandQs.last).enqueue(komut)
     if (pompa.komutGirdi()) kojoWorld.scheduleLater(queueHandler)
   }
 
@@ -1240,12 +1246,17 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
 
   private def commandQ = commandQs.head
 
+  // pushQ ile popQ arasında, yani bir real* işinin içinde, true. Bkz. sıraya.
+  private var içKuyruğaYazılıyor = false
+
   private def pushQ(): Unit = {
     commandQs = mutable.Queue.empty[Command] :: commandQs
+    içKuyruğaYazılıyor = true
   }
 
   private def popQ(): Unit = {
     sıraya(PopQ)
+    içKuyruğaYazılıyor = false
   }
 
   private def realPopQ(): Unit = {
