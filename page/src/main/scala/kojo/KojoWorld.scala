@@ -691,7 +691,13 @@ class KojoWorldImpl extends KojoWorld {
   //  }
   //
 
-  def zoomXY(xfactor: Double, yfactor: Double, cx: Double, cy: Double): Unit = {
+  // Kullanıcıya açık yakınlaştırma BİRİME göre göreli (masaüstü SpriteCanvas: xfactor0 * camScale).
+  // #237: mutlak olunca santim biriminde yaklaş(0.5) sahneyi 0.5 piksel/birime ezip her şeyi gizliyordu.
+  def zoomXY(xfactor: Double, yfactor: Double, cx: Double, cy: Double): Unit =
+    zoomXYMutlak(xfactor * birimÖlçeği, yfactor * birimÖlçeği, cx, cy)
+
+  // Doğrudan sahne ölçeği (piksel/dünya birimi); iç çağrılar (resetView, kaydırma, tekerlek) bunu kullanır.
+  private[kojo] def zoomXYMutlak(xfactor: Double, yfactor: Double, cx: Double, cy: Double): Unit = {
     val cw = screenWidth
     val ch = screenHeight
 //    stage.setTransform(cw / 2 - cx, ch / 2 + cy, xfactor, -yfactor, 0, 0, 0, 0, 0)
@@ -1688,14 +1694,14 @@ class KojoWorldImpl extends KojoWorld {
 
   // Tuvali başlangıç görünümüne döndür: dünya-(0,0) merkezde, yakınlaştırma 1.
   // (Fareyle kaydırma da stage.position'ı değiştirir; zoomXY onu geri kurar.)
-  def resetView(): Unit = zoomXY(birimÖlçeği, birimÖlçeği, 0, 0)
+  def resetView(): Unit = zoomXYMutlak(birimÖlçeği, birimÖlçeği, 0, 0)
 
   // Tuvali dünya birimiyle kaydırır (masaüstü tCanvas.scroll). Ölçek hesaba
   // katılır, yoksa yakınlaştırılmışken kaydırma miktarı tutmaz. Ekran merkezini
   // (x, y) kadar öteleyip zoomXY ile yeniden kuruyoruz: böylece canvasOrigin/
   // canvasBounds defteri ve pişmiş doku, fareyle kaydırmadaki gibi tazeleniyor.
   def scroll(x: Double, y: Double): Unit =
-    zoomXY(stage.scale.x, -stage.scale.y, merkezDünyaX + x, merkezDünyaY + y)
+    zoomXYMutlak(stage.scale.x, -stage.scale.y, merkezDünyaX + x, merkezDünyaY + y)
 
   // Tuvali döndürür (masaüstü tCanvas.viewRotate). Masaüstündeki gibi BİRİKİMLİ:
   // her çağrı mevcut dönüşe eklenir (tuvaliDöndür(30) iki kez => 60 derece),
@@ -1792,7 +1798,7 @@ class KojoWorldImpl extends KojoWorld {
         // (yaklaşXY) korunsun. Ekran merkezindeki dünya noktasını koruyarak
         // yakınlaşırız (yoksa zoomXY dünya-(0,0)'ı merkeze koyup pan'ı iptal ederdi).
         val f = if (e.deltaY > 0) 0.9 else 1.1
-        zoomXY(stage.scale.x * f, -stage.scale.y * f, merkezDünyaX, merkezDünyaY)
+        zoomXYMutlak(stage.scale.x * f, -stage.scale.y * f, merkezDünyaX, merkezDünyaY)
       }
     }
     penceredeDinle("keydown", (e: KeyboardEvent) => keyDown(e))
@@ -1837,7 +1843,7 @@ class KojoWorldImpl extends KojoWorld {
         // tutmayı ve resetBake'i yapar -- yoksa pan'la açılan bölgeye çizilen
         // durağan resimler pişirilince kaybolur, canvasBounds eskir.
         // Mevcut ölçeği (eşit olmayan olabilir) aynen koru: xf=scale.x, yf=-scale.y.
-        zoomXY(stage.scale.x, -stage.scale.y, merkezDünyaX, merkezDünyaY)
+        zoomXYMutlak(stage.scale.x, -stage.scale.y, merkezDünyaX, merkezDünyaY)
       }
     }
     stage.on("pointerdown", panDown(_))
