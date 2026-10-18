@@ -508,6 +508,10 @@ class Turtle(x: Double, y: Double, forPic: Boolean = false, costume: String = nu
     turtlePathMoveTo(x, y)
     turtleImage.position.set(x, y)
     turtleImage.rotation = Utils.deg2radians(90)
+    // Kaplumbağa simgesi ekran boyunu korur (masaüstü: setToScale(1 / camScale)); birim
+    // silVeÇizimBiriminiKur ile sonradan değişir, sil() de buraya uğrar (#239)
+    val u = 1 / kojoWorld.birimÖlçeği
+    turtleImage.scale.set(u, u)
   }
 
   // private[kojo]: bunlar yalnız `sync` ile kuyruğun doğru noktasında okunuyor
